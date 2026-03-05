@@ -6,7 +6,7 @@ import type {
   Result,
   ValidationResult,
 } from "./types.ts";
-import { err, ok } from "./types.ts";
+import { err, extractSDKText, ok } from "./types.ts";
 import {
   COMPLETION_MARKER,
   RALPH_RECEIPTS_DIRNAME,
@@ -17,14 +17,15 @@ import { buildCommandSpec, buildPrompt } from "./command.ts";
 import { runValidation } from "./validation.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
 
-/** Extract `.result` from an NDJSON line, falling back to the raw line. */
-export const extractNdjsonResult = (line: string): string => {
+/**
+ * Parse an NDJSON line from `claude --output-format=stream-json` and extract
+ * displayable text. Returns `undefined` for events with no user-facing content.
+ *
+ * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
+ */
+export const extractNdjsonResult = (line: string): string | undefined => {
   try {
-    const parsed = JSON.parse(line);
-    return typeof parsed === "object" && parsed !== null &&
-        typeof parsed.result === "string"
-      ? parsed.result
-      : line;
+    return extractSDKText(JSON.parse(line));
   } catch {
     return line;
   }
@@ -46,13 +47,18 @@ export const ndjsonResultTransform = (): TransformStream<
       lines.forEach((line) => {
         const trimmed = line.trim();
         if (!trimmed) return;
-        controller.enqueue(encoder.encode(extractNdjsonResult(trimmed)));
+        const result = extractNdjsonResult(trimmed);
+        if (result !== undefined) {
+          controller.enqueue(encoder.encode(result));
+        }
       });
     },
     flush(controller) {
       const trimmed = buffer.trim();
-      if (trimmed) {
-        controller.enqueue(encoder.encode(extractNdjsonResult(trimmed)));
+      if (!trimmed) return;
+      const result = extractNdjsonResult(trimmed);
+      if (result !== undefined) {
+        controller.enqueue(encoder.encode(result));
       }
     },
   });

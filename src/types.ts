@@ -74,3 +74,121 @@ export type LoopState = {
 
 /** The set of supported agent backend identifiers. */
 export const VALID_AGENTS = ["claude", "codex"] as const;
+
+/**
+ * Subset of the Claude Agent SDK NDJSON streaming message types relevant
+ * to output extraction when using `--output-format=stream-json`.
+ *
+ * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
+ */
+
+/** Final result message emitted when the agent completes or errors. */
+export type SDKResultMessage =
+  | {
+    type: "result";
+    subtype: "success";
+    result: string;
+    is_error: boolean;
+    duration_ms: number;
+    num_turns: number;
+    total_cost_usd: number;
+  }
+  | {
+    type: "result";
+    subtype:
+      | "error_max_turns"
+      | "error_during_execution"
+      | "error_max_budget_usd";
+    is_error: boolean;
+    errors: string[];
+  };
+
+/** System-level events (init, status, hooks, tasks, etc.). */
+export type SDKSystemMessage = {
+  type: "system";
+  subtype: string;
+  session_id: string;
+};
+
+/**
+ * A content block inside an Anthropic API message.
+ * @see {@link https://docs.anthropic.com/en/api/messages}
+ */
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: unknown }
+  | { type: "thinking"; thinking: string };
+
+/** Assistant turn with a full Anthropic API message payload. */
+export type SDKAssistantMessage = {
+  type: "assistant";
+  session_id: string;
+  message: { content: ContentBlock[] };
+};
+
+/** Streaming partial events (only with --include-partial-messages). */
+export type SDKPartialAssistantMessage = {
+  type: "stream_event";
+  event: unknown;
+};
+
+/** Tool use summary (e.g. "Read 3 files, ran 2 commands"). */
+export type SDKToolUseSummaryMessage = {
+  type: "tool_use_summary";
+  summary: string;
+};
+
+/**
+ * Discriminated union of NDJSON message types emitted by
+ * `claude --output-format=stream-json`.
+ *
+ * The catch-all variant covers event types we don't extract from.
+ */
+export type SDKMessage =
+  | SDKResultMessage
+  | SDKSystemMessage
+  | SDKAssistantMessage
+  | SDKPartialAssistantMessage
+  | SDKToolUseSummaryMessage;
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+
+/**
+ * Extract displayable text from any SDK streaming message.
+ *
+ * Handles:
+ * - `SDKAssistantMessage` → text content blocks from `message.content`
+ * - `SDKResultMessage` (success) → final `.result` string
+ * - `SDKToolUseSummaryMessage` → `.summary`
+ *
+ * Returns `undefined` for events with no user-facing text (system, hooks, etc.).
+ */
+export const extractSDKText = (raw: unknown): string | undefined => {
+  if (!isRecord(raw)) return undefined;
+  const type = raw.type;
+  return type === "assistant"
+    ? extractAssistantText(raw)
+    : type === "result" && raw.subtype === "success" &&
+        typeof raw.result === "string"
+    ? raw.result
+    : type === "tool_use_summary" && typeof raw.summary === "string"
+    ? raw.summary
+    : undefined;
+};
+
+const extractAssistantText = (
+  raw: Record<string, unknown>,
+): string | undefined => {
+  const msg = raw.message;
+  if (!isRecord(msg) || !Array.isArray(msg.content)) return undefined;
+  const text = (msg.content as unknown[])
+    .filter(
+      (block): block is { type: "text"; text: string } =>
+        isRecord(block) && block.type === "text" &&
+        typeof block.text === "string",
+    )
+    .map((block) => block.text)
+    .join("");
+  return text || undefined;
+};

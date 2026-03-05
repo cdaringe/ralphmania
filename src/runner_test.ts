@@ -97,34 +97,77 @@ Deno.test("pipeStream handles empty stream", async () => {
   assertEquals(found, false);
 });
 
-Deno.test("extractNdjsonResult extracts .result from valid JSON", () => {
+Deno.test("extractNdjsonResult extracts .result from success result", () => {
   assertEquals(
-    extractNdjsonResult('{"result":"hello","type":"message"}'),
+    extractNdjsonResult(
+      '{"type":"result","subtype":"success","result":"hello","is_error":false}',
+    ),
     "hello",
   );
 });
 
-Deno.test("extractNdjsonResult returns raw line when no .result", () => {
-  const line = '{"type":"progress","count":5}';
-  assertEquals(extractNdjsonResult(line), line);
+Deno.test("extractNdjsonResult extracts text from assistant message", () => {
+  assertEquals(
+    extractNdjsonResult(
+      JSON.stringify({
+        type: "assistant",
+        session_id: "abc",
+        message: {
+          content: [
+            { type: "text", text: "Hello " },
+            { type: "tool_use", id: "t1", name: "Read", input: {} },
+            { type: "text", text: "world" },
+          ],
+        },
+      }),
+    ),
+    "Hello world",
+  );
+});
+
+Deno.test("extractNdjsonResult extracts tool_use_summary", () => {
+  assertEquals(
+    extractNdjsonResult(
+      '{"type":"tool_use_summary","summary":"Read 3 files"}',
+    ),
+    "Read 3 files",
+  );
+});
+
+Deno.test("extractNdjsonResult skips system events", () => {
+  assertEquals(
+    extractNdjsonResult('{"type":"system","subtype":"init","session_id":"x"}'),
+    undefined,
+  );
 });
 
 Deno.test("extractNdjsonResult returns raw line on invalid JSON", () => {
   assertEquals(extractNdjsonResult("not json at all"), "not json at all");
 });
 
-Deno.test("extractNdjsonResult returns raw line for non-string result", () => {
-  const line = '{"result":42}';
-  assertEquals(extractNdjsonResult(line), line);
+Deno.test("extractNdjsonResult returns undefined for non-string result", () => {
+  assertEquals(
+    extractNdjsonResult('{"type":"result","subtype":"success","result":42}'),
+    undefined,
+  );
+});
+
+Deno.test("extractNdjsonResult returns undefined for error result", () => {
+  assertEquals(
+    extractNdjsonResult(
+      '{"type":"result","subtype":"error_max_turns","is_error":true,"errors":["max turns"]}',
+    ),
+    undefined,
+  );
 });
 
 Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () => {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const input = [
-    '{"result":"hello "}\n',
-    '{"type":"status"}\n',
-    '{"result":"world"}\n',
+    '{"type":"result","subtype":"success","result":"hello ","is_error":false}\n',
+    '{"type":"system","subtype":"init","session_id":"abc"}\n',
+    '{"type":"result","subtype":"success","result":"world","is_error":false}\n',
   ].join("");
 
   const stream = new ReadableStream<Uint8Array>({
@@ -144,18 +187,21 @@ Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () 
   await stream.pipeThrough(ndjsonResultTransform()).pipeTo(writable);
   const output = chunks.join("");
   assertEquals(output.includes("hello "), true);
-  assertEquals(output.includes('{"type":"status"}'), true);
+  assertEquals(output.includes("system"), false);
   assertEquals(output.includes("world"), true);
 });
 
 Deno.test("ndjsonResultTransform handles split chunks", async () => {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
+  const line =
+    '{"type":"result","subtype":"success","result":"split","is_error":false}\n';
+  const mid = Math.floor(line.length / 2);
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode('{"resu'));
-      controller.enqueue(encoder.encode('lt":"split"}\n'));
+      controller.enqueue(encoder.encode(line.slice(0, mid)));
+      controller.enqueue(encoder.encode(line.slice(mid)));
       controller.close();
     },
   });
