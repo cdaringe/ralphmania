@@ -1,5 +1,9 @@
 import { assertEquals } from "jsr:@std/assert";
-import { pipeStream } from "./runner.ts";
+import {
+  extractNdjsonResult,
+  ndjsonResultTransform,
+  pipeStream,
+} from "./runner.ts";
 
 Deno.test("pipeStream pipes data and detects marker", async () => {
   const data = new TextEncoder().encode(
@@ -91,4 +95,78 @@ Deno.test("pipeStream handles empty stream", async () => {
   };
   const found = await pipeStream({ stream, output, marker: "anything" });
   assertEquals(found, false);
+});
+
+Deno.test("extractNdjsonResult extracts .result from valid JSON", () => {
+  assertEquals(
+    extractNdjsonResult('{"result":"hello","type":"message"}'),
+    "hello",
+  );
+});
+
+Deno.test("extractNdjsonResult returns raw line when no .result", () => {
+  const line = '{"type":"progress","count":5}';
+  assertEquals(extractNdjsonResult(line), line);
+});
+
+Deno.test("extractNdjsonResult returns raw line on invalid JSON", () => {
+  assertEquals(extractNdjsonResult("not json at all"), "not json at all");
+});
+
+Deno.test("extractNdjsonResult returns raw line for non-string result", () => {
+  const line = '{"result":42}';
+  assertEquals(extractNdjsonResult(line), line);
+});
+
+Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () => {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const input = [
+    '{"result":"hello "}\n',
+    '{"type":"status"}\n',
+    '{"result":"world"}\n',
+  ].join("");
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(input));
+      controller.close();
+    },
+  });
+
+  const chunks: string[] = [];
+  const writable = new WritableStream<Uint8Array>({
+    write(chunk) {
+      chunks.push(decoder.decode(chunk));
+    },
+  });
+
+  await stream.pipeThrough(ndjsonResultTransform()).pipeTo(writable);
+  const output = chunks.join("");
+  assertEquals(output.includes("hello "), true);
+  assertEquals(output.includes('{"type":"status"}'), true);
+  assertEquals(output.includes("world"), true);
+});
+
+Deno.test("ndjsonResultTransform handles split chunks", async () => {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('{"resu'));
+      controller.enqueue(encoder.encode('lt":"split"}\n'));
+      controller.close();
+    },
+  });
+
+  const chunks: string[] = [];
+  const writable = new WritableStream<Uint8Array>({
+    write(chunk) {
+      chunks.push(decoder.decode(chunk));
+    },
+  });
+
+  await stream.pipeThrough(ndjsonResultTransform()).pipeTo(writable);
+  assertEquals(chunks.join(""), "split");
 });

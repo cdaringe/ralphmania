@@ -32,9 +32,10 @@ export const buildCommandSpec = ({ agent, model, prompt }: {
       command: "claude",
       args: [
         "--dangerously-skip-permissions",
+        "--output-format=stream-json",
+        "--verbose",
         "--model",
         model,
-        //  "-p",
         prompt,
       ],
     }

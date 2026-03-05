@@ -17,6 +17,47 @@ import { buildCommandSpec, buildPrompt } from "./command.ts";
 import { runValidation } from "./validation.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
 
+/** Extract `.result` from an NDJSON line, falling back to the raw line. */
+export const extractNdjsonResult = (line: string): string => {
+  try {
+    const parsed = JSON.parse(line);
+    return typeof parsed === "object" && parsed !== null &&
+        typeof parsed.result === "string"
+      ? parsed.result
+      : line;
+  } catch {
+    return line;
+  }
+};
+
+/** TransformStream that extracts `.result` from each NDJSON line. */
+export const ndjsonResultTransform = (): TransformStream<
+  Uint8Array,
+  Uint8Array
+> => {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let buffer = "";
+  return new TransformStream({
+    transform(chunk, controller) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        controller.enqueue(encoder.encode(extractNdjsonResult(trimmed)));
+      });
+    },
+    flush(controller) {
+      const trimmed = buffer.trim();
+      if (trimmed) {
+        controller.enqueue(encoder.encode(extractNdjsonResult(trimmed)));
+      }
+    },
+  });
+};
+
 /**
  * Read a byte stream, decode it, and forward each chunk to `output`.
  *
@@ -92,10 +133,14 @@ const runIteration = async (
       signal: combinedSignal,
     }).spawn();
 
+    const stdoutStream = agent === "claude"
+      ? child.stdout.pipeThrough(ndjsonResultTransform())
+      : child.stdout;
+
     const [status, foundAllCompleteSigil] = await Promise.all([
       child.status,
       pipeStream({
-        stream: child.stdout,
+        stream: stdoutStream,
         output: Deno.stdout,
         marker: COMPLETION_MARKER,
       }),
