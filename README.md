@@ -12,7 +12,7 @@ deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
 - ❌ Bad for projects with firm or static specifications.
 
 <details>
-<summary>What makes `ralphmania` different from naive-[ralphing](https://ghuntley.com/loop/)?</summary>
+<summary>What makes `ralphmania` different from naive-ralphing?</summary>
 
 A basic "ralph loop" is great for one shot development. However, `ralphmania` is
 designed for iterative development. Specifically, it has strong support for:
