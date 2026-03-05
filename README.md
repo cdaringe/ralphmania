@@ -1,15 +1,18 @@
 # ralphmania
 
-AI agent loop execution scripts for specification-driven development.
+Run an AI agent in a loop until a specification is complete. Essentially, tell `ralphmania`, "Here are my goals, do work until everything is done and verified."
 
-"Here are my goals, do work until everything is done."
+```bash
+deno run -A jsr:@cdaringe/ralphmania -i 10
+deno run -A jsr:@cdaringe/ralphmania -i 10 [-a claude|codex]
+deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
+```
 
-- Good for projects where the specifications are not rock solid, but are
-  expected to change regularly over time.
-- Bad for projects with firm or static specifications.
+- ✅ Good for projects where the specifications evolving, fuzzy, or not fully baked.
+- ❌ Bad for projects with firm or static specifications.
 
-Runs an AI coding agent (Claude or Codex) in a loop, validating each iteration
-against a user-defined specification until all scenarios are verified.
+<details>
+<summary>What makes `ralphmania` different from naive-[ralphing](https://ghuntley.com/loop/)?</summary>
 
 A basic "ralph loop" is great for one shot development. However, `ralphmania` is
 designed for iterative development. Specifically, it has strong support for:
@@ -29,45 +32,51 @@ designed for iterative development. Specifically, it has strong support for:
 5. **PLUGINS** - support for changing the default flow if you want to tune
    default behaviors!
 
-## What it does
+</details>
 
-- Runs an AI agent iteratively against `specification.md`, tracking progress in
-  `progress.md`
-- Validates each iteration via a user-defined, customizable
-  `specification.validate.sh` hook
-- Escalates to stronger models when verification, validation, or user feedback
-  directly in the progress.md document indicates rework is needed
-- Scopes strong-model passes to specific failing scenarios
-- Generates receipts (evidence artifacts) once all scenarios pass validation
+## How it works
 
-## Usage
+1. Write a `specification.md` with scenarios
+2. Run ralphmania -- it iterates an AI agent, tracking progress in `progress.md`
+3. Each iteration is validated via `specification.validate.sh` (user tunable, created on first run)
+4. Review `progress.md` between runs -- mark scenarios as `VERIFIED` or `NEEDS_REWORK` to request fixes
+5. When rework is detected, ralphmania escalates to stronger models, scoped to failing scenarios
 
-```bash
-# Run 10 iterations with Claude (default agent)
-deno run -A jsr:@cdaringe/ralphmania -i 10
+## Example
 
-# Run with Codex
-deno run -A jsr:@cdaringe/ralphmania -i 10 -a codex
+**specification.md:**
 
-# With a plugin
-deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
+Write a specification document _like_ the following:
+
+```md
+## Scenarios
+
+| # | Scenario | Description |
+|---|----------|-------------|
+| 1 | Auth | Add login/logout with JWT |
+| 2 | Dashboard | Show user stats on /dashboard |
 ```
 
-On first run, a `specification.validate.sh` template is created. Fill in your
-validation logic before re-running.
+Try to append only. Mark invalid scenarios `REMOVED`.
+
+**progress.md** (managed by the agent, editable by you):
+
+```md
+<!-- END_DEMO -->
+| # | Status | Summary | Rework notes |
+|---|--------|---------|--------------|
+| 1 | VERIFIED | docs/scenarios/auth.md | |
+| 2 | NEEDS_REWORK | docs/scenarios/dashboard.md | missing error states |
+```
+
+Set a scenario to `NEEDS_REWORK` with notes and ralphmania will direct the agent to fix it, escalating to a stronger model if rework persists. The agent verification step will do this sometimes, or you the user may do this at the end of an iteration cycle!
 
 ## Plugins
 
-Plugins let you customize ralphmania's behavior by hooking into its lifecycle:
-
 ```typescript
-import type { Plugin } from "@cdaringe/ralphmania";
+import type { Plugin } from "jsr:@cdaringe/ralphmania";
 
 const plugin: Plugin = {
-  onConfigResolved({ agent, iterations, log }) {
-    log({ tags: ["info"], message: `Starting with ${agent}` });
-    return { agent, iterations };
-  },
   onPromptBuilt({ prompt }) {
     return prompt + "\nAlways use TypeScript.";
   },
@@ -76,28 +85,4 @@ const plugin: Plugin = {
 export { plugin };
 ```
 
-### Available hooks
-
-| Hook                   | Kind      | When                                   |
-| ---------------------- | --------- | -------------------------------------- |
-| `onConfigResolved`     | transform | After CLI parse, once                  |
-| `onModelSelected`      | transform | Each iteration, after model resolution |
-| `onPromptBuilt`        | transform | Each iteration, after prompt assembly  |
-| `onCommandBuilt`       | transform | Each iteration, before spawn           |
-| `onIterationEnd`       | observe   | After agent process exits              |
-| `onValidationComplete` | transform | After validation runs                  |
-| `onLoopEnd`            | observe   | After loop exits                       |
-
-## Project structure
-
-| File                | Purpose                                                |
-| ------------------- | ------------------------------------------------------ |
-| `mod.ts`            | Entrypoint — CLI parsing, signal handling, main loop   |
-| `src/runner.ts`     | Iteration execution, stream piping, receipt generation |
-| `src/model.ts`      | Model selection and rework-based escalation            |
-| `src/command.ts`    | Prompt and command construction per agent              |
-| `src/validation.ts` | Validation hook setup and execution                    |
-| `src/cli.ts`        | CLI argument parsing                                   |
-| `src/plugin.ts`     | Plugin type, loading, and hooks                        |
-| `src/types.ts`      | Shared types and Result utilities                      |
-| `src/constants.ts`  | Prompts, timeouts, paths                               |
+Hooks: `onConfigResolved`, `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`, `onIterationEnd`, `onValidationComplete`, `onLoopEnd`.
