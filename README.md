@@ -56,10 +56,10 @@ Write a specification document _like_ the following:
 ```md
 ## Scenarios
 
-| # | Scenario  | Description                   |
-| - | --------- | ----------------------------- |
-| 1 | Auth      | Add login/logout with JWT     |
-| 2 | Dashboard | Show user stats on /dashboard |
+| # | Scenario  | Description                                    |
+| - | --------- | ---------------------------------------------- |
+| 1 | Auth      | The system SHALL support login/logout with JWT |
+| 2 | Dashboard | The GUI SHALL support user stats on /dashboard |
 ```
 
 Try to append only. Mark invalid scenarios `REMOVED`.
