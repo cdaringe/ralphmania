@@ -1,9 +1,21 @@
-import type { Agent, IterationResult, Logger, LoopState, Result, ValidationResult } from "./types.ts";
+import type {
+  Agent,
+  IterationResult,
+  Logger,
+  LoopState,
+  Result,
+  ValidationResult,
+} from "./types.ts";
 import { err, ok } from "./types.ts";
-import { COMPLETION_MARKER, RALPH_RECEIPTS_DIRNAME, TIMEOUT_MS } from "./constants.ts";
+import {
+  COMPLETION_MARKER,
+  RALPH_RECEIPTS_DIRNAME,
+  TIMEOUT_MS,
+} from "./constants.ts";
 import { getModel, resolveModelSelection } from "./model.ts";
 import { buildCommandSpec, buildPrompt } from "./command.ts";
 import { runValidation } from "./validation.ts";
+import type { HookContext, Plugin } from "./plugin.ts";
 
 export const pipeStream = async ({ stream, output, marker }: {
   stream: ReadableStream<Uint8Array>;
@@ -26,28 +38,39 @@ export const pipeStream = async ({ stream, output, marker }: {
 };
 
 const runIteration = async (
-  { iterationNum, agent, signal, log, validationFailurePath }: {
+  { iterationNum, agent, signal, log, validationFailurePath, plugin }: {
     iterationNum: number;
     agent: Agent;
     signal: AbortSignal;
     log: Logger;
     validationFailurePath: string | undefined;
+    plugin: Plugin;
   },
 ): Promise<IterationResult> => {
-  const { model, mode, targetScenario } = await resolveModelSelection(
-    agent,
-    log,
-  );
-  const prompt = buildPrompt({
-    targetScenario,
-    mode,
+  const ctx: HookContext = { agent, log, iterationNum };
+
+  const rawSelection = await resolveModelSelection(agent, log);
+  const selection = plugin.onModelSelected
+    ? await plugin.onModelSelected({ selection: rawSelection, ctx })
+    : rawSelection;
+
+  const rawPrompt = buildPrompt({
+    targetScenario: selection.targetScenario,
+    mode: selection.mode,
     validationFailurePath,
   });
-  const spec = buildCommandSpec({ agent, model, prompt });
+  const prompt = plugin.onPromptBuilt
+    ? await plugin.onPromptBuilt({ prompt: rawPrompt, selection, ctx })
+    : rawPrompt;
+
+  const rawSpec = buildCommandSpec({ agent, model: selection.model, prompt });
+  const spec = plugin.onCommandBuilt
+    ? await plugin.onCommandBuilt({ spec: rawSpec, selection, ctx })
+    : rawSpec;
 
   log({
     tags: ["info", "iteration"],
-    message: `Starting ${iterationNum} (${model})...`,
+    message: `Starting ${iterationNum} (${selection.model})...`,
   });
 
   const combinedSignal = AbortSignal.any([
@@ -74,7 +97,7 @@ const runIteration = async (
       pipeStream({ stream: child.stderr, output: Deno.stderr }),
     ]);
 
-    return status.code !== 0
+    const result: IterationResult = status.code !== 0
       ? (log({
         tags: ["error"],
         message:
@@ -92,13 +115,18 @@ const runIteration = async (
         message: `Iteration ${iterationNum} complete.`,
       }),
         { status: "continue" });
+
+    await plugin.onIterationEnd?.({ result, ctx });
+    return result;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       log({
         tags: ["error"],
         message: `TIMEOUT: iteration ${iterationNum} exceeded 60 minutes`,
       });
-      return { status: "timeout" };
+      const result: IterationResult = { status: "timeout" };
+      await plugin.onIterationEnd?.({ result, ctx });
+      return result;
     }
 
     throw error;
@@ -137,12 +165,13 @@ Requirements:
 };
 
 export const runLoopIteration = async (
-  { state, iterationNum, agent, signal, log }: {
+  { state, iterationNum, agent, signal, log, plugin }: {
     state: LoopState;
     iterationNum: number;
     agent: Agent;
     signal: AbortSignal;
     log: Logger;
+    plugin: Plugin;
   },
 ): Promise<LoopState> => {
   const result: IterationResult = state.task === "build"
@@ -152,12 +181,18 @@ export const runLoopIteration = async (
       signal,
       log,
       validationFailurePath: state.validationFailurePath,
+      plugin,
     })
     : { status: "continue" };
 
-  const validation: ValidationResult = state.task === "build"
+  const rawValidation: ValidationResult = state.task === "build"
     ? await runValidation({ iterationNum, log })
     : { status: "skip" };
+
+  const ctx: HookContext = { agent, log, iterationNum };
+  const validation = plugin.onValidationComplete
+    ? await plugin.onValidationComplete({ result: rawValidation, ctx })
+    : rawValidation;
 
   const validationFailurePath = validation.status === "failed"
     ? validation.outputPath

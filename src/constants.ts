@@ -1,7 +1,7 @@
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const REWORK_THRESHOLD = 1;
 export const USAGE =
-  "Usage: deno run ralph.mts --iterations <n> [--agent claude|codex]";
+  "Usage: deno run ralph.mts --iterations <n> [--agent claude|codex] [--plugin <path>]";
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";
 export const VALIDATE_SCRIPT = "specification.validate.sh";
 export const VALIDATE_OUTPUT_DIR = ".ralph/validation";

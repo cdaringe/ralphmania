@@ -1,14 +1,32 @@
 #!/usr/bin/env -S deno run --allow-run --allow-read --allow-write --allow-env
 /**
  * Sample usage:
- * deno run -A ralph.mts --iterations 10 --agent codex
- * deno run -A ralph.mts --iterations 10 --agent claude
+ * deno run -A mod.ts --iterations 10 --agent codex
+ * deno run -A mod.ts --iterations 10 --agent claude
+ * deno run -A mod.ts --iterations 10 --plugin ./my-plugin.ts
  */
+
+export type { HookContext, Plugin } from "./src/plugin.ts";
+export { loadPlugin, noopPlugin } from "./src/plugin.ts";
+export type {
+  Agent,
+  CommandSpec,
+  IterationResult,
+  Logger,
+  LoopState,
+  ModelSelection,
+  Result,
+  ToolMode,
+  ValidationResult,
+} from "./src/types.ts";
+export { err, ok, VALID_AGENTS } from "./src/types.ts";
+
 import type { LoopState } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
 import { parseCliArgs } from "./src/cli.ts";
 import { ensureValidationHook } from "./src/validation.ts";
 import { runLoopIteration } from "./src/runner.ts";
+import { loadPlugin } from "./src/plugin.ts";
 
 const main = async (): Promise<number> => {
   const log = createLogger();
@@ -19,7 +37,23 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  const { agent, iterations } = parsed.value;
+  const { pluginPath } = parsed.value;
+
+  const pluginResult = await loadPlugin({ pluginPath, log });
+  if (!pluginResult.ok) {
+    log({ tags: ["error"], message: pluginResult.error });
+    return 1;
+  }
+  const plugin = pluginResult.value;
+
+  const { agent, iterations } = plugin.onConfigResolved
+    ? await plugin.onConfigResolved({
+      agent: parsed.value.agent,
+      iterations: parsed.value.iterations,
+      log,
+    })
+    : parsed.value;
+
   log({
     tags: ["info"],
     message:
@@ -59,9 +93,16 @@ const main = async (): Promise<number> => {
       agent,
       signal: shutdownController.signal,
       log,
+      plugin,
     });
     if (state.task === "complete") break;
   }
+
+  await plugin.onLoopEnd?.({
+    finalState: state,
+    totalIterations: iterations,
+    log,
+  });
 
   log({
     tags: ["info"],
@@ -71,13 +112,15 @@ const main = async (): Promise<number> => {
   return 0;
 };
 
-main().then(
-  (code) => {
-    Deno.exitCode = code;
-  },
-  (error) => {
-    const log = createLogger();
-    log({ tags: ["error"], message: `Fatal error: ${error}` });
-    Deno.exit(1);
-  },
-);
+if (import.meta.main) {
+  main().then(
+    (code) => {
+      Deno.exitCode = code;
+    },
+    (error) => {
+      const log = createLogger();
+      log({ tags: ["error"], message: `Fatal error: ${error}` });
+      Deno.exit(1);
+    },
+  );
+}

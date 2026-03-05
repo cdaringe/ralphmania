@@ -1,6 +1,10 @@
 import type { Logger, Result, ValidationResult } from "./types.ts";
 import { err, ok } from "./types.ts";
-import { VALIDATE_OUTPUT_DIR, VALIDATE_SCRIPT, VALIDATE_TEMPLATE } from "./constants.ts";
+import {
+  VALIDATE_OUTPUT_DIR,
+  VALIDATE_SCRIPT,
+  VALIDATE_TEMPLATE,
+} from "./constants.ts";
 
 export const ensureValidationHook = async (
   log: Logger,
