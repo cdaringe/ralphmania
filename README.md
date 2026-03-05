@@ -62,7 +62,6 @@ Try to append only. Mark invalid scenarios `REMOVED`.
 **progress.md** (managed by the agent, editable by you):
 
 ```md
-<!-- END_DEMO -->
 | # | Status | Summary | Rework notes |
 |---|--------|---------|--------------|
 | 1 | VERIFIED | docs/scenarios/auth.md | |
