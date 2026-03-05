@@ -17,6 +17,11 @@ import { buildCommandSpec, buildPrompt } from "./command.ts";
 import { runValidation } from "./validation.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
 
+/**
+ * Read a byte stream, decode it, and forward each chunk to `output`.
+ *
+ * @returns `true` if any chunk contained the optional `marker` string.
+ */
 export const pipeStream = async ({ stream, output, marker }: {
   stream: ReadableStream<Uint8Array>;
   output: { write: (data: Uint8Array) => Promise<number> };
@@ -164,6 +169,10 @@ Requirements:
     : ok(undefined);
 };
 
+/**
+ * Execute one full cycle of the agentic loop: run the agent, validate
+ * the output, and advance the {@link LoopState}.
+ */
 export const runLoopIteration = async (
   { state, iterationNum, agent, signal, log, plugin }: {
     state: LoopState;

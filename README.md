@@ -1,6 +1,8 @@
 # ralphmania
 
-Run an AI agent in a loop until a specification is complete. Essentially, tell `ralphmania`, "Here are my goals, do work until everything is done and verified."
+Run an AI agent in a loop until a specification is complete. Essentially, tell
+`ralphmania`, "Here are my goals, do work until everything is done and
+verified."
 
 ```bash
 deno run -A jsr:@cdaringe/ralphmania -i 10
@@ -8,7 +10,7 @@ deno run -A jsr:@cdaringe/ralphmania -i 10 [-a claude|codex]
 deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
 ```
 
-- ✅ Good for projects where the specifications evolving, fuzzy, or not fully baked.
+- ✅ Good for projects where the specifications are evolving or not fully baked.
 - ❌ Bad for projects with firm or static specifications.
 
 <details>
@@ -38,9 +40,12 @@ designed for iterative development. Specifically, it has strong support for:
 
 1. Write a `specification.md` with scenarios
 2. Run ralphmania -- it iterates an AI agent, tracking progress in `progress.md`
-3. Each iteration is validated via `specification.validate.sh` (user tunable, created on first run)
-4. Review `progress.md` between runs -- mark scenarios as `VERIFIED` or `NEEDS_REWORK` to request fixes
-5. When rework is detected, ralphmania escalates to stronger models, scoped to failing scenarios
+3. Each iteration is validated via `specification.validate.sh` (user tunable,
+   created on first run)
+4. Review `progress.md` between runs -- mark scenarios as `VERIFIED` or
+   `NEEDS_REWORK` to request fixes
+5. When rework is detected, ralphmania escalates to stronger models, scoped to
+   failing scenarios
 
 ## Example
 
@@ -51,9 +56,9 @@ Write a specification document _like_ the following:
 ```md
 ## Scenarios
 
-| # | Scenario | Description |
-|---|----------|-------------|
-| 1 | Auth | Add login/logout with JWT |
+| # | Scenario  | Description                   |
+| - | --------- | ----------------------------- |
+| 1 | Auth      | Add login/logout with JWT     |
 | 2 | Dashboard | Show user stats on /dashboard |
 ```
 
@@ -62,13 +67,16 @@ Try to append only. Mark invalid scenarios `REMOVED`.
 **progress.md** (managed by the agent, editable by you):
 
 ```md
-| # | Status | Summary | Rework notes |
-|---|--------|---------|--------------|
-| 1 | VERIFIED | docs/scenarios/auth.md | |
+| # | Status       | Summary                     | Rework notes         |
+| - | ------------ | --------------------------- | -------------------- |
+| 1 | VERIFIED     | docs/scenarios/auth.md      |                      |
 | 2 | NEEDS_REWORK | docs/scenarios/dashboard.md | missing error states |
 ```
 
-Set a scenario to `NEEDS_REWORK` with notes and ralphmania will direct the agent to fix it, escalating to a stronger model if rework persists. The agent verification step will do this sometimes, or you the user may do this at the end of an iteration cycle!
+Set a scenario to `NEEDS_REWORK` with notes and ralphmania will direct the agent
+to fix it, escalating to a stronger model if rework persists. The agent
+verification step will do this sometimes, or you the user may do this at the end
+of an iteration cycle!
 
 ## Plugins
 
@@ -84,4 +92,5 @@ const plugin: Plugin = {
 export { plugin };
 ```
 
-Hooks: `onConfigResolved`, `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`, `onIterationEnd`, `onValidationComplete`, `onLoopEnd`.
+Hooks: `onConfigResolved`, `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`,
+`onIterationEnd`, `onValidationComplete`, `onLoopEnd`.

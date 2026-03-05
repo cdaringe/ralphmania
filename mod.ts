@@ -1,9 +1,15 @@
 #!/usr/bin/env -S deno run --allow-run --allow-read --allow-write --allow-env
 /**
- * Sample usage:
- * deno run -A mod.ts --iterations 10 --agent codex
+ * Ralphmania runs an AI agent in an agentic loop, iterating until a
+ * `specification.md` is fully implemented and validated.
+ *
+ * ```sh
  * deno run -A mod.ts --iterations 10 --agent claude
+ * deno run -A mod.ts --iterations 10 --agent codex
  * deno run -A mod.ts --iterations 10 --plugin ./my-plugin.ts
+ * ```
+ *
+ * @module
  */
 
 export type { HookContext, Plugin } from "./src/plugin.ts";
