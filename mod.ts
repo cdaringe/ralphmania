@@ -27,16 +27,48 @@ export type {
 } from "./src/types.ts";
 export { err, ok, VALID_AGENTS } from "./src/types.ts";
 
-import type { LoopState } from "./src/types.ts";
+import type { Agent, LoopState } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
-import { parseCliArgs } from "./src/cli.ts";
+import { parseCliArgsInteractive } from "./src/cli.ts";
 import { ensureValidationHook } from "./src/validation.ts";
 import { runLoopIteration } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
+import { getModel } from "./src/model.ts";
+import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
+
+const printBanner = (
+  { agent, iterations }: { agent: Agent; iterations: number },
+) => {
+  const fast = getModel({ agent, mode: "fast" });
+  const general = getModel({ agent, mode: "general" });
+  const strong = getModel({ agent, mode: "strong" });
+
+  const line = dim("─".repeat(46));
+  const encoder = new TextEncoder();
+  const w = (s: string) => Deno.stdout.writeSync(encoder.encode(s));
+
+  w(`\n${line}\n`);
+  w(`  ${bold(magenta("ralphmania"))} ${dim("v0.9.0")}\n`);
+  w(`${line}\n`);
+  w(`  ${dim("agent")}        ${bold(cyan(agent))}\n`);
+  w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
+  w(`\n`);
+  w(`  ${bold("Model Ladder")}\n`);
+  w(`  ${dim("fast")}    ${green("→")} ${fast}    ${dim("(receipts)")}\n`);
+  w(
+    `  ${dim("general")} ${green("→")} ${general} ${dim("(default build)")}\n`,
+  );
+  w(
+    `  ${dim("strong")}  ${green("→")} ${strong}  ${
+      dim("(rework escalation)")
+    }\n`,
+  );
+  w(`${line}\n\n`);
+};
 
 const main = async (): Promise<number> => {
   const log = createLogger();
-  const parsed = parseCliArgs(Deno.args);
+  const parsed = await parseCliArgsInteractive(Deno.args);
 
   if (!parsed.ok) {
     log({ tags: ["error"], message: parsed.error });
@@ -60,11 +92,7 @@ const main = async (): Promise<number> => {
     })
     : parsed.value;
 
-  log({
-    tags: ["info"],
-    message:
-      `Starting ralph loop for ${iterations} iterations with ${agent}...`,
-  });
+  printBanner({ agent, iterations });
 
   const shutdownController = new AbortController();
   const onSigint = () => {
@@ -74,6 +102,7 @@ const main = async (): Promise<number> => {
     });
     shutdownController.abort();
     Deno.removeSignalListener("SIGINT", onSigint);
+    Deno.addSignalListener("SIGINT", () => Deno.exit(130));
   };
   Deno.addSignalListener("SIGINT", onSigint);
 
