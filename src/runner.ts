@@ -234,6 +234,12 @@ export const runLoopIteration = async (
     plugin: Plugin;
   },
 ): Promise<LoopState> => {
+  const separator = "=".repeat(60);
+  log({
+    tags: ["info", "phase"],
+    message:
+      `\n${separator}\n  PHASE 1: AGENT EXECUTION (iteration ${iterationNum})\n${separator}`,
+  });
   const result: IterationResult = state.task === "build"
     ? await runIteration({
       iterationNum,
@@ -245,6 +251,11 @@ export const runLoopIteration = async (
     })
     : { status: "continue" };
 
+  log({
+    tags: ["info", "phase"],
+    message:
+      `\n${separator}\n  PHASE 2: VALIDATION (iteration ${iterationNum})\n${separator}`,
+  });
   const rawValidation: ValidationResult = state.task === "build"
     ? await runValidation({ iterationNum, log })
     : { status: "skip" };
@@ -262,10 +273,26 @@ export const runLoopIteration = async (
     result.status === "complete";
 
   if (!isPriorWorkOk) {
+    log({
+      tags: ["info", "phase"],
+      message:
+        `\n${separator}\n  ITERATION ${iterationNum} COMPLETE (continuing)\n${separator}\n`,
+    });
     return { validationFailurePath, task: state.task };
   }
 
+  log({
+    tags: ["info", "phase"],
+    message:
+      `\n${separator}\n  PHASE 3: RECEIPTS (iteration ${iterationNum})\n${separator}`,
+  });
   const receiptsResult = await updateReceipts({ agent });
+  log({
+    tags: ["info", "phase"],
+    message: `\n${separator}\n  ITERATION ${iterationNum} COMPLETE (${
+      receiptsResult.ok ? "done" : "receipts failed"
+    })\n${separator}\n`,
+  });
   return receiptsResult.ok
     ? { validationFailurePath, task: "complete" }
     : (log({ tags: ["error"], message: receiptsResult.error }),
