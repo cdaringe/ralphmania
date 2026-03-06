@@ -1,5 +1,29 @@
+import type { EffortLevel, ToolMode } from "./types.ts";
+
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const REWORK_THRESHOLD = 1;
+export const ESCALATION_FILE = ".ralph/escalation.json";
+
+/**
+ * 4-step Claude escalation ladder. Index = {@link EscalationLevel}.
+ *
+ * | Level | Model  | Mode    | Effort |
+ * |-------|--------|---------|--------|
+ * | 0     | sonnet | general | low    |
+ * | 1     | sonnet | general | high   |
+ * | 2     | opus   | strong  | medium |
+ * | 3     | opus   | strong  | high   |
+ */
+export const CLAUDE_LADDER: readonly {
+  model: string;
+  mode: ToolMode;
+  effort: EffortLevel;
+}[] = [
+  { model: "sonnet", mode: "general", effort: "low" },
+  { model: "sonnet", mode: "general", effort: "high" },
+  { model: "opus", mode: "strong", effort: "medium" },
+  { model: "opus", mode: "strong", effort: "high" },
+];
 export const USAGE =
   "Usage: deno run ralph.mts --iterations <n> [--agent claude|codex] [--plugin <path>]";
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";

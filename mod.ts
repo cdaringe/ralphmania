@@ -17,6 +17,9 @@ export { loadPlugin, noopPlugin } from "./src/plugin.ts";
 export type {
   Agent,
   CommandSpec,
+  EffortLevel,
+  EscalationLevel,
+  EscalationState,
   IterationResult,
   Logger,
   LoopState,
@@ -34,16 +37,13 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { runLoopIteration } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel } from "./src/model.ts";
+import { CLAUDE_LADDER } from "./src/constants.ts";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 
 const printBanner = (
   { agent, iterations }: { agent: Agent; iterations: number },
 ) => {
-  const fast = getModel({ agent, mode: "fast" });
-  const general = getModel({ agent, mode: "general" });
-  const strong = getModel({ agent, mode: "strong" });
-
   const line = dim("─".repeat(46));
   const encoder = new TextEncoder();
   const w = (s: string) => Deno.stdout.writeSync(encoder.encode(s));
@@ -55,17 +55,34 @@ const printBanner = (
   w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
   w(`\n`);
   w(`  ${bold("Model Ladder")}\n`);
-  w(
-    `  ${dim("fast")}    ${green("→")} ${fast}    ${dim("(default build)")}\n`,
-  );
-  w(
-    `  ${dim("general")} ${green("→")} ${general} ${
-      dim("(rework escalation)")
-    }\n`,
-  );
-  w(
-    `  ${dim("strong")}  ${green("→")} ${strong}  ${dim("(heavy rework)")}\n`,
-  );
+
+  if (agent === "claude") {
+    CLAUDE_LADDER.forEach((rung, i) => {
+      w(
+        `  ${dim(`L${i}`)} ${green("→")} ${rung.model} ${
+          dim(`(${rung.mode}, effort: ${rung.effort})`)
+        }\n`,
+      );
+    });
+  } else {
+    const fast = getModel({ agent, mode: "fast" });
+    const general = getModel({ agent, mode: "general" });
+    const strong = getModel({ agent, mode: "strong" });
+    w(
+      `  ${dim("fast")}    ${green("→")} ${fast}    ${
+        dim("(default build)")
+      }\n`,
+    );
+    w(
+      `  ${dim("general")} ${green("→")} ${general} ${
+        dim("(rework escalation)")
+      }\n`,
+    );
+    w(
+      `  ${dim("strong")}  ${green("→")} ${strong}  ${dim("(heavy rework)")}\n`,
+    );
+  }
+
   w(`${line}\n\n`);
 };
 

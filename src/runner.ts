@@ -124,7 +124,7 @@ const runIteration = async (
 
   log({
     tags: ["info", "iteration"],
-    message: `Starting ${iterationNum} (${selection.model})...`,
+    message: `Starting ${iterationNum} (${selection.model}${selection.effort ? `, effort: ${selection.effort}` : ""})...`,
   });
 
   const combinedSignal = AbortSignal.any([
@@ -138,7 +138,12 @@ const runIteration = async (
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
-      env: nonInteractiveEnv(),
+      env: {
+        ...nonInteractiveEnv(),
+        ...(selection.effort
+          ? { CLAUDE_CODE_EFFORT_LEVEL: selection.effort }
+          : {}),
+      },
       signal: combinedSignal,
     }).spawn();
 

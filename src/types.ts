@@ -40,14 +40,25 @@ export type ValidationResult =
  */
 export type ToolMode = "fast" | "general" | "strong";
 
+/** Claude Code effort level, passed via `CLAUDE_CODE_EFFORT_LEVEL` env var. */
+export type EffortLevel = "low" | "medium" | "high";
+
+/** Per-scenario escalation level (0–3) in the Claude ladder. */
+export type EscalationLevel = 0 | 1 | 2 | 3;
+
+/** Persistent escalation state: scenario number (as string) → level. */
+export type EscalationState = Record<string, EscalationLevel>;
+
 /**
  * The resolved model configuration for an iteration, including the concrete
- * model name, capability tier, and an optional scenario to focus on.
+ * model name, capability tier, an optional scenario to focus on, and an
+ * optional effort level for Claude Code.
  */
 export type ModelSelection = {
   readonly model: string;
   readonly mode: ToolMode;
   readonly targetScenario: number | undefined;
+  readonly effort: EffortLevel | undefined;
 };
 
 /** Outcome of a single agent iteration. */

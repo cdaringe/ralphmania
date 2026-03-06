@@ -2,9 +2,11 @@ import { assertEquals } from "jsr:@std/assert";
 import {
   computeModelSelection,
   detectScenarioFromProgress,
+  findReworkScenarios,
   getModel,
   parseImplementedCount,
   parseTotalCount,
+  updateEscalationState,
 } from "./model.ts";
 
 // parseImplementedCount tests
@@ -91,46 +93,183 @@ Deno.test("detectScenarioFromProgress empty content", () => {
   assertEquals(detectScenarioFromProgress(""), { ok: true, value: undefined });
 });
 
+// findReworkScenarios tests
+
+Deno.test("findReworkScenarios finds all rework scenario numbers", () => {
+  const content = [
+    "| 1 | COMPLETE |",
+    "| 2 | NEEDS_REWORK | fix it |",
+    "| 3 | VERIFIED |",
+    "| 5 | NEEDS_REWORK | broken |",
+  ].join("\n");
+  assertEquals(findReworkScenarios(content), [2, 5]);
+});
+
+Deno.test("findReworkScenarios returns empty for no rework", () => {
+  assertEquals(findReworkScenarios("| 1 | COMPLETE |"), []);
+});
+
+Deno.test("findReworkScenarios returns empty for empty content", () => {
+  assertEquals(findReworkScenarios(""), []);
+});
+
+// updateEscalationState tests
+
+Deno.test("updateEscalationState adds new rework scenarios at level 1", () => {
+  const result = updateEscalationState({
+    current: {},
+    reworkScenarios: [3, 7],
+  });
+  assertEquals(result, { "3": 1, "7": 1 });
+});
+
+Deno.test("updateEscalationState bumps existing scenarios", () => {
+  const result = updateEscalationState({
+    current: { "3": 1, "7": 2 },
+    reworkScenarios: [3, 7],
+  });
+  assertEquals(result, { "3": 2, "7": 3 });
+});
+
+Deno.test("updateEscalationState caps at level 3", () => {
+  const result = updateEscalationState({
+    current: { "3": 3 },
+    reworkScenarios: [3],
+  });
+  assertEquals(result, { "3": 3 });
+});
+
+Deno.test("updateEscalationState removes cleared scenarios", () => {
+  const result = updateEscalationState({
+    current: { "3": 2, "7": 1 },
+    reworkScenarios: [3],
+  });
+  assertEquals(result, { "3": 3 });
+});
+
+Deno.test("updateEscalationState handles mix of new, bump, and clear", () => {
+  const result = updateEscalationState({
+    current: { "1": 2, "5": 1 },
+    reworkScenarios: [1, 9],
+  });
+  assertEquals(result, { "1": 3, "9": 1 });
+});
+
 // computeModelSelection tests
 
-Deno.test("computeModelSelection below threshold uses general", () => {
+Deno.test("computeModelSelection claude with escalation level 0", () => {
   const content = "| 1 | NEEDS_REWORK |";
-  const result = computeModelSelection(content, "claude");
+  const result = computeModelSelection({
+    content,
+    agent: "claude",
+    escalationLevel: 0,
+  });
   assertEquals(result.ok, true);
   if (result.ok) {
-    assertEquals(result.value.mode, "general");
     assertEquals(result.value.model, "sonnet");
+    assertEquals(result.value.mode, "general");
+    assertEquals(result.value.effort, "low");
   }
 });
 
-Deno.test("computeModelSelection above threshold uses strong", () => {
+Deno.test("computeModelSelection claude with escalation level 1", () => {
+  const content = "| 1 | NEEDS_REWORK |";
+  const result = computeModelSelection({
+    content,
+    agent: "claude",
+    escalationLevel: 1,
+  });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.model, "sonnet");
+    assertEquals(result.value.mode, "general");
+    assertEquals(result.value.effort, "high");
+  }
+});
+
+Deno.test("computeModelSelection claude with escalation level 2", () => {
+  const content = "| 1 | NEEDS_REWORK |";
+  const result = computeModelSelection({
+    content,
+    agent: "claude",
+    escalationLevel: 2,
+  });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.model, "opus");
+    assertEquals(result.value.mode, "strong");
+    assertEquals(result.value.effort, "medium");
+  }
+});
+
+Deno.test("computeModelSelection claude with escalation level 3", () => {
+  const content = "| 1 | NEEDS_REWORK |";
+  const result = computeModelSelection({
+    content,
+    agent: "claude",
+    escalationLevel: 3,
+  });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.model, "opus");
+    assertEquals(result.value.mode, "strong");
+    assertEquals(result.value.effort, "high");
+  }
+});
+
+Deno.test("computeModelSelection codex below threshold uses general", () => {
+  const content = "| 1 | NEEDS_REWORK |";
+  const result = computeModelSelection({ content, agent: "codex" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.mode, "general");
+    assertEquals(result.value.model, "gpt-5.1-codex-max");
+    assertEquals(result.value.effort, undefined);
+  }
+});
+
+Deno.test("computeModelSelection codex above threshold uses strong", () => {
   const content = "| 1 | NEEDS_REWORK |\n| 2 | NEEDS_REWORK |";
-  const result = computeModelSelection(content, "claude");
+  const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.mode, "strong");
-    assertEquals(result.value.model, "opus");
+    assertEquals(result.value.model, "gpt-5.3-codex");
+    assertEquals(result.value.effort, undefined);
   }
 });
 
 Deno.test("computeModelSelection no rework uses fast", () => {
   const content = "| 1 | COMPLETED |";
-  const result = computeModelSelection(content, "codex");
+  const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.mode, "fast");
     assertEquals(result.value.model, "gpt-5.1-codex");
     assertEquals(result.value.targetScenario, undefined);
+    assertEquals(result.value.effort, undefined);
   }
 });
 
 Deno.test("computeModelSelection codex above threshold", () => {
   const content = "| 5 | NEEDS_REWORK |\n| 6 | NEEDS_REWORK |";
-  const result = computeModelSelection(content, "codex");
+  const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.mode, "strong");
     assertEquals(result.value.model, "gpt-5.3-codex");
     assertEquals(result.value.targetScenario, 5);
+    assertEquals(result.value.effort, undefined);
+  }
+});
+
+Deno.test("computeModelSelection claude without escalation level falls through to codex path", () => {
+  const content = "| 1 | NEEDS_REWORK |";
+  const result = computeModelSelection({ content, agent: "claude" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.mode, "general");
+    assertEquals(result.value.model, "sonnet");
+    assertEquals(result.value.effort, undefined);
   }
 });
