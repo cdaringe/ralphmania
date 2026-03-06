@@ -121,7 +121,7 @@ Deno.test("extractNdjsonResult extracts text from assistant message", () => {
         },
       }),
     ),
-    "Hello world",
+    "Hello \n[tool: Read]\nworld",
   );
 });
 
@@ -134,10 +134,10 @@ Deno.test("extractNdjsonResult extracts tool_use_summary", () => {
   );
 });
 
-Deno.test("extractNdjsonResult skips system events", () => {
+Deno.test("extractNdjsonResult extracts system events", () => {
   assertEquals(
     extractNdjsonResult('{"type":"system","subtype":"init","session_id":"x"}'),
-    undefined,
+    "[system: init]",
   );
 });
 
@@ -145,12 +145,12 @@ Deno.test("extractNdjsonResult returns raw line on invalid JSON", () => {
   assertEquals(extractNdjsonResult("not json at all"), "not json at all");
 });
 
-Deno.test("extractNdjsonResult returns undefined for error result", () => {
+Deno.test("extractNdjsonResult extracts error result", () => {
   assertEquals(
     extractNdjsonResult(
       '{"type":"result","subtype":"error_max_turns","is_error":true,"errors":["max turns"]}',
     ),
-    undefined,
+    "[error_max_turns] max turns",
   );
 });
 
@@ -180,7 +180,7 @@ Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () 
   await stream.pipeThrough(ndjsonResultTransform()).pipeTo(writable);
   const output = chunks.join("");
   assertEquals(output.includes("hello "), true);
-  assertEquals(output.includes("system"), false);
+  assertEquals(output.includes("[system: init]"), true);
   assertEquals(output.includes("world"), true);
 });
 

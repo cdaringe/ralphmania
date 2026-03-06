@@ -124,7 +124,9 @@ const runIteration = async (
 
   log({
     tags: ["info", "iteration"],
-    message: `Starting ${iterationNum} (${selection.model}${selection.effort ? `, effort: ${selection.effort}` : ""})...`,
+    message: `Starting ${iterationNum} (${selection.model}${
+      selection.effort ? `, effort: ${selection.effort}` : ""
+    })...`,
   });
 
   const combinedSignal = AbortSignal.any([

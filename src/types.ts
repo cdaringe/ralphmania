@@ -178,23 +178,35 @@ export const isSDKMessage = (v: unknown): v is SDKMessage =>
 type TextBlock = Extract<ContentBlock, { type: "text" }>;
 
 /**
- * Extract displayable text from a parsed SDK streaming message,
- * matching how Claude Code renders output to the terminal.
+ * Extract displayable text from a parsed SDK streaming message.
+ * Biases towards showing MORE output so the user sees activity.
  *
  * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
  */
 export const extractSDKText = (raw: unknown): string | undefined => {
   if (!isSDKMessage(raw)) return undefined;
   switch (raw.type) {
-    case "assistant":
-      return raw.message.content
-        .filter((b): b is TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("") || undefined;
+    case "assistant": {
+      const parts = raw.message.content.flatMap((b): string[] => {
+        switch (b.type) {
+          case "text":
+            return b.text ? [b.text] : [];
+          case "tool_use":
+            return [`[tool: ${b.name}]`];
+          case "thinking":
+            return b.thinking ? [b.thinking] : [];
+        }
+      });
+      return parts.join("\n") || undefined;
+    }
     case "result":
-      return raw.subtype === "success" ? raw.result : undefined;
+      return raw.subtype === "success"
+        ? raw.result
+        : `[${raw.subtype}] ${raw.errors.join(", ")}`;
     case "tool_use_summary":
       return raw.summary;
+    case "system":
+      return `[system: ${raw.subtype}]`;
     default:
       return undefined;
   }
