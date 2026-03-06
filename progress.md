@@ -16,7 +16,7 @@
 | 10 |          |                                                                                                                               |              |
 | 11 |          |                                                                                                                               |              |
 | 12 |          |                                                                                                                               |              |
-| 13 |          |                                                                                                                               |              |
+| 13 | COMPLETE | [Each iteration capped at 60 minutes via AbortSignal.timeout](docs/scenarios/13-iteration-timeout.md)                         |              |
 | 14 |          |                                                                                                                               |              |
 | 15 | COMPLETE | [First boot generates progress.md template](docs/scenarios/15-first-boot-progress-generation.md)                              |              |
 | 16 | COMPLETE | [Logger prefixes all output with [ralph:...] tag](docs/scenarios/16-logger-ralphmania-prefix.md)                              |              |
