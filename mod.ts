@@ -34,6 +34,7 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { runLoopIteration } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel } from "./src/model.ts";
+import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 
 const printBanner = (
@@ -105,6 +106,8 @@ const main = async (): Promise<number> => {
     Deno.addSignalListener("SIGINT", () => Deno.exit(130));
   };
   Deno.addSignalListener("SIGINT", onSigint);
+
+  await ensureProgressFile(log);
 
   const hookResult = await ensureValidationHook(log);
   if (!hookResult.ok) {

@@ -18,3 +18,5 @@
 | 12 |          |                                                                                                        |              |
 | 13 |          |                                                                                                        |              |
 | 14 |          |                                                                                                        |              |
+| 15 | COMPLETE | [First boot generates progress.md template](docs/scenarios/15-first-boot-progress-generation.md)       |              |
+| 16 |          |                                                                                                        |              |
