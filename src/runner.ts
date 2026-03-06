@@ -9,6 +9,7 @@ import type {
 import { err, extractSDKText, ok } from "./types.ts";
 import {
   COMPLETION_MARKER,
+  nonInteractiveEnv,
   RALPH_RECEIPTS_DIRNAME,
   TIMEOUT_MS,
 } from "./constants.ts";
@@ -136,6 +137,7 @@ const runIteration = async (
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
+      env: nonInteractiveEnv(),
       signal: combinedSignal,
     }).spawn();
 
@@ -212,8 +214,10 @@ Requirements:
   });
   const output = await new Deno.Command(spec.command, {
     args: spec.args,
+    stdin: "null",
     stdout: "piped",
     stderr: "piped",
+    env: nonInteractiveEnv(),
   }).output();
   return output.code
     ? err(`Failed to update receipts with exit code ${output.code}`)

@@ -1,6 +1,7 @@
 import type { Logger, Result, ValidationResult } from "./types.ts";
 import { err, ok } from "./types.ts";
 import {
+  nonInteractiveEnv,
   VALIDATE_OUTPUT_DIR,
   VALIDATE_SCRIPT,
   VALIDATE_TEMPLATE,
@@ -46,8 +47,10 @@ export const runValidation = async ({ iterationNum, log }: {
 
   const child = new Deno.Command("bash", {
     args: [VALIDATE_SCRIPT],
+    stdin: "null",
     stdout: "piped",
     stderr: "piped",
+    env: nonInteractiveEnv(),
   }).spawn();
 
   await Promise.all([

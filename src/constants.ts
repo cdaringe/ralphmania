@@ -20,6 +20,28 @@ exit 1
 
 export const RALPH_RECEIPTS_DIRNAME = ".ralph/receipts";
 
+/**
+ * Environment variable overrides that suppress interactive password/passphrase
+ * prompts from common tools. Programs that open `/dev/tty` directly (git, ssh,
+ * gpg, sudo) bypass stdin:"null" — these env vars cause them to fail fast
+ * instead of hanging.
+ *
+ * Use {@link nonInteractiveEnv} to merge these with the inherited environment.
+ */
+export const NON_INTERACTIVE_ENV_OVERRIDES: Record<string, string> = {
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_SSH_COMMAND: "ssh -o BatchMode=yes",
+  SSH_BATCH_MODE: "yes",
+  DEBIAN_FRONTEND: "noninteractive",
+  CI: "true",
+};
+
+/** Merge inherited environment with non-interactive overrides. */
+export const nonInteractiveEnv = (): Record<string, string> => ({
+  ...Deno.env.toObject(),
+  ...NON_INTERACTIVE_ENV_OVERRIDES,
+});
+
 export const BASE_PROMPT = `@specification.md @progress.md
 ONLY DO ONE TASK AT A TIME.
 
