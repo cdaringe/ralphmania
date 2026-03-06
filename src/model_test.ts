@@ -84,13 +84,13 @@ Deno.test("computeModelSelection above threshold uses strong", () => {
   }
 });
 
-Deno.test("computeModelSelection no rework uses general", () => {
+Deno.test("computeModelSelection no rework uses fast", () => {
   const content = "| 1 | COMPLETED |";
   const result = computeModelSelection(content, "codex");
   assertEquals(result.ok, true);
   if (result.ok) {
-    assertEquals(result.value.mode, "general");
-    assertEquals(result.value.model, "gpt-5.1-codex-max");
+    assertEquals(result.value.mode, "fast");
+    assertEquals(result.value.model, "gpt-5.1-codex");
     assertEquals(result.value.targetScenario, undefined);
   }
 });

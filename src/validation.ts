@@ -37,11 +37,16 @@ export const runValidation = async ({ iterationNum, log }: {
     truncate: true,
   });
 
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const stripAnsi = (text: string): string =>
+    text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+
   const tee = (dest: typeof Deno.stdout) =>
     new WritableStream<Uint8Array>({
       write(chunk) {
         dest.writeSync(chunk);
-        file.writeSync(chunk);
+        file.writeSync(encoder.encode(stripAnsi(decoder.decode(chunk))));
       },
     });
 

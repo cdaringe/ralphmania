@@ -2,7 +2,8 @@
 
 ## Requirement
 
-> The logger SHALL clearly identify ralphmania logs as associated with ralphmania, as there are many other streams piped to stdio within ralphmania.
+> The logger SHALL clearly identify ralphmania logs as associated with
+> ralphmania, as there are many other streams piped to stdio within ralphmania.
 
 ## Implementation
 

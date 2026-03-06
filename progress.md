@@ -20,3 +20,4 @@
 | 14 |          |                                                                                                        |              |
 | 15 | COMPLETE | [First boot generates progress.md template](docs/scenarios/15-first-boot-progress-generation.md)       |              |
 | 16 | COMPLETE | [Logger prefixes all output with [ralph:...] tag](docs/scenarios/16-logger-ralphmania-prefix.md)       |              |
+| 17 | COMPLETE | [Validation logs stripped of ANSI color codes](docs/scenarios/17-strip-color-codes-from-logs.md)        |              |

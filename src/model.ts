@@ -44,7 +44,9 @@ export const computeModelSelection = (
 
   const mode = reworkCount > REWORK_THRESHOLD
     ? "strong" as const
-    : "general" as const;
+    : reworkCount > 0
+    ? "general" as const
+    : "fast" as const;
   const model = getModel({ agent, mode });
 
   return ok({
@@ -58,7 +60,7 @@ export const resolveModelSelection = async (
   agent: Agent,
   log: Logger,
 ): Promise<ModelSelection> => {
-  const defaultMode = "general" as const;
+  const defaultMode = "fast" as const;
   const defaults: ModelSelection = {
     model: getModel({ agent, mode: defaultMode }),
     mode: defaultMode,

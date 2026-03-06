@@ -55,14 +55,16 @@ const printBanner = (
   w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
   w(`\n`);
   w(`  ${bold("Model Ladder")}\n`);
-  w(`  ${dim("fast")}    ${green("→")} ${fast}    ${dim("(receipts)")}\n`);
   w(
-    `  ${dim("general")} ${green("→")} ${general} ${dim("(default build)")}\n`,
+    `  ${dim("fast")}    ${green("→")} ${fast}    ${dim("(default build)")}\n`,
   );
   w(
-    `  ${dim("strong")}  ${green("→")} ${strong}  ${
+    `  ${dim("general")} ${green("→")} ${general} ${
       dim("(rework escalation)")
     }\n`,
+  );
+  w(
+    `  ${dim("strong")}  ${green("→")} ${strong}  ${dim("(heavy rework)")}\n`,
   );
   w(`${line}\n\n`);
 };
