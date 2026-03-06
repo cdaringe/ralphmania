@@ -10,8 +10,8 @@
 
 ### 1. Validation execution (`src/validation.ts`)
 
-`runValidation({ iterationNum, log })` is called from `runLoopIteration` (Phase 2)
-after every agent iteration. It:
+`runValidation({ iterationNum, log })` is called from `runLoopIteration`
+(Phase 2) after every agent iteration. It:
 
 - Creates `.ralph/validation/` via `Deno.mkdir` (recursive).
 - Opens `iteration-{N}.log` for writing.
@@ -53,9 +53,9 @@ instructed to fix those issues first.
 
 ## Evidence
 
-| Concern | File | Symbol |
-| --- | --- | --- |
-| Runs script & captures log | `src/validation.ts:28` | `runValidation` |
-| Log path constant | `src/constants.ts:7` | `VALIDATE_OUTPUT_DIR` |
-| Threads failure path in state | `src/runner.ts:274-276` | `runLoopIteration` |
-| Injects failure into prompt | `src/command.ts:16-22` | `buildPrompt` |
+| Concern                       | File                    | Symbol                |
+| ----------------------------- | ----------------------- | --------------------- |
+| Runs script & captures log    | `src/validation.ts:28`  | `runValidation`       |
+| Log path constant             | `src/constants.ts:7`    | `VALIDATE_OUTPUT_DIR` |
+| Threads failure path in state | `src/runner.ts:274-276` | `runLoopIteration`    |
+| Injects failure into prompt   | `src/command.ts:16-22`  | `buildPrompt`         |
