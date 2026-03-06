@@ -13,7 +13,7 @@
 | 7  | COMPLETE | [Run validation script, capture log, feed failure context back](docs/scenarios/07-validation-run-and-feedback.md)             |              |
 | 8  | COMPLETE | [NEEDS_REWORK detection and per-scenario model escalation](docs/scenarios/08-rework-escalation.md)                            |              |
 | 9  | COMPLETE | [Agent scoped to failing scenario during escalation](docs/scenarios/09-scope-to-failing-scenario.md)                          |              |
-| 10 |          |                                                                                                                               |              |
+| 10 | COMPLETE | [Agent self-reviews all claims, marks VERIFIED or NEEDS_REWORK](docs/scenarios/10-self-review-verification.md)                |              |
 | 11 | COMPLETE | [Evidence receipts generated in .ralph/receipts/ on completion](docs/scenarios/11-receipts.md)                               |              |
 | 12 | COMPLETE | [User-provided plugins with 7 lifecycle hooks](docs/scenarios/12-plugins.md)                                                  |              |
 | 13 | COMPLETE | [Each iteration capped at 60 minutes via AbortSignal.timeout](docs/scenarios/13-iteration-timeout.md)                         |              |
