@@ -7,7 +7,7 @@
 | 1  |          |                                                                                                        |              |
 | 2  | COMPLETE | [CLI accepts --agent/-a, --iterations/-i, --plugin/-p flags](docs/scenarios/02-cli-flags.md)           |              |
 | 3  | COMPLETE | [Startup banner shows agent, iterations, model ladder](docs/scenarios/03-startup-banner.md)            |              |
-| 4  |          |                                                                                                        |              |
+| 4  | COMPLETE | [Agentic loop runs N iterations, stops early on completion](docs/scenarios/04-agentic-loop.md)         |              |
 | 5  | COMPLETE | [SIGINT graceful: first aborts, second force-exits 130](docs/scenarios/05-sigint-graceful-shutdown.md) |              |
 | 6  |          |                                                                                                        |              |
 | 7  |          |                                                                                                        |              |

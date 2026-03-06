@@ -4,7 +4,8 @@
 
 At each iteration start, the model-selection log SHALL report progress as
 `"Status: N of M implemented, finding next task..."` (parsed from `progress.md`)
-when no rework is pending, and mention `NEEDS_REWORK` only when rework entries exist.
+when no rework is pending, and mention `NEEDS_REWORK` only when rework entries
+exist.
 
 ## Implementation
 
@@ -26,8 +27,9 @@ iteration via `runIteration`):
 
 ## Evidence
 
-- `src/model_test.ts` — 4 new unit tests cover both helpers and both log
-  message branches; all 17 tests pass (`deno test src/model_test.ts`).
-- The log is emitted via `log({ tags: ["info", "model"], message: statusMessage })`
-  inside `resolveModelSelection`, which is invoked once per iteration before any
-  agent subprocess is spawned.
+- `src/model_test.ts` — 4 new unit tests cover both helpers and both log message
+  branches; all 17 tests pass (`deno test src/model_test.ts`).
+- The log is emitted via
+  `log({ tags: ["info", "model"], message: statusMessage })` inside
+  `resolveModelSelection`, which is invoked once per iteration before any agent
+  subprocess is spawned.
