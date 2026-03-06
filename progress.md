@@ -12,7 +12,7 @@
 | 6  | COMPLETE | [Auto-create specification.validate.sh with placeholder, halt until filled](docs/scenarios/06-validation-hook-auto-create.md) |              |
 | 7  | COMPLETE | [Run validation script, capture log, feed failure context back](docs/scenarios/07-validation-run-and-feedback.md)             |              |
 | 8  | COMPLETE | [NEEDS_REWORK detection and per-scenario model escalation](docs/scenarios/08-rework-escalation.md)                            |              |
-| 9  |          |                                                                                                                               |              |
+| 9  | COMPLETE | [Agent scoped to failing scenario during escalation](docs/scenarios/09-scope-to-failing-scenario.md)                          |              |
 | 10 |          |                                                                                                                               |              |
 | 11 |          |                                                                                                                               |              |
 | 12 |          |                                                                                                                               |              |
