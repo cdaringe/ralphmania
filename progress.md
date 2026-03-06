@@ -4,7 +4,7 @@
 
 | #  | Status   | Summary                                                                                                                       | Rework Notes |
 | -- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1  |          |                                                                                                                               |              |
+| 1  | COMPLETE | [Interactive prompting for missing agent/iterations input](docs/scenarios/01-interactive-prompting.md)                        |              |
 | 2  | COMPLETE | [CLI accepts --agent/-a, --iterations/-i, --plugin/-p flags](docs/scenarios/02-cli-flags.md)                                  |              |
 | 3  | COMPLETE | [Startup banner shows agent, iterations, model ladder](docs/scenarios/03-startup-banner.md)                                   |              |
 | 4  | COMPLETE | [Agentic loop runs N iterations, stops early on completion](docs/scenarios/04-agentic-loop.md)                                |              |
