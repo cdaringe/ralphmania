@@ -2,7 +2,8 @@
 
 ## Requirement
 
-> When flushing results to disk, the system SHALL not record terminal color codes, ensuring logs are plain text.
+> When flushing results to disk, the system SHALL not record terminal color
+> codes, ensuring logs are plain text.
 
 ## Implementation
 
@@ -27,8 +28,8 @@ const stripAnsi = (text: string): string =>
 const tee = (dest: typeof Deno.stdout) =>
   new WritableStream<Uint8Array>({
     write(chunk) {
-      dest.writeSync(chunk);  // colors preserved for terminal
-      file.writeSync(encoder.encode(stripAnsi(decoder.decode(chunk))));  // plain text on disk
+      dest.writeSync(chunk); // colors preserved for terminal
+      file.writeSync(encoder.encode(stripAnsi(decoder.decode(chunk)))); // plain text on disk
     },
   });
 ```
