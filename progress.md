@@ -14,7 +14,7 @@
 | 8  | COMPLETE | [NEEDS_REWORK detection and per-scenario model escalation](docs/scenarios/08-rework-escalation.md)                            |              |
 | 9  | COMPLETE | [Agent scoped to failing scenario during escalation](docs/scenarios/09-scope-to-failing-scenario.md)                          |              |
 | 10 |          |                                                                                                                               |              |
-| 11 |          |                                                                                                                               |              |
+| 11 | COMPLETE | [Evidence receipts generated in .ralph/receipts/ on completion](docs/scenarios/11-receipts.md)                               |              |
 | 12 | COMPLETE | [User-provided plugins with 7 lifecycle hooks](docs/scenarios/12-plugins.md)                                                  |              |
 | 13 | COMPLETE | [Each iteration capped at 60 minutes via AbortSignal.timeout](docs/scenarios/13-iteration-timeout.md)                         |              |
 | 14 | COMPLETE | [Subprocesses run with CI=true, no prompts, stdin null](docs/scenarios/14-non-interactive-environment.md)                     |              |
