@@ -32,7 +32,7 @@ export const createLogger = (): Logger => {
     const coloredTags = tags.map(colorizeTag).join(dim(":"));
     const coloredMessage = level === "error" ? bold(red(message)) : message;
     const encoded = encoder.encode(
-      `${dim("[")}${coloredTags}${dim("]")} ${coloredMessage}\n`,
+      `${dim("[")}${magenta("ralph")}${dim(":")}${coloredTags}${dim("]")} ${coloredMessage}\n`,
     );
     level === "error"
       ? Deno.stderr.writeSync(encoded)
