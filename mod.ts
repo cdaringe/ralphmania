@@ -13,6 +13,9 @@
  */
 
 export type { HookContext, Plugin } from "./src/plugin.ts";
+
+import denoConfig from "./deno.json" with { type: "json" };
+const { version } = denoConfig;
 export { loadPlugin, noopPlugin } from "./src/plugin.ts";
 export type {
   Agent,
@@ -49,7 +52,7 @@ const printBanner = (
   const w = (s: string) => Deno.stdout.writeSync(encoder.encode(s));
 
   w(`\n${line}\n`);
-  w(`  ${bold(magenta("ralphmania"))} ${dim("v0.9.0")}\n`);
+  w(`  ${bold(magenta("ralphmania"))} ${dim(`v${version}`)}\n`);
   w(`${line}\n`);
   w(`  ${dim("agent")}        ${bold(cyan(agent))}\n`);
   w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
