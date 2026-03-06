@@ -142,7 +142,7 @@ export type SDKToolUseSummaryMessage = {
  * Discriminated union of NDJSON message types emitted by
  * `claude --output-format=stream-json`.
  *
- * The catch-all variant covers event types we don't extract from.
+ * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
  */
 export type SDKMessage =
   | SDKResultMessage
@@ -151,44 +151,40 @@ export type SDKMessage =
   | SDKPartialAssistantMessage
   | SDKToolUseSummaryMessage;
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null;
+const SDK_MESSAGE_TYPES: ReadonlySet<string> = new Set<SDKMessage["type"]>([
+  "result",
+  "system",
+  "assistant",
+  "stream_event",
+  "tool_use_summary",
+]);
+
+/** Narrows parsed JSON to a known SDK streaming message. */
+export const isSDKMessage = (v: unknown): v is SDKMessage =>
+  typeof v === "object" && v !== null &&
+  SDK_MESSAGE_TYPES.has((v as { type: string }).type);
+
+type TextBlock = Extract<ContentBlock, { type: "text" }>;
 
 /**
- * Extract displayable text from any SDK streaming message.
+ * Extract displayable text from a parsed SDK streaming message,
+ * matching how Claude Code renders output to the terminal.
  *
- * Handles:
- * - `SDKAssistantMessage` → text content blocks from `message.content`
- * - `SDKResultMessage` (success) → final `.result` string
- * - `SDKToolUseSummaryMessage` → `.summary`
- *
- * Returns `undefined` for events with no user-facing text (system, hooks, etc.).
+ * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
  */
 export const extractSDKText = (raw: unknown): string | undefined => {
-  if (!isRecord(raw)) return undefined;
-  const type = raw.type;
-  return type === "assistant"
-    ? extractAssistantText(raw)
-    : type === "result" && raw.subtype === "success" &&
-        typeof raw.result === "string"
-    ? raw.result
-    : type === "tool_use_summary" && typeof raw.summary === "string"
-    ? raw.summary
-    : undefined;
-};
-
-const extractAssistantText = (
-  raw: Record<string, unknown>,
-): string | undefined => {
-  const msg = raw.message;
-  if (!isRecord(msg) || !Array.isArray(msg.content)) return undefined;
-  const text = (msg.content as unknown[])
-    .filter(
-      (block): block is { type: "text"; text: string } =>
-        isRecord(block) && block.type === "text" &&
-        typeof block.text === "string",
-    )
-    .map((block) => block.text)
-    .join("");
-  return text || undefined;
+  if (!isSDKMessage(raw)) return undefined;
+  switch (raw.type) {
+    case "assistant":
+      return raw.message.content
+        .filter((b): b is TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("") || undefined;
+    case "result":
+      return raw.subtype === "success" ? raw.result : undefined;
+    case "tool_use_summary":
+      return raw.summary;
+    default:
+      return undefined;
+  }
 };

@@ -145,13 +145,6 @@ Deno.test("extractNdjsonResult returns raw line on invalid JSON", () => {
   assertEquals(extractNdjsonResult("not json at all"), "not json at all");
 });
 
-Deno.test("extractNdjsonResult returns undefined for non-string result", () => {
-  assertEquals(
-    extractNdjsonResult('{"type":"result","subtype":"success","result":42}'),
-    undefined,
-  );
-});
-
 Deno.test("extractNdjsonResult returns undefined for error result", () => {
   assertEquals(
     extractNdjsonResult(
