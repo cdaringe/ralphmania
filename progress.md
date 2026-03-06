@@ -22,3 +22,4 @@
 | 16 | COMPLETE | [Logger prefixes all output with [ralph:...] tag](docs/scenarios/16-logger-ralphmania-prefix.md)                              |              |
 | 17 | COMPLETE | [Validation logs stripped of ANSI color codes](docs/scenarios/17-strip-color-codes-from-logs.md)                              |              |
 | 18 | COMPLETE | [Model-selection log reports progress status](docs/scenarios/18-model-selection-progress-status.md)                           |              |
+| 19 | COMPLETE | [Claude 4-step escalation ladder via CLAUDE_CODE_EFFORT_LEVEL](docs/scenarios/19-claude-escalation-ladder.md)                 |              |
