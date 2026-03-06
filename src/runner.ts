@@ -239,18 +239,11 @@ export const runLoopIteration = async (
     plugin: Plugin;
   },
 ): Promise<LoopState> => {
-  const phase = (label: string) => {
-    const bar = dim("━".repeat(56));
-    return `\n${bar}\n  ${bold(label)}\n${bar}`;
-  };
-
   log({
     tags: ["info", "phase"],
-    message: phase(
-      `${magenta("PHASE 1")} ${cyan("AGENT EXECUTION")} ${
-        dim(`(iteration ${iterationNum})`)
-      }`,
-    ),
+    message: `${magenta("PHASE 1")} ${cyan("AGENT EXECUTION")} ${
+      dim(`(iteration ${iterationNum})`)
+    }`,
   });
   const result: IterationResult = state.task === "build"
     ? await runIteration({
@@ -265,11 +258,9 @@ export const runLoopIteration = async (
 
   log({
     tags: ["info", "phase"],
-    message: phase(
-      `${magenta("PHASE 2")} ${yellow("VALIDATION")} ${
-        dim(`(iteration ${iterationNum})`)
-      }`,
-    ),
+    message: `${magenta("PHASE 2")} ${yellow("VALIDATION")} ${
+      dim(`(iteration ${iterationNum})`)
+    }`,
   });
   const rawValidation: ValidationResult = state.task === "build"
     ? await runValidation({ iterationNum, log })
@@ -290,31 +281,25 @@ export const runLoopIteration = async (
   if (!isPriorWorkOk) {
     log({
       tags: ["info", "phase"],
-      message: phase(
-        `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
-          cyan("(continuing)")
-        }`,
-      ),
+      message: `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
+        cyan("(continuing)")
+      }`,
     });
     return { validationFailurePath, task: state.task };
   }
 
   log({
     tags: ["info", "phase"],
-    message: phase(
-      `${magenta("PHASE 3")} ${green("RECEIPTS")} ${
-        dim(`(iteration ${iterationNum})`)
-      }`,
-    ),
+    message: `${magenta("PHASE 3")} ${green("RECEIPTS")} ${
+      dim(`(iteration ${iterationNum})`)
+    }`,
   });
   const receiptsResult = await updateReceipts({ agent });
   log({
     tags: ["info", "phase"],
-    message: phase(
-      `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
-        receiptsResult.ok ? green("(done)") : red("(receipts failed)")
-      }`,
-    ),
+    message: `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
+      receiptsResult.ok ? green("(done)") : red("(receipts failed)")
+    }`,
   });
   return receiptsResult.ok
     ? { validationFailurePath, task: "complete" }
