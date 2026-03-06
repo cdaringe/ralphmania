@@ -56,6 +56,14 @@ export const computeModelSelection = (
   });
 };
 
+/** Count rows with COMPLETE or VERIFIED status in progress.md content. */
+export const parseImplementedCount = (content: string): number =>
+  (content.match(/^\|\s*\d+\s*\|\s*(COMPLETE|VERIFIED)\s*\|/gm) ?? []).length;
+
+/** Count total scenario rows in progress.md content. */
+export const parseTotalCount = (content: string): number =>
+  (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length;
+
 export const resolveModelSelection = async (
   agent: Agent,
   log: Logger,
@@ -80,10 +88,12 @@ export const resolveModelSelection = async (
 
   const { model, mode, targetScenario } = result.value;
   const reworkCount = (content?.match(/NEEDS_REWORK/g) ?? []).length;
-  log({
-    tags: ["info", "model"],
-    message: `${reworkCount} NEEDS_REWORK entries → using ${model}`,
-  });
+  const statusMessage = reworkCount > 0
+    ? `${reworkCount} NEEDS_REWORK entries → using ${model}`
+    : `Status: ${parseImplementedCount(content ?? "")} of ${
+      parseTotalCount(content ?? "")
+    } implemented, finding next task...`;
+  log({ tags: ["info", "model"], message: statusMessage });
 
   if (mode === "strong" && targetScenario !== undefined) {
     log({

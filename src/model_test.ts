@@ -3,7 +3,36 @@ import {
   computeModelSelection,
   detectScenarioFromProgress,
   getModel,
+  parseImplementedCount,
+  parseTotalCount,
 } from "./model.ts";
+
+// parseImplementedCount tests
+
+Deno.test("parseImplementedCount counts COMPLETE rows", () => {
+  const content = [
+    "| 1  | COMPLETE | done |",
+    "| 2  |          |      |",
+    "| 3  | VERIFIED | yep  |",
+  ].join("\n");
+  assertEquals(parseImplementedCount(content), 2);
+});
+
+Deno.test("parseImplementedCount returns 0 when none implemented", () => {
+  assertEquals(parseImplementedCount("| 1  |          |      |"), 0);
+});
+
+// parseTotalCount tests
+
+Deno.test("parseTotalCount counts all scenario rows", () => {
+  const content = [
+    "| #  | Status |",
+    "| -- | ------ |",
+    "| 1  | COMPLETE |",
+    "| 2  |          |",
+  ].join("\n");
+  assertEquals(parseTotalCount(content), 2);
+});
 
 // getModel tests
 

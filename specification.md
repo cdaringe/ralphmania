@@ -19,3 +19,4 @@
 | 15 | UX           | On first boot, the SYSTEM SHALL generate the progress.md with a template                                                                                                                                     |
 | 16 | UX           | The logger SHALL clearly identify ralphmania logs as associated with ralphmania, as there are many other streams piped to stdio within ralphmania.                                                           |
 | 17 | Validation   | When flushing results to disk, the system SHALL not record terminal color codes, ensuring logs are plain text.                                                                                               |
+| 18 | UX           | At each iteration start, the model-selection log SHALL report progress as "Status: N of M implemented, finding next task..." (parsed from `progress.md`) when no rework is pending, and mention `NEEDS_REWORK` only when rework entries exist. |
