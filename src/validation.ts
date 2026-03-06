@@ -30,24 +30,34 @@ export const runValidation = async ({ iterationNum, log }: {
 }): Promise<ValidationResult> => {
   await Deno.mkdir(VALIDATE_OUTPUT_DIR, { recursive: true });
   const outputPath = `${VALIDATE_OUTPUT_DIR}/iteration-${iterationNum}.log`;
-  const decoder = new TextDecoder();
+  const file = await Deno.open(outputPath, {
+    write: true,
+    create: true,
+    truncate: true,
+  });
 
-  const output = await new Deno.Command("bash", {
+  const tee = (dest: typeof Deno.stdout) =>
+    new WritableStream<Uint8Array>({
+      write(chunk) {
+        dest.writeSync(chunk);
+        file.writeSync(chunk);
+      },
+    });
+
+  const child = new Deno.Command("bash", {
     args: [VALIDATE_SCRIPT],
     stdout: "piped",
     stderr: "piped",
-  }).output();
+  }).spawn();
 
-  const content = [
-    "--- stdout ---",
-    decoder.decode(output.stdout),
-    "--- stderr ---",
-    decoder.decode(output.stderr),
-    `--- exit code: ${output.code} ---`,
-  ].join("\n");
-  await Deno.writeTextFile(outputPath, content);
+  await Promise.all([
+    child.stdout.pipeTo(tee(Deno.stdout)),
+    child.stderr.pipeTo(tee(Deno.stderr)),
+  ]);
+  const { code } = await child.status;
+  file.close();
 
-  return output.code === 0
+  return code === 0
     ? (log({
       tags: ["info", "validate"],
       message: `Validation passed (iteration ${iterationNum})`,
