@@ -10,7 +10,7 @@
 | 4  | COMPLETE | [Agentic loop runs N iterations, stops early on completion](docs/scenarios/04-agentic-loop.md)                                |              |
 | 5  | COMPLETE | [SIGINT graceful: first aborts, second force-exits 130](docs/scenarios/05-sigint-graceful-shutdown.md)                        |              |
 | 6  | COMPLETE | [Auto-create specification.validate.sh with placeholder, halt until filled](docs/scenarios/06-validation-hook-auto-create.md) |              |
-| 7  |          |                                                                                                                               |              |
+| 7  | COMPLETE | [Run validation script, capture log, feed failure context back](docs/scenarios/07-validation-run-and-feedback.md)             |              |
 | 8  |          |                                                                                                                               |              |
 | 9  |          |                                                                                                                               |              |
 | 10 |          |                                                                                                                               |              |
