@@ -1,19 +1,20 @@
 # Scenarios
 
-| # | Area | Scenario |
-| - | - | --------- |
-| 1 | UX | The user SHALL be prompted interactively for any missing information needed to complete a task when running the CLI iff there are no defaults for that required input. |
-| 2 | CLI | The CLI SHALL accept `--agent` (`-a`), `--iterations` (`-i`), and `--plugin` (`-p`) flags, supporting `claude` and `codex` as agent backends. |
-| 3 | CLI | The CLI SHALL display a startup banner showing the selected agent, iteration count, and model ladder (fast/general/strong tiers). |
-| 4 | Loop | The system SHALL run an AI agent iteratively up to N iterations, stopping early when all scenarios are verified complete. |
-| 5 | Loop | The system SHALL handle SIGINT gracefully: first signal aborts the current iteration, second signal force-exits with code 130. |
-| 6 | Validation | The system SHALL auto-create `specification.validate.sh` with a placeholder on first run if it does not exist, and halt until the user fills it in. |
-| 7 | Validation | The system SHALL run `specification.validate.sh` after each agent iteration, capturing output to `.ralph/validation/iteration-{N}.log` and feeding failure context back to the agent on the next iteration. |
-| 8 | Rework | The system SHALL detect `NEEDS_REWORK` entries in `progress.md` and escalate to a stronger model tier when the rework count exceeds the threshold. |
-| 9 | Rework | When escalating, the system SHALL scope the agent's work to the specific failing scenario to save tokens and cost. |
-| 10 | Verification | After all scenarios are implemented, the agent SHALL self-review each claim in `progress.md`, verifying intent vs. actual output, and marking scenarios `VERIFIED` or `NEEDS_REWORK`. |
-| 11 | Receipts | Upon successful validation and completion, the system SHALL generate evidence receipts in `.ralph/receipts/` using the fast model tier. |
-| 12 | Plugins | The system SHALL support user-provided plugins (via `--plugin`) with hooks: `onConfigResolved`, `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`, `onIterationEnd`, `onValidationComplete`, `onLoopEnd`. |
-| 13 | Timeout | Each agent iteration SHALL be capped at 60 minutes, after which the iteration is terminated and the loop continues. |
-| 14 | Environment | Agent and validation subprocesses SHALL run in a non-interactive environment (CI=true, no git/ssh prompts, stdin null) to prevent hangs. |
-| 15| UX | On first boot, the SYSTEM SHALL generate the progress.md with a template |
+| #  | Area         | Scenario                                                                                                                                                                                                     |
+| -- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1  | UX           | The user SHALL be prompted interactively for any missing information needed to complete a task when running the CLI iff there are no defaults for that required input.                                       |
+| 2  | CLI          | The CLI SHALL accept `--agent` (`-a`), `--iterations` (`-i`), and `--plugin` (`-p`) flags, supporting `claude` and `codex` as agent backends.                                                                |
+| 3  | CLI          | The CLI SHALL display a startup banner showing the selected agent, iteration count, and model ladder (fast/general/strong tiers).                                                                            |
+| 4  | Loop         | The system SHALL run an AI agent iteratively up to N iterations, stopping early when all scenarios are verified complete.                                                                                    |
+| 5  | Loop         | The system SHALL handle SIGINT gracefully: first signal aborts the current iteration, second signal force-exits with code 130.                                                                               |
+| 6  | Validation   | The system SHALL auto-create `specification.validate.sh` with a placeholder on first run if it does not exist, and halt until the user fills it in.                                                          |
+| 7  | Validation   | The system SHALL run `specification.validate.sh` after each agent iteration, capturing output to `.ralph/validation/iteration-{N}.log` and feeding failure context back to the agent on the next iteration.  |
+| 8  | Rework       | The system SHALL detect `NEEDS_REWORK` entries in `progress.md` and escalate to a stronger model tier when the rework count exceeds the threshold.                                                           |
+| 9  | Rework       | When escalating, the system SHALL scope the agent's work to the specific failing scenario to save tokens and cost.                                                                                           |
+| 10 | Verification | After all scenarios are implemented, the agent SHALL self-review each claim in `progress.md`, verifying intent vs. actual output, and marking scenarios `VERIFIED` or `NEEDS_REWORK`.                        |
+| 11 | Receipts     | Upon successful validation and completion, the system SHALL generate evidence receipts in `.ralph/receipts/` using the fast model tier.                                                                      |
+| 12 | Plugins      | The system SHALL support user-provided plugins (via `--plugin`) with hooks: `onConfigResolved`, `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`, `onIterationEnd`, `onValidationComplete`, `onLoopEnd`. |
+| 13 | Timeout      | Each agent iteration SHALL be capped at 60 minutes, after which the iteration is terminated and the loop continues.                                                                                          |
+| 14 | Environment  | Agent and validation subprocesses SHALL run in a non-interactive environment (CI=true, no git/ssh prompts, stdin null) to prevent hangs.                                                                     |
+| 15 | UX           | On first boot, the SYSTEM SHALL generate the progress.md with a template                                                                                                                                     |
+| 16 | UX           | The logger SHALL clearly identify ralphmania logs as associated with ralphmania, as there are many other streams piped to stdio within ralphmania.                                                           |
