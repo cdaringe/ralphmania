@@ -18,3 +18,4 @@
 | 14 | Environment  | Agent and validation subprocesses SHALL run in a non-interactive environment (CI=true, no git/ssh prompts, stdin null) to prevent hangs.                                                                     |
 | 15 | UX           | On first boot, the SYSTEM SHALL generate the progress.md with a template                                                                                                                                     |
 | 16 | UX           | The logger SHALL clearly identify ralphmania logs as associated with ralphmania, as there are many other streams piped to stdio within ralphmania.                                                           |
+| 17 | Validation | When flushing results to disk, the system SHALL not record terminal color codes, ensuring logs are plain text. |
