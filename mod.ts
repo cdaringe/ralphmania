@@ -33,7 +33,7 @@ export type {
 } from "./src/types.ts";
 export { err, ok, VALID_AGENTS } from "./src/types.ts";
 
-import type { Agent, LoopState } from "./src/types.ts";
+import type { Agent, EscalationLevel, LoopState } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
 import { parseCliArgsInteractive } from "./src/cli.ts";
 import { ensureValidationHook } from "./src/validation.ts";
@@ -45,7 +45,11 @@ import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 
 const printBanner = (
-  { agent, iterations }: { agent: Agent; iterations: number },
+  { agent, iterations, level }: {
+    agent: Agent;
+    iterations: number;
+    level: EscalationLevel | undefined;
+  },
 ) => {
   const line = dim("─".repeat(46));
   const encoder = new TextEncoder();
@@ -56,6 +60,7 @@ const printBanner = (
   w(`${line}\n`);
   w(`  ${dim("agent")}        ${bold(cyan(agent))}\n`);
   w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
+  w(`  ${dim("level")}        ${bold(yellow(String(level ?? "auto")))}\n`);
   w(`\n`);
   w(`  ${bold("Model Ladder")}\n`);
 
@@ -107,15 +112,18 @@ const main = async (): Promise<number> => {
   }
   const plugin = pluginResult.value;
 
-  const { agent, iterations } = plugin.onConfigResolved
-    ? await plugin.onConfigResolved({
-      agent: parsed.value.agent,
-      iterations: parsed.value.iterations,
-      log,
-    })
+  const { agent, iterations, level } = plugin.onConfigResolved
+    ? {
+      ...parsed.value,
+      ...await plugin.onConfigResolved({
+        agent: parsed.value.agent,
+        iterations: parsed.value.iterations,
+        log,
+      }),
+    }
     : parsed.value;
 
-  printBanner({ agent, iterations });
+  printBanner({ agent, iterations, level });
 
   const shutdownController = new AbortController();
   const onSigint = () => {
@@ -154,6 +162,7 @@ const main = async (): Promise<number> => {
       signal: shutdownController.signal,
       log,
       plugin,
+      level,
     });
     if (state.task === "complete") break;
   }

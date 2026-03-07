@@ -1,5 +1,6 @@
 import type {
   Agent,
+  EscalationLevel,
   IterationResult,
   Logger,
   LoopState,
@@ -105,18 +106,23 @@ export const pipeStream = async ({ stream, output, marker }: {
 };
 
 const runIteration = async (
-  { iterationNum, agent, signal, log, validationFailurePath, plugin }: {
+  { iterationNum, agent, signal, log, validationFailurePath, plugin, level }: {
     iterationNum: number;
     agent: Agent;
     signal: AbortSignal;
     log: Logger;
     validationFailurePath: string | undefined;
     plugin: Plugin;
+    level: EscalationLevel | undefined;
   },
 ): Promise<IterationResult> => {
   const ctx: HookContext = { agent, log, iterationNum };
 
-  const rawSelection = await resolveModelSelection(agent, log);
+  const rawSelection = await resolveModelSelection({
+    agent,
+    log,
+    minLevel: level,
+  });
   const selection = plugin.onModelSelected
     ? await plugin.onModelSelected({ selection: rawSelection, ctx })
     : rawSelection;
@@ -250,13 +256,14 @@ Requirements:
  * the output, and advance the {@link LoopState}.
  */
 export const runLoopIteration = async (
-  { state, iterationNum, agent, signal, log, plugin }: {
+  { state, iterationNum, agent, signal, log, plugin, level }: {
     state: LoopState;
     iterationNum: number;
     agent: Agent;
     signal: AbortSignal;
     log: Logger;
     plugin: Plugin;
+    level: EscalationLevel | undefined;
   },
 ): Promise<LoopState> => {
   log({
@@ -273,6 +280,7 @@ export const runLoopIteration = async (
       log,
       validationFailurePath: state.validationFailurePath,
       plugin,
+      level,
     })
     : { status: "continue" };
 

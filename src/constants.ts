@@ -25,7 +25,14 @@ export const CLAUDE_LADDER: readonly {
   { model: "opus", mode: "strong", effort: "high" },
 ];
 export const USAGE =
-  "Usage: deno run ralph.mts --iterations <n> [--agent claude|codex] [--plugin <path>]";
+  `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-3]
+
+Options:
+  -i, --iterations <n>       Number of agentic loop iterations (required)
+  -a, --agent <name>         Agent backend: claude (default) or codex
+  -p, --plugin <path>        Path to a plugin module
+  -l, --level <0-3>          Starting escalation level for the Claude model ladder
+                             (0=sonnet/low, 1=sonnet/high, 2=opus/medium, 3=opus/high)`;
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";
 export const VALIDATE_SCRIPT = "specification.validate.sh";
 export const VALIDATE_OUTPUT_DIR = ".ralph/validation";

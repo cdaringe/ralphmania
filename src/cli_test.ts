@@ -63,3 +63,45 @@ Deno.test("parseCliArgs negative iterations", () => {
   const result = parseCliArgs(["-i", "-1"]);
   assertEquals(result.ok, false);
 });
+
+Deno.test("parseCliArgs with --level", () => {
+  const result = parseCliArgs(["-i", "5", "--level", "2"]);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.level, 2);
+  }
+});
+
+Deno.test("parseCliArgs with -l shorthand", () => {
+  const result = parseCliArgs(["-i", "5", "-l", "3"]);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.level, 3);
+  }
+});
+
+Deno.test("parseCliArgs level defaults to undefined", () => {
+  const result = parseCliArgs(["-i", "5"]);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.level, undefined);
+  }
+});
+
+Deno.test("parseCliArgs invalid level is ignored", () => {
+  const result = parseCliArgs(["-i", "5", "-l", "9"]);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.level, undefined);
+  }
+});
+
+Deno.test("parseCliArgs --help returns usage", () => {
+  const result = parseCliArgs(["--help"]);
+  assertEquals(result.ok, false);
+});
+
+Deno.test("parseCliArgs -h returns usage", () => {
+  const result = parseCliArgs(["-h"]);
+  assertEquals(result.ok, false);
+});

@@ -146,8 +146,11 @@ export const writeEscalationState = async (
 };
 
 export const resolveModelSelection = async (
-  agent: Agent,
-  log: Logger,
+  { agent, log, minLevel }: {
+    agent: Agent;
+    log: Logger;
+    minLevel?: EscalationLevel;
+  },
 ): Promise<ModelSelection> => {
   const defaultMode = "fast" as const;
   const defaults: ModelSelection = {
@@ -185,8 +188,11 @@ export const resolveModelSelection = async (
     }
 
     const target = scenarioResult.value;
-    const level: EscalationLevel =
+    const stateLevel: EscalationLevel =
       (target !== undefined ? newState[String(target)] : undefined) ?? 0;
+    const level: EscalationLevel = clampLevel(
+      Math.max(stateLevel, minLevel ?? 0),
+    );
     const result = computeModelSelection({
       content,
       agent,

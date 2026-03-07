@@ -1,5 +1,12 @@
 import { parseArgs } from "jsr:@std/cli@1/parse-args";
-import { type Agent, err, ok, type Result, VALID_AGENTS } from "./types.ts";
+import {
+  type Agent,
+  err,
+  type EscalationLevel,
+  ok,
+  type Result,
+  VALID_AGENTS,
+} from "./types.ts";
 import { USAGE } from "./constants.ts";
 import { bold, cyan, dim, green, yellow } from "./colors.ts";
 
@@ -9,25 +16,36 @@ export type CliConfig = {
   agent: Agent;
   iterations: number;
   pluginPath: string | undefined;
+  level: EscalationLevel | undefined;
 };
 
 /** Parse CLI args into a fully resolved config, or a partial config needing interactive input. */
+const parseLevel = (raw: unknown): EscalationLevel | undefined => {
+  if (raw === undefined || raw === "") return undefined;
+  const n = parseInt(String(raw), 10);
+  return n >= 0 && n <= 3 ? (n as EscalationLevel) : undefined;
+};
+
 export const parseCliArgs = (
   rawArgs: string[],
 ): Result<CliConfig, string> => {
   const args = parseArgs(rawArgs, {
-    string: ["agent", "iterations", "plugin"],
-    alias: { a: "agent", i: "iterations", p: "plugin" },
+    boolean: ["help"],
+    string: ["agent", "iterations", "plugin", "level"],
+    alias: { a: "agent", i: "iterations", p: "plugin", l: "level", h: "help" },
     default: { agent: "claude" },
   });
+
+  if (args.help) return err(USAGE);
 
   const agent = String(args.agent).toLowerCase();
   const iterations = parseInt(String(args.iterations ?? ""), 10);
   const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
+  const level = parseLevel(args.level);
 
   return !isAgent(agent) || !iterations || isNaN(iterations) || iterations < 1
     ? err(USAGE)
-    : ok({ agent, iterations, pluginPath });
+    : ok({ agent, iterations, pluginPath, level });
 };
 
 /** Parse CLI args, prompting interactively for missing values when running in a TTY. */
@@ -35,11 +53,15 @@ export const parseCliArgsInteractive = async (
   rawArgs: string[],
 ): Promise<Result<CliConfig, string>> => {
   const args = parseArgs(rawArgs, {
-    string: ["agent", "iterations", "plugin"],
-    alias: { a: "agent", i: "iterations", p: "plugin" },
+    boolean: ["help"],
+    string: ["agent", "iterations", "plugin", "level"],
+    alias: { a: "agent", i: "iterations", p: "plugin", l: "level", h: "help" },
   });
 
+  if (args.help) return err(USAGE);
+
   const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
+  const level = parseLevel(args.level);
   const isTTY = Deno.stdin.isTerminal();
 
   // Resolve agent
@@ -65,7 +87,7 @@ export const parseCliArgsInteractive = async (
     });
   }
 
-  return ok({ agent, iterations, pluginPath });
+  return ok({ agent, iterations, pluginPath, level });
 };
 
 const write = (s: string) => Deno.stdout.writeSync(new TextEncoder().encode(s));
