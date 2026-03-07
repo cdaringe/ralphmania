@@ -84,6 +84,24 @@ Deno.test("pipeStream handles multiple chunks", async () => {
   assertEquals(chunks.length, 3);
 });
 
+Deno.test("pipeStream detects marker split across two chunks", async () => {
+  const encoder = new TextEncoder();
+  const marker = "<promise>COMPLETE</promise>";
+  const mid = Math.floor(marker.length / 2);
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode("before " + marker.slice(0, mid)));
+      controller.enqueue(encoder.encode(marker.slice(mid) + " after"));
+      controller.close();
+    },
+  });
+  const output = {
+    write: async (d: Uint8Array) => d.length,
+  };
+  const found = await pipeStream({ stream, output, marker });
+  assertEquals(found, true);
+});
+
 Deno.test("pipeStream handles empty stream", async () => {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

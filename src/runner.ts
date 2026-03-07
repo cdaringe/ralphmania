@@ -79,11 +79,24 @@ export const pipeStream = async ({ stream, output, marker }: {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let found = false;
+  let matchIndex = 0;
   try {
     for await (const chunk of stream) {
-      const text = decoder.decode(chunk);
+      const text = decoder.decode(chunk, { stream: true });
       await output.write(encoder.encode(text));
-      if (marker && text.includes(marker)) found = true;
+      if (marker && !found) {
+        for (const ch of text) {
+          matchIndex = ch === marker[matchIndex]
+            ? matchIndex + 1
+            : ch === marker[0]
+            ? 1
+            : 0;
+          if (matchIndex === marker.length) {
+            found = true;
+            break;
+          }
+        }
+      }
     }
   } catch {
     // Stream closed or aborted
