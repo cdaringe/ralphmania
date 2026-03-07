@@ -88,12 +88,14 @@ Deno.test("parseCliArgs level defaults to undefined", () => {
   }
 });
 
-Deno.test("parseCliArgs invalid level is ignored", () => {
+Deno.test("parseCliArgs invalid level returns error", () => {
   const result = parseCliArgs(["-i", "5", "-l", "9"]);
-  assertEquals(result.ok, true);
-  if (result.ok) {
-    assertEquals(result.value.level, undefined);
-  }
+  assertEquals(result.ok, false);
+});
+
+Deno.test("parseCliArgs level 4 returns error", () => {
+  const result = parseCliArgs(["-i", "5", "-l", "4"]);
+  assertEquals(result.ok, false);
 });
 
 Deno.test("parseCliArgs --help returns usage", () => {

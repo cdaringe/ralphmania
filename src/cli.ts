@@ -19,11 +19,14 @@ export type CliConfig = {
   level: EscalationLevel | undefined;
 };
 
-/** Parse CLI args into a fully resolved config, or a partial config needing interactive input. */
-const parseLevel = (raw: unknown): EscalationLevel | undefined => {
-  if (raw === undefined || raw === "") return undefined;
+const parseLevel = (
+  raw: unknown,
+): Result<EscalationLevel | undefined, string> => {
+  if (raw === undefined || raw === "") return ok(undefined);
   const n = parseInt(String(raw), 10);
-  return n >= 0 && n <= 3 ? (n as EscalationLevel) : undefined;
+  return n >= 0 && n <= 3
+    ? ok(n as EscalationLevel)
+    : err(`Invalid --level: ${raw} (must be 0-3)`);
 };
 
 export const parseCliArgs = (
@@ -41,11 +44,13 @@ export const parseCliArgs = (
   const agent = String(args.agent).toLowerCase();
   const iterations = parseInt(String(args.iterations ?? ""), 10);
   const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
-  const level = parseLevel(args.level);
+  const levelResult = parseLevel(args.level);
 
-  return !isAgent(agent) || !iterations || isNaN(iterations) || iterations < 1
+  return !levelResult.ok
+    ? levelResult
+    : !isAgent(agent) || !iterations || isNaN(iterations) || iterations < 1
     ? err(USAGE)
-    : ok({ agent, iterations, pluginPath, level });
+    : ok({ agent, iterations, pluginPath, level: levelResult.value });
 };
 
 /** Parse CLI args, prompting interactively for missing values when running in a TTY. */
@@ -61,7 +66,9 @@ export const parseCliArgsInteractive = async (
   if (args.help) return err(USAGE);
 
   const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
-  const level = parseLevel(args.level);
+  const levelResult = parseLevel(args.level);
+  if (!levelResult.ok) return levelResult;
+  const level = levelResult.value;
   const isTTY = Deno.stdin.isTerminal();
 
   // Resolve agent
