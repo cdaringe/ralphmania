@@ -79,7 +79,7 @@ export type Plugin = {
   /** Called once after the loop exits, regardless of outcome. */
   onLoopEnd?: (opts: {
     finalState: LoopState;
-    totalIterations: number;
+    iterationNum: number;
     log: Logger;
   }) => void | Promise<void>;
 };

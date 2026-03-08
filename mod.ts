@@ -172,7 +172,7 @@ const main = async (): Promise<number> => {
 
   await plugin.onLoopEnd?.({
     finalState: { ...state },
-    totalIterations: iterations,
+    totalIterations: iterationNum,
     log,
   });
 
@@ -188,7 +188,7 @@ const main = async (): Promise<number> => {
     log({
       tags: ["info"],
       message:
-        `All ${iterations} iterations completed without completion marker.`,
+        `${iterationNum} iterations completed without completion marker.`,
     });
 
   return 0;
