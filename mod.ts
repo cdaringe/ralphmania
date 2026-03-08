@@ -173,20 +173,21 @@ const main = async (): Promise<number> => {
     log,
   });
 
-  if (state.task === "complete") {
-    log({ tags: ["info"], message: "Generating evidence receipts..." });
-    const receiptsResult = await updateReceipts({ agent });
-    if (!receiptsResult.ok) {
-      log({ tags: ["error"], message: receiptsResult.error });
-    }
-    return 0;
-  }
+  const receiptsResult = state.task === "complete"
+    ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
+      await updateReceipts({ agent }))
+    : null;
 
-  log({
-    tags: ["info"],
-    message:
-      `All ${iterations} iterations completed without completion marker.`,
-  });
+  receiptsResult && !receiptsResult.ok &&
+    log({ tags: ["error"], message: receiptsResult.error });
+
+  state.task !== "complete" &&
+    log({
+      tags: ["info"],
+      message:
+        `All ${iterations} iterations completed without completion marker.`,
+    });
+
   return 0;
 };
 

@@ -56,9 +56,9 @@ export const RALPH_RECEIPTS_DIRNAME = ".ralph/receipts";
 
 ### LoopState Simplification
 
-`src/types.ts` — `LoopState.task` is now `"build" | "complete"` only.
-The former `"produce_receipts"` task state has been removed since receipts
-run once post-loop, not as a retry within iterations.
+`src/types.ts` — `LoopState.task` is now `"build" | "complete"` only. The former
+`"produce_receipts"` task state has been removed since receipts run once
+post-loop, not as a retry within iterations.
 
 ## Evidence
 
