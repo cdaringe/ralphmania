@@ -37,7 +37,7 @@ import type { Agent, EscalationLevel, LoopState } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
 import { parseCliArgsInteractive } from "./src/cli.ts";
 import { ensureValidationHook } from "./src/validation.ts";
-import { runLoopIteration } from "./src/runner.ts";
+import { runLoopIteration, updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel } from "./src/model.ts";
 import { CLAUDE_LADDER } from "./src/constants.ts";
@@ -172,6 +172,15 @@ const main = async (): Promise<number> => {
     totalIterations: iterations,
     log,
   });
+
+  if (state.task === "complete") {
+    log({ tags: ["info"], message: "Generating evidence receipts..." });
+    const receiptsResult = await updateReceipts({ agent });
+    if (!receiptsResult.ok) {
+      log({ tags: ["error"], message: receiptsResult.error });
+    }
+    return 0;
+  }
 
   log({
     tags: ["info"],

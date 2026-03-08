@@ -4,33 +4,37 @@
 
 ## Requirement
 
-Upon successful validation and completion, the system SHALL generate evidence
-receipts in `.ralph/receipts/` using the fast model tier.
+Upon successful execution and all features VERIFIED and no more looping, the
+system SHALL generate evidence receipts in `.ralph/receipts/` using the fastest
+model tier. Receipts are generated only AFTER the loop halts — not within
+individual iterations.
 
 ## Implementation
 
 ### Trigger Condition
 
-`src/runner.ts` – `runLoopIteration` enters Phase 3 (Receipts) only when both
-conditions hold:
-
-- Validation passed (`validation.status === "passed"`)
-- Agent signaled completion (`result.status === "complete"`, i.e.
-  `COMPLETION_MARKER` found in output)
+`mod.ts` — after the main loop exits, receipts are generated only when
+`state.task === "complete"` (all scenarios verified, validation passed):
 
 ```ts
-const isPriorWorkOk = validation.status === "passed" &&
-  result.status === "complete";
+if (state.task === "complete") {
+  log({ tags: ["info"], message: "Generating evidence receipts..." });
+  const receiptsResult = await updateReceipts({ agent });
+  if (!receiptsResult.ok) {
+    log({ tags: ["error"], message: receiptsResult.error });
+  }
+  return 0;
+}
 ```
 
 ### Receipt Generation
 
-`updateReceipts({ agent })` in `src/runner.ts`:
+`updateReceipts({ agent })` exported from `src/runner.ts`:
 
 - Uses `getModel({ agent, mode: "fast" })` — the cheapest model tier.
 - Builds a `CommandSpec` via `buildCommandSpec` with a prompt instructing the
   agent to update `.ralph/receipts/{index.html,assets}`.
-- Runs the subprocess synchronously via `.output()` (not streamed).
+- Runs the subprocess via `.output()` (not streamed).
 - Uses `nonInteractiveEnv()` and `stdin: "null"`.
 
 The prompt instructs the agent to:
@@ -50,23 +54,18 @@ The prompt instructs the agent to:
 export const RALPH_RECEIPTS_DIRNAME = ".ralph/receipts";
 ```
 
-### Loop State Transition
+### LoopState Simplification
 
-On success: `{ task: "complete" }` — loop exits. On receipts failure:
-`{ task: "produce_receipts" }` — loop continues to retry.
-
-```ts
-return receiptsResult.ok
-  ? { validationFailurePath, task: "complete" }
-  : { validationFailurePath, task: "produce_receipts" };
-```
-
-The `"produce_receipts"` task causes `runLoopIteration` to skip the agent build
-phase and jump straight to receipts on the next iteration.
+`src/types.ts` — `LoopState.task` is now `"build" | "complete"` only.
+The former `"produce_receipts"` task state has been removed since receipts
+run once post-loop, not as a retry within iterations.
 
 ## Evidence
 
-- `src/runner.ts`: `updateReceipts`, `runLoopIteration` Phase 3 block,
-  `LoopState.task === "produce_receipts"`
-- `src/constants.ts`: `RALPH_RECEIPTS_DIRNAME`
+- `mod.ts`: post-loop `if (state.task === "complete")` block calls
+  `updateReceipts`
+- `src/runner.ts`: `updateReceipts` exported, Phase 3 removed from
+  `runLoopIteration`
+- `src/types.ts`: `LoopState.task` simplified to `"build" | "complete"`
+- `src/constants.ts`: `RALPH_RECEIPTS_DIRNAME = ".ralph/receipts"`
 - `src/model.ts`: `getModel({ agent, mode: "fast" })` used for receipts

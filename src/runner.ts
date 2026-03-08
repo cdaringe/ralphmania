@@ -18,7 +18,7 @@ import { getModel, resolveModelSelection } from "./model.ts";
 import { buildCommandSpec, buildPrompt } from "./command.ts";
 import { runValidation } from "./validation.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
-import { bold, cyan, dim, green, magenta, red, yellow } from "./colors.ts";
+import { bold, cyan, dim, green, magenta, yellow } from "./colors.ts";
 
 /**
  * Parse an NDJSON line from `claude --output-format=stream-json` and extract
@@ -218,7 +218,7 @@ const runIteration = async (
   }
 };
 
-const updateReceipts = async (
+export const updateReceipts = async (
   { agent }: { agent: Agent },
 ): Promise<Result<undefined, string>> => {
   const prompt = `
@@ -272,17 +272,15 @@ export const runLoopIteration = async (
       dim(`(iteration ${iterationNum})`)
     }`,
   });
-  const result: IterationResult = state.task === "build"
-    ? await runIteration({
-      iterationNum,
-      agent,
-      signal,
-      log,
-      validationFailurePath: state.validationFailurePath,
-      plugin,
-      level,
-    })
-    : { status: "continue" };
+  const result: IterationResult = await runIteration({
+    iterationNum,
+    agent,
+    signal,
+    log,
+    validationFailurePath: state.validationFailurePath,
+    plugin,
+    level,
+  });
 
   log({
     tags: ["info", "phase"],
@@ -290,9 +288,10 @@ export const runLoopIteration = async (
       dim(`(iteration ${iterationNum})`)
     }`,
   });
-  const rawValidation: ValidationResult = state.task === "build"
-    ? await runValidation({ iterationNum, log })
-    : { status: "skip" };
+  const rawValidation: ValidationResult = await runValidation({
+    iterationNum,
+    log,
+  });
 
   const ctx: HookContext = { agent, log, iterationNum };
   const validation = plugin.onValidationComplete
@@ -306,31 +305,12 @@ export const runLoopIteration = async (
   const isPriorWorkOk = validation.status === "passed" &&
     result.status === "complete";
 
-  if (!isPriorWorkOk) {
-    log({
-      tags: ["info", "phase"],
-      message: `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
-        cyan("(continuing)")
-      }`,
-    });
-    return { validationFailurePath, task: state.task };
-  }
-
-  log({
-    tags: ["info", "phase"],
-    message: `${magenta("PHASE 3")} ${green("RECEIPTS")} ${
-      dim(`(iteration ${iterationNum})`)
-    }`,
-  });
-  const receiptsResult = await updateReceipts({ agent });
+  const task = isPriorWorkOk ? "complete" : "build";
   log({
     tags: ["info", "phase"],
     message: `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
-      receiptsResult.ok ? green("(done)") : red("(receipts failed)")
+      isPriorWorkOk ? green("(done)") : cyan("(continuing)")
     }`,
   });
-  return receiptsResult.ok
-    ? { validationFailurePath, task: "complete" }
-    : (log({ tags: ["error"], message: receiptsResult.error }),
-      { validationFailurePath, task: "produce_receipts" });
+  return { validationFailurePath, task };
 };

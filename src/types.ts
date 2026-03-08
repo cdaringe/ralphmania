@@ -75,12 +75,12 @@ export type CommandSpec = {
 };
 
 /**
- * Tracks the current phase of the agentic loop. The task progresses from
- * `"build"` to `"produce_receipts"` to `"complete"`.
+ * Tracks the current phase of the agentic loop. The task is either `"build"`
+ * (running agent + validation) or `"complete"` (all scenarios verified).
  */
 export type LoopState = {
   readonly validationFailurePath: string | undefined;
-  readonly task: "build" | "produce_receipts" | "complete";
+  readonly task: "build" | "complete";
 };
 
 /** The set of supported agent backend identifiers. */
