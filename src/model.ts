@@ -8,7 +8,9 @@ import type {
 } from "./types.ts";
 import { err, ok } from "./types.ts";
 import {
-  CLAUDE_LADDER,
+  CLAUDE_CODER,
+  CLAUDE_ESCALATED,
+  CLAUDE_VERIFIER,
   ESCALATION_FILE,
   REWORK_THRESHOLD,
 } from "./constants.ts";
@@ -57,8 +59,7 @@ export const findReworkScenarios = (content: string): number[] => {
  * - Scenarios newly in rework: start at level 1.
  * - Scenarios no longer in rework: removed from state.
  */
-const clampLevel = (n: number): EscalationLevel =>
-  n >= 3 ? 3 : n === 2 ? 2 : n === 1 ? 1 : 0;
+const clampLevel = (n: number): EscalationLevel => n >= 1 ? 1 : 0;
 
 export const updateEscalationState = (
   { current, reworkScenarios }: {
@@ -74,24 +75,28 @@ export const updateEscalationState = (
   );
 
 export const computeModelSelection = (
-  { content, agent, escalationLevel }: {
+  { content, agent, escalationLevel, isVerifierMode }: {
     content: string;
     agent: Agent;
     escalationLevel?: EscalationLevel;
+    isVerifierMode?: boolean;
   },
 ): Result<ModelSelection, string> => {
   const scenarioResult = detectScenarioFromProgress(content);
 
-  if (!scenarioResult.ok) return scenarioResult;
-
-  const reworkCount = (content.match(/NEEDS_REWORK/g) ?? []).length;
-
-  return agent === "claude" && escalationLevel !== undefined
+  return !scenarioResult.ok
+    ? scenarioResult
+    : agent === "claude" && escalationLevel !== undefined
     ? ok({
-      ...CLAUDE_LADDER[escalationLevel],
+      ...(escalationLevel >= 1
+        ? CLAUDE_ESCALATED
+        : isVerifierMode
+        ? CLAUDE_VERIFIER
+        : CLAUDE_CODER),
       targetScenario: scenarioResult.value,
     })
     : (() => {
+      const reworkCount = (content.match(/NEEDS_REWORK/g) ?? []).length;
       const mode = reworkCount > REWORK_THRESHOLD
         ? "strong" as const
         : reworkCount > 0
@@ -190,13 +195,19 @@ export const resolveModelSelection = async (
     const target = scenarioResult.value;
     const stateLevel: EscalationLevel =
       (target !== undefined ? newState[String(target)] : undefined) ?? 0;
-    const level: EscalationLevel = clampLevel(
-      Math.max(stateLevel, minLevel ?? 0),
-    );
+
+    // Role detection
+    const isVerifierMode = reworkScenarios.length === 0 &&
+      parseImplementedCount(content) === parseTotalCount(content);
+    const effectiveLevel: EscalationLevel = reworkScenarios.length > 0
+      ? clampLevel(Math.max(1, stateLevel, minLevel ?? 0))
+      : clampLevel(Math.max(stateLevel, minLevel ?? 0));
+
     const result = computeModelSelection({
       content,
       agent,
-      escalationLevel: level,
+      escalationLevel: effectiveLevel,
+      isVerifierMode,
     });
 
     if (!result.ok) {
@@ -207,7 +218,7 @@ export const resolveModelSelection = async (
     const { model, mode, effort, targetScenario } = result.value;
     const reworkCount = reworkScenarios.length;
     const statusMessage = reworkCount > 0
-      ? `${reworkCount} NEEDS_REWORK entries → ${model} (effort: ${effort}, level: ${level})`
+      ? `${reworkCount} NEEDS_REWORK entries → ${model} (effort: ${effort}, level: ${effectiveLevel})`
       : `Status: ${parseImplementedCount(content)} of ${
         parseTotalCount(content)
       } implemented, finding next task...`;

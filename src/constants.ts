@@ -1,38 +1,35 @@
-import type { EffortLevel, ToolMode } from "./types.ts";
-
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const REWORK_THRESHOLD = 1;
 export const ESCALATION_FILE = ".ralph/escalation.json";
 
-/**
- * 4-step Claude escalation ladder. Index = {@link EscalationLevel}.
- *
- * | Level | Model  | Mode    | Effort |
- * |-------|--------|---------|--------|
- * | 0     | sonnet | general | low    |
- * | 1     | sonnet | general | high   |
- * | 2     | opus   | strong  | medium |
- * | 3     | opus   | strong  | high   |
- */
-export const CLAUDE_LADDER: readonly {
-  model: string;
-  mode: ToolMode;
-  effort: EffortLevel;
-}[] = [
-  { model: "sonnet", mode: "general", effort: "low" },
-  { model: "sonnet", mode: "general", effort: "high" },
-  { model: "opus", mode: "strong", effort: "medium" },
-  { model: "opus", mode: "strong", effort: "high" },
-];
+/** Coder config: unimplemented scenarios remain. */
+export const CLAUDE_CODER = {
+  model: "sonnet",
+  mode: "general",
+  effort: "high",
+} as const;
+/** Verifier config: all scenarios implemented, verifying. */
+export const CLAUDE_VERIFIER = {
+  model: "opus",
+  mode: "general",
+  effort: "low",
+} as const;
+/** Escalated config: NEEDS_REWORK present. */
+export const CLAUDE_ESCALATED = {
+  model: "opus",
+  mode: "strong",
+  effort: "high",
+} as const;
+
 export const USAGE =
-  `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-3]
+  `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-1]
 
 Options:
   -i, --iterations <n>       Number of agentic loop iterations (required)
   -a, --agent <name>         Agent backend: claude (default) or codex
   -p, --plugin <path>        Path to a plugin module
-  -l, --level <0-3>          Starting escalation level for the Claude model ladder
-                             (0=sonnet/low, 1=sonnet/high, 2=opus/medium, 3=opus/high)`;
+  -l, --level <0-1>          Starting escalation level for the Claude model ladder
+                             (0=coder/verifier, 1=escalated)`;
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";
 export const VALIDATE_SCRIPT = "specification.validate.sh";
 export const VALIDATE_OUTPUT_DIR = ".ralph/validation";

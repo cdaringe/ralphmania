@@ -43,8 +43,8 @@ export type ToolMode = "fast" | "general" | "strong";
 /** Claude Code effort level, passed via `CLAUDE_CODE_EFFORT_LEVEL` env var. */
 export type EffortLevel = "low" | "medium" | "high";
 
-/** Per-scenario escalation level (0–3) in the Claude ladder. */
-export type EscalationLevel = 0 | 1 | 2 | 3;
+/** Per-scenario escalation level (0–1) in the Claude ladder. */
+export type EscalationLevel = 0 | 1;
 
 /** Persistent escalation state: scenario number (as string) → level. */
 export type EscalationState = Record<string, EscalationLevel>;

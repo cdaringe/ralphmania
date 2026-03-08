@@ -123,41 +123,41 @@ Deno.test("updateEscalationState adds new rework scenarios at level 1", () => {
   assertEquals(result, { "3": 1, "7": 1 });
 });
 
-Deno.test("updateEscalationState bumps existing scenarios", () => {
+Deno.test("updateEscalationState bumps existing scenarios capped at 1", () => {
   const result = updateEscalationState({
-    current: { "3": 1, "7": 2 },
+    current: { "3": 1, "7": 1 },
     reworkScenarios: [3, 7],
   });
-  assertEquals(result, { "3": 2, "7": 3 });
+  assertEquals(result, { "3": 1, "7": 1 });
 });
 
-Deno.test("updateEscalationState caps at level 3", () => {
+Deno.test("updateEscalationState caps at level 1", () => {
   const result = updateEscalationState({
-    current: { "3": 3 },
+    current: { "3": 1 },
     reworkScenarios: [3],
   });
-  assertEquals(result, { "3": 3 });
+  assertEquals(result, { "3": 1 });
 });
 
 Deno.test("updateEscalationState removes cleared scenarios", () => {
   const result = updateEscalationState({
-    current: { "3": 2, "7": 1 },
+    current: { "3": 1, "7": 1 },
     reworkScenarios: [3],
   });
-  assertEquals(result, { "3": 3 });
+  assertEquals(result, { "3": 1 });
 });
 
 Deno.test("updateEscalationState handles mix of new, bump, and clear", () => {
   const result = updateEscalationState({
-    current: { "1": 2, "5": 1 },
+    current: { "1": 1, "5": 1 },
     reworkScenarios: [1, 9],
   });
-  assertEquals(result, { "1": 3, "9": 1 });
+  assertEquals(result, { "1": 1, "9": 1 });
 });
 
 // computeModelSelection tests
 
-Deno.test("computeModelSelection claude with escalation level 0", () => {
+Deno.test("computeModelSelection claude level 0 coder mode", () => {
   const content = "| 1 | NEEDS_REWORK |";
   const result = computeModelSelection({
     content,
@@ -168,46 +168,32 @@ Deno.test("computeModelSelection claude with escalation level 0", () => {
   if (result.ok) {
     assertEquals(result.value.model, "sonnet");
     assertEquals(result.value.mode, "general");
+    assertEquals(result.value.effort, "high");
+  }
+});
+
+Deno.test("computeModelSelection claude level 0 verifier mode", () => {
+  const content = "| 1 | COMPLETE |";
+  const result = computeModelSelection({
+    content,
+    agent: "claude",
+    escalationLevel: 0,
+    isVerifierMode: true,
+  });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.model, "opus");
+    assertEquals(result.value.mode, "general");
     assertEquals(result.value.effort, "low");
   }
 });
 
-Deno.test("computeModelSelection claude with escalation level 1", () => {
+Deno.test("computeModelSelection claude level 1 escalated", () => {
   const content = "| 1 | NEEDS_REWORK |";
   const result = computeModelSelection({
     content,
     agent: "claude",
     escalationLevel: 1,
-  });
-  assertEquals(result.ok, true);
-  if (result.ok) {
-    assertEquals(result.value.model, "sonnet");
-    assertEquals(result.value.mode, "general");
-    assertEquals(result.value.effort, "high");
-  }
-});
-
-Deno.test("computeModelSelection claude with escalation level 2", () => {
-  const content = "| 1 | NEEDS_REWORK |";
-  const result = computeModelSelection({
-    content,
-    agent: "claude",
-    escalationLevel: 2,
-  });
-  assertEquals(result.ok, true);
-  if (result.ok) {
-    assertEquals(result.value.model, "opus");
-    assertEquals(result.value.mode, "strong");
-    assertEquals(result.value.effort, "medium");
-  }
-});
-
-Deno.test("computeModelSelection claude with escalation level 3", () => {
-  const content = "| 1 | NEEDS_REWORK |";
-  const result = computeModelSelection({
-    content,
-    agent: "claude",
-    escalationLevel: 3,
   });
   assertEquals(result.ok, true);
   if (result.ok) {

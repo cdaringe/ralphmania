@@ -24,9 +24,9 @@ const parseLevel = (
 ): Result<EscalationLevel | undefined, string> => {
   if (raw === undefined || raw === "") return ok(undefined);
   const n = parseInt(String(raw), 10);
-  return n >= 0 && n <= 3
+  return n >= 0 && n <= 1
     ? ok(n as EscalationLevel)
-    : err(`Invalid --level: ${raw} (must be 0-3)`);
+    : err(`Invalid --level: ${raw} (must be 0-1)`);
 };
 
 export const parseCliArgs = (

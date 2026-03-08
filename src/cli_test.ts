@@ -65,18 +65,18 @@ Deno.test("parseCliArgs negative iterations", () => {
 });
 
 Deno.test("parseCliArgs with --level", () => {
-  const result = parseCliArgs(["-i", "5", "--level", "2"]);
+  const result = parseCliArgs(["-i", "5", "--level", "1"]);
   assertEquals(result.ok, true);
   if (result.ok) {
-    assertEquals(result.value.level, 2);
+    assertEquals(result.value.level, 1);
   }
 });
 
 Deno.test("parseCliArgs with -l shorthand", () => {
-  const result = parseCliArgs(["-i", "5", "-l", "3"]);
+  const result = parseCliArgs(["-i", "5", "-l", "0"]);
   assertEquals(result.ok, true);
   if (result.ok) {
-    assertEquals(result.value.level, 3);
+    assertEquals(result.value.level, 0);
   }
 });
 
