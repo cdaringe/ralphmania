@@ -257,14 +257,14 @@ Requirements:
  */
 export const runLoopIteration = async (
   {
-     agent,
-     iterationNum,
-     level ,
-     log,
-     plugin,
-     signal,
-     state,
-    }: {
+    agent,
+    iterationNum,
+    level,
+    log,
+    plugin,
+    signal,
+    state,
+  }: {
     agent: Agent;
     iterationNum: number;
     level: EscalationLevel | undefined;
