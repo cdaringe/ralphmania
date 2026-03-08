@@ -150,25 +150,28 @@ const main = async (): Promise<number> => {
     task: "build",
   };
 
-  for (let i = 1; i <= iterations; i++) {
+  let iterationNum = 0;
+
+  while (iterationNum < iterations) {
     if (shutdownController.signal.aborted) {
       log({ tags: ["error"], message: "Exiting due to signal" });
       return 130;
     }
     state = await runLoopIteration({
       state,
-      iterationNum: i,
+      iterationNum,
       agent,
       signal: shutdownController.signal,
       log,
       plugin,
       level,
     });
+    ++iterationNum;
     if (state.task === "complete") break;
   }
 
   await plugin.onLoopEnd?.({
-    finalState: state,
+    finalState: { ...state },
     totalIterations: iterations,
     log,
   });

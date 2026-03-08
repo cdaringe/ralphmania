@@ -256,14 +256,22 @@ Requirements:
  * the output, and advance the {@link LoopState}.
  */
 export const runLoopIteration = async (
-  { state, iterationNum, agent, signal, log, plugin, level }: {
-    state: LoopState;
-    iterationNum: number;
+  {
+     agent,
+     iterationNum,
+     level ,
+     log,
+     plugin,
+     signal,
+     state,
+    }: {
     agent: Agent;
-    signal: AbortSignal;
+    iterationNum: number;
+    level: EscalationLevel | undefined;
     log: Logger;
     plugin: Plugin;
-    level: EscalationLevel | undefined;
+    signal: AbortSignal;
+    state: LoopState;
   },
 ): Promise<LoopState> => {
   log({
