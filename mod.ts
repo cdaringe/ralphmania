@@ -172,7 +172,7 @@ const main = async (): Promise<number> => {
 
   await plugin.onLoopEnd?.({
     finalState: { ...state },
-    totalIterations: iterationNum,
+    iterationNum,
     log,
   });
 
