@@ -40,7 +40,11 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { runLoopIteration, updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel } from "./src/model.ts";
-import { CLAUDE_LADDER } from "./src/constants.ts";
+import {
+  CLAUDE_CODER,
+  CLAUDE_ESCALATED,
+  CLAUDE_VERIFIER,
+} from "./src/constants.ts";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 
@@ -65,10 +69,15 @@ const printBanner = (
   w(`  ${bold("Model Ladder")}\n`);
 
   if (agent === "claude") {
-    CLAUDE_LADDER.forEach((rung, i) => {
+    const roles = [
+      { label: "coder", ...CLAUDE_CODER },
+      { label: "verifier", ...CLAUDE_VERIFIER },
+      { label: "escalated", ...CLAUDE_ESCALATED },
+    ];
+    roles.forEach(({ label, model, mode, effort }) => {
       w(
-        `  ${dim(`L${i}`)} ${green("→")} ${rung.model} ${
-          dim(`(${rung.mode}, effort: ${rung.effort})`)
+        `  ${dim(label)} ${green("→")} ${model} ${
+          dim(`(${mode}, effort: ${effort})`)
         }\n`,
       );
     });
