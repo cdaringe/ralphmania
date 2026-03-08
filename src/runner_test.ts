@@ -225,5 +225,5 @@ Deno.test("ndjsonResultTransform handles split chunks", async () => {
   });
 
   await stream.pipeThrough(ndjsonResultTransform()).pipeTo(writable);
-  assertEquals(chunks.join(""), "split");
+  assertEquals(chunks.join(""), "split\n");
 });

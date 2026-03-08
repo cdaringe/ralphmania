@@ -52,7 +52,7 @@ export const ndjsonResultTransform = (): TransformStream<
         if (!trimmed) return;
         const result = extractNdjsonResult(trimmed);
         if (result !== undefined) {
-          controller.enqueue(encoder.encode(result));
+          controller.enqueue(encoder.encode(result + "\n"));
         }
       });
     },
@@ -61,7 +61,7 @@ export const ndjsonResultTransform = (): TransformStream<
       if (!trimmed) return;
       const result = extractNdjsonResult(trimmed);
       if (result !== undefined) {
-        controller.enqueue(encoder.encode(result));
+        controller.enqueue(encoder.encode(result + "\n"));
       }
     },
   });

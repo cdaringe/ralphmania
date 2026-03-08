@@ -60,11 +60,13 @@ export const RALPH_RECEIPTS_DIRNAME = ".ralph/receipts";
  * Use {@link nonInteractiveEnv} to merge these with the inherited environment.
  */
 export const NON_INTERACTIVE_ENV_OVERRIDES: Record<string, string> = {
-  GIT_TERMINAL_PROMPT: "0",
-  GIT_SSH_COMMAND: "ssh -o BatchMode=yes",
-  SSH_BATCH_MODE: "yes",
-  DEBIAN_FRONTEND: "noninteractive",
   CI: "true",
+  DEBIAN_FRONTEND: "noninteractive",
+  GIT_SSH_COMMAND: "ssh -o BatchMode=yes",
+  GIT_TERMINAL_PROMPT: "0",
+  NO_COLOR: "1",
+  SSH_BATCH_MODE: "yes",
+  TERM: "dumb",
 };
 
 /** Merge inherited environment with non-interactive overrides. */
@@ -81,10 +83,10 @@ ONLY DO ONE TASK AT A TIME.
 3. Document your scenario implementation in docs/scenarios/:name.md. Write maximally concise detail, justifying how the scenario is fully completed. Reference key details & files as evidence for a reviewer.
 4. Commit your changes.
 5. Update progress.md scenario table with status and add a filename pointing to docs/scenario/* summary. Do NOT fill in rework notes column--leave that for the reviewer.
-6. If all scenarios are completed, revisit each claim ONE BY ONE in the progress
-file CRITIQUE if the INTENT of the scenario is ACTUALLY COMPLETED. Run code, use browsers, and verify documentation to validate the scearnio.
-  6.1 Review if the user's desires are met--not if the claimed tasks are completed.
-  6.2 Every referenced document or module should be verified existing and up-to-date.
-  6.3 Update status to VERIFIED or NEEDS_REWORK with rework notes as needed.
+6. If all scenarios are completed, revisit each claim that IS NOT marked as VERIFIED, one by one, in the progress.md & CRITIQUE if the intent of the scenario is actually completed.
+  6.1 Analyze e2e & integration tests, run code, use browsers, and verify documentation to validate the scenario.
+  6.2 All referenced documents & modules should be verified existing and up-to-date.
+  6.3 Assess if the user's scenario outcomes met--not just if the prior agent's tasks are completed.
+  6.4 Update status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes as needed, otherwise specify no notes.
 
 Once all claims are VERIFIED, output ${COMPLETION_MARKER}.`;
