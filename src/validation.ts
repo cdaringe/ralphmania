@@ -10,19 +10,26 @@ import {
 export const ensureValidationHook = async (
   log: Logger,
 ): Promise<Result<void, string>> => {
-  const exists = await Deno.stat(VALIDATE_SCRIPT).then(() => true, () => false);
-  if (exists) return ok(undefined);
+  try {
+    const exists = await Deno.stat(VALIDATE_SCRIPT).then(
+      () => true,
+      () => false,
+    );
+    if (exists) return ok(undefined);
 
-  await Deno.writeTextFile(VALIDATE_SCRIPT, VALIDATE_TEMPLATE);
-  await Deno.chmod(VALIDATE_SCRIPT, 0o755);
-  log({
-    tags: ["info", "hook"],
-    message:
-      `Created ${VALIDATE_SCRIPT}. Fill in your validation logic and re-run.`,
-  });
-  return err(
-    `${VALIDATE_SCRIPT} created — fill in validation logic before re-running.`,
-  );
+    await Deno.writeTextFile(VALIDATE_SCRIPT, VALIDATE_TEMPLATE);
+    await Deno.chmod(VALIDATE_SCRIPT, 0o755);
+    log({
+      tags: ["info", "hook"],
+      message:
+        `Created ${VALIDATE_SCRIPT}. Fill in your validation logic and re-run.`,
+    });
+    return err(
+      `${VALIDATE_SCRIPT} created — fill in validation logic before re-running.`,
+    );
+  } catch (error) {
+    return err(`Failed to ensure validation hook: ${error}`);
+  }
 };
 
 export const runValidation = async ({ iterationNum, log }: {
@@ -50,31 +57,40 @@ export const runValidation = async ({ iterationNum, log }: {
       },
     });
 
-  const child = new Deno.Command("bash", {
-    args: [VALIDATE_SCRIPT],
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-    env: nonInteractiveEnv(),
-  }).spawn();
+  try {
+    const child = new Deno.Command("bash", {
+      args: [VALIDATE_SCRIPT],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+      env: nonInteractiveEnv(),
+    }).spawn();
 
-  await Promise.all([
-    child.stdout.pipeTo(tee(Deno.stdout)),
-    child.stderr.pipeTo(tee(Deno.stderr)),
-  ]);
-  const { code } = await child.status;
-  file.close();
+    await Promise.all([
+      child.stdout.pipeTo(tee(Deno.stdout)),
+      child.stderr.pipeTo(tee(Deno.stderr)),
+    ]);
+    const { code } = await child.status;
+    file.close();
 
-  return code === 0
-    ? (log({
-      tags: ["info", "validate"],
-      message: `Validation passed (iteration ${iterationNum})`,
-    }),
-      { status: "passed" })
-    : (log({
+    return code === 0
+      ? (log({
+        tags: ["info", "validate"],
+        message: `Validation passed (iteration ${iterationNum})`,
+      }),
+        { status: "passed" })
+      : (log({
+        tags: ["error", "validate"],
+        message:
+          `Validation failed (iteration ${iterationNum}), see ${outputPath}`,
+      }),
+        { status: "failed", outputPath });
+  } catch (error) {
+    file.close();
+    log({
       tags: ["error", "validate"],
-      message:
-        `Validation failed (iteration ${iterationNum}), see ${outputPath}`,
-    }),
-      { status: "failed", outputPath });
+      message: `Validation crashed (iteration ${iterationNum}): ${error}`,
+    });
+    return { status: "failed", outputPath };
+  }
 };

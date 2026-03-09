@@ -239,16 +239,20 @@ Requirements:
     model: getModel({ agent, mode: "fast" }),
     prompt,
   });
-  const output = await new Deno.Command(spec.command, {
-    args: spec.args,
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-    env: nonInteractiveEnv(),
-  }).output();
-  return output.code
-    ? err(`Failed to update receipts with exit code ${output.code}`)
-    : ok(undefined);
+  try {
+    const output = await new Deno.Command(spec.command, {
+      args: spec.args,
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+      env: nonInteractiveEnv(),
+    }).output();
+    return output.code
+      ? err(`Failed to update receipts with exit code ${output.code}`)
+      : ok(undefined);
+  } catch (error) {
+    return err(`Failed to generate receipts: ${error}`);
+  }
 };
 
 /**
