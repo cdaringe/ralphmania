@@ -239,6 +239,8 @@ Requirements:
     model: getModel({ agent, mode: "fast" }),
     prompt,
   });
+  const cmdString = [spec.command, ...spec.args].join(" ");
+
   try {
     const output = await new Deno.Command(spec.command, {
       args: spec.args,
@@ -248,10 +250,12 @@ Requirements:
       env: nonInteractiveEnv(),
     }).output();
     return output.code
-      ? err(`Failed to update receipts with exit code ${output.code}`)
+      ? err(
+        `Failed to update receipts with exit code ${output.code} [${cmdString}]`,
+      )
       : ok(undefined);
   } catch (error) {
-    return err(`Failed to generate receipts: ${error}`);
+    return err(`Failed to generate receipts: ${error} [${cmdString}]`);
   }
 };
 
