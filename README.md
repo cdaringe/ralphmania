@@ -92,14 +92,15 @@ export const plugin: Plugin = {
 };
 ```
 
-Load via `--plugin ./my-plugin.ts`. All hooks receive a `HookContext` (`{ agent, log, iterationNum }`) plus hook-specific data.
+Load via `--plugin ./my-plugin.ts`. All hooks receive a `HookContext`
+(`{ agent, log, iterationNum }`) plus hook-specific data.
 
-| Hook | When it fires | What you can do |
-| --- | --- | --- |
-| `onConfigResolved` | Before the loop starts | Override `agent` and `iterations` count |
-| `onModelSelected` | Each iteration, after model resolution | Override the `ModelSelection` (model, provider) |
-| `onPromptBuilt` | Each iteration, after prompt construction | Modify the prompt string sent to the agent |
-| `onCommandBuilt` | Each iteration, after CLI command is assembled | Modify the `CommandSpec` (command, args, env) |
-| `onIterationEnd` | After the agent subprocess exits | Observe the `IterationResult` (read-only) |
-| `onValidationComplete` | After the validation script runs | Override the `ValidationResult` (pass/fail/messages) |
-| `onLoopEnd` | Once after the loop exits, regardless of outcome | Observe the final `LoopState` (read-only) |
+| Hook                   | When it fires                                    | What you can do                                      |
+| ---------------------- | ------------------------------------------------ | ---------------------------------------------------- |
+| `onConfigResolved`     | Before the loop starts                           | Override `agent` and `iterations` count              |
+| `onModelSelected`      | Each iteration, after model resolution           | Override the `ModelSelection` (model, provider)      |
+| `onPromptBuilt`        | Each iteration, after prompt construction        | Modify the prompt string sent to the agent           |
+| `onCommandBuilt`       | Each iteration, after CLI command is assembled   | Modify the `CommandSpec` (command, args, env)        |
+| `onIterationEnd`       | After the agent subprocess exits                 | Observe the `IterationResult` (read-only)            |
+| `onValidationComplete` | After the validation script runs                 | Override the `ValidationResult` (pass/fail/messages) |
+| `onLoopEnd`            | Once after the loop exits, regardless of outcome | Observe the final `LoopState` (read-only)            |
