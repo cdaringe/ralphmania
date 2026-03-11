@@ -4,6 +4,7 @@ import type {
   IterationResult,
   Logger,
   LoopState,
+  ModelSelection,
   Result,
   ValidationResult,
 } from "./types.ts";
@@ -219,7 +220,7 @@ const runIteration = async (
 };
 
 export const updateReceipts = async (
-  { agent }: { agent: Agent },
+  { agent, plugin, log }: { agent: Agent; plugin: Plugin; log: Logger },
 ): Promise<Result<undefined, string>> => {
   const prompt = `
 Update ${RALPH_RECEIPTS_DIRNAME}/{index.html,assets} with videos &/or markdown notes
@@ -234,11 +235,24 @@ Requirements:
 1. Markdown SHALL be rendered
 2. Videos SHALL be embedded and playable from the receipt.
 `.trim();
-  const spec = buildCommandSpec({
-    agent,
+  const ctx: HookContext = { agent, log, iterationNum: -1 };
+  const rawSelection: ModelSelection = {
     model: getModel({ agent, mode: "fast" }),
+    mode: "fast",
+    targetScenario: undefined,
+    effort: undefined,
+  };
+  const selection = plugin.onModelSelected
+    ? await plugin.onModelSelected({ selection: rawSelection, ctx })
+    : rawSelection;
+  const rawSpec = buildCommandSpec({
+    agent,
+    model: selection.model,
     prompt,
   });
+  const spec = plugin.onCommandBuilt
+    ? await plugin.onCommandBuilt({ spec: rawSpec, selection, ctx })
+    : rawSpec;
   const cmdString = [spec.command, ...spec.args].join(" ");
 
   try {

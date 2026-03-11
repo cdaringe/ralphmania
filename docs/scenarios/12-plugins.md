@@ -34,7 +34,8 @@ hook-specific data.
 - Accepts file paths, `file://`, `http://`, `https://`, `jsr:`, `npm:`
   specifiers.
 - Relative file paths are resolved against `cwd()`.
-- Uses dynamic `import()` and reads `mod.default ?? mod` as the plugin object.
+- Uses dynamic `import()` and `resolvePlugin` to extract the named `plugin`
+  export from the module: `export const plugin: Plugin = { ... }`.
 - Returns `noopPlugin` (empty object) when no `--plugin` flag is given.
 
 ### Integration Points
@@ -62,18 +63,18 @@ hook-specific data.
 ```ts
 import type { Plugin } from "@cdaringe/ralphmania";
 
-const myPlugin: Plugin = {
+export const plugin: Plugin = {
   onModelSelected({ selection, ctx }) {
     ctx.log({ tags: ["info", "plugin"], message: `Using ${selection.model}` });
     return selection;
   },
 };
-export default myPlugin;
 ```
 
 ## Evidence
 
-- `src/plugin.ts`: `Plugin`, `HookContext`, `loadPlugin`, `noopPlugin`
+- `src/plugin.ts`: `Plugin`, `HookContext`, `loadPlugin`, `resolvePlugin`,
+  `noopPlugin`
 - `mod.ts`: `--plugin` flag, `loadPlugin`, `onConfigResolved`, `onLoopEnd`
 - `src/runner.ts`: `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`,
   `onIterationEnd`, `onValidationComplete`

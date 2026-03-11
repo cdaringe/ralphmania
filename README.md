@@ -80,17 +80,26 @@ of an iteration cycle!
 
 ## Plugins
 
+Extend the loop by exporting a `plugin` object with optional hooks:
+
 ```typescript
 import type { Plugin } from "jsr:@cdaringe/ralphmania";
 
-const plugin: Plugin = {
+export const plugin: Plugin = {
   onPromptBuilt({ prompt }) {
     return prompt + "\nAlways use TypeScript.";
   },
 };
-
-export { plugin };
 ```
 
-Hooks: `onConfigResolved`, `onModelSelected`, `onPromptBuilt`, `onCommandBuilt`,
-`onIterationEnd`, `onValidationComplete`, `onLoopEnd`.
+Load via `--plugin ./my-plugin.ts`. All hooks receive a `HookContext` (`{ agent, log, iterationNum }`) plus hook-specific data.
+
+| Hook | When it fires | What you can do |
+| --- | --- | --- |
+| `onConfigResolved` | Before the loop starts | Override `agent` and `iterations` count |
+| `onModelSelected` | Each iteration, after model resolution | Override the `ModelSelection` (model, provider) |
+| `onPromptBuilt` | Each iteration, after prompt construction | Modify the prompt string sent to the agent |
+| `onCommandBuilt` | Each iteration, after CLI command is assembled | Modify the `CommandSpec` (command, args, env) |
+| `onIterationEnd` | After the agent subprocess exits | Observe the `IterationResult` (read-only) |
+| `onValidationComplete` | After the validation script runs | Override the `ValidationResult` (pass/fail/messages) |
+| `onLoopEnd` | Once after the loop exits, regardless of outcome | Observe the final `LoopState` (read-only) |

@@ -187,7 +187,7 @@ const main = async (): Promise<number> => {
 
   const receiptsResult = state.task === "complete"
     ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
-      await updateReceipts({ agent }))
+      await updateReceipts({ agent, plugin, log }))
     : null;
 
   receiptsResult && !receiptsResult.ok &&

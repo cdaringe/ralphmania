@@ -25,13 +25,12 @@ export type HookContext = {
  * ```ts
  * import type { Plugin } from "@cdaringe/ralphmania";
  *
- * const myPlugin: Plugin = {
+ * export const plugin: Plugin = {
  *   onModelSelected({ selection, ctx }) {
  *     ctx.log({ tags: ["info", "plugin"], message: `Using ${selection.model}` });
  *     return selection;
  *   },
  * };
- * export default myPlugin;
  * ```
  */
 export type Plugin = {
@@ -88,6 +87,15 @@ export type Plugin = {
 export const noopPlugin: Plugin = {};
 
 /**
+ * Resolve a {@link Plugin} from a dynamically imported module namespace.
+ * Expects a named `plugin` export: `export const plugin: Plugin = { ... }`.
+ */
+export const resolvePlugin = (mod: Record<string, unknown>): Plugin =>
+  typeof mod.plugin === "object" && mod.plugin !== null
+    ? (mod.plugin as Plugin)
+    : {};
+
+/**
  * Dynamically import a {@link Plugin} from a file path, URL, or package
  * specifier (`jsr:`, `npm:`). Returns {@link noopPlugin} if no path is given.
  */
@@ -105,7 +113,7 @@ export const loadPlugin = async (
       ? pluginPath
       : new URL(pluginPath, `file://${Deno.cwd()}/`).href;
     const mod = await import(specifier);
-    const plugin: Plugin = mod.default ?? mod;
+    const plugin = resolvePlugin(mod);
     log({
       tags: ["info", "plugin"],
       message: `Loaded plugin from ${pluginPath}`,
