@@ -2,6 +2,7 @@ import type { Logger, Result, ValidationResult } from "./types.ts";
 import { err, ok } from "./types.ts";
 import {
   nonInteractiveEnv,
+  RALPH_OUTPUT_FILE_VAR,
   VALIDATE_OUTPUT_DIR,
   VALIDATE_SCRIPT,
   VALIDATE_TEMPLATE,
@@ -32,12 +33,14 @@ export const ensureValidationHook = async (
   }
 };
 
-export const runValidation = async ({ iterationNum, log }: {
+export const runValidation = async ({ iterationNum, log, cwd }: {
   iterationNum: number;
   log: Logger;
+  cwd?: string;
 }): Promise<ValidationResult> => {
-  await Deno.mkdir(VALIDATE_OUTPUT_DIR, { recursive: true });
-  const outputPath = `${VALIDATE_OUTPUT_DIR}/iteration-${iterationNum}.log`;
+  const outputDir = cwd ? `${cwd}/${VALIDATE_OUTPUT_DIR}` : VALIDATE_OUTPUT_DIR;
+  await Deno.mkdir(outputDir, { recursive: true });
+  const outputPath = `${outputDir}/iteration-${iterationNum}.log`;
   const file = await Deno.open(outputPath, {
     write: true,
     create: true,
@@ -57,13 +60,19 @@ export const runValidation = async ({ iterationNum, log }: {
       },
     });
 
+  const tmpOutputPath = await Deno.makeTempFile({
+    prefix: "ralph-validate-",
+    suffix: ".log",
+  });
+
   try {
     const child = new Deno.Command("bash", {
       args: [VALIDATE_SCRIPT],
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
-      env: nonInteractiveEnv(),
+      cwd,
+      env: { ...nonInteractiveEnv(), [RALPH_OUTPUT_FILE_VAR]: tmpOutputPath },
     }).spawn();
 
     await Promise.all([
@@ -71,7 +80,17 @@ export const runValidation = async ({ iterationNum, log }: {
       child.stderr.pipeTo(tee(Deno.stderr)),
     ]);
     const { code } = await child.status;
-    file.close();
+
+    // If the script wrote to the tmp file, use it instead of the stdio capture.
+    const tmpContent = await Deno.readTextFile(tmpOutputPath).catch(() => "");
+    if (tmpContent.trim().length > 0) {
+      file.close();
+      await Deno.writeTextFile(outputPath, stripAnsi(tmpContent));
+    } else {
+      file.close();
+    }
+
+    await Deno.remove(tmpOutputPath).catch(() => {});
 
     return code === 0
       ? (log({
@@ -87,6 +106,7 @@ export const runValidation = async ({ iterationNum, log }: {
         { status: "failed", outputPath });
   } catch (error) {
     file.close();
+    await Deno.remove(tmpOutputPath).catch(() => {});
     log({
       tags: ["error", "validate"],
       message: `Validation crashed (iteration ${iterationNum}): ${error}`,

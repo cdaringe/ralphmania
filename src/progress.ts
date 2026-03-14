@@ -3,8 +3,8 @@ import type { Logger } from "./types.ts";
 const PROGRESS_FILE = "progress.md";
 const SPEC_FILE = "specification.md";
 
-/** Parse scenario count from specification.md by counting data rows in the table. */
-const parseScenarioCount = (specContent: string): number =>
+/** Parse scenario count by counting data rows in the scenario table. */
+export const parseScenarioCount = (specContent: string): number =>
   specContent.split("\n").filter((line) => /^\|\s*\d+\s*\|/.test(line)).length;
 
 const generateProgressTemplate = (scenarioCount: number): string => {
@@ -36,10 +36,49 @@ const writeProgressTemplate = async (log: Logger): Promise<void> => {
   });
 };
 
+const syncProgressWithSpec = async (log: Logger): Promise<void> => {
+  const specContent = await Deno.readTextFile(SPEC_FILE).catch(() => "");
+  const specCount = parseScenarioCount(specContent);
+  if (specCount === 0) return;
+
+  const progressContent = await Deno.readTextFile(PROGRESS_FILE).catch(
+    () => "",
+  );
+  const progressCount = parseScenarioCount(progressContent);
+
+  if (specCount > progressCount) {
+    const newRows = Array.from(
+      { length: specCount - progressCount },
+      (_, i) => {
+        const num = progressCount + i + 1;
+        return `| ${
+          String(num).padEnd(2)
+        } |          |                                                                                                        |              |`;
+      },
+    ).join("\n");
+    await Deno.writeTextFile(
+      PROGRESS_FILE,
+      progressContent.trimEnd() + "\n" + newRows + "\n",
+    );
+    log({
+      tags: ["info", "progress"],
+      message: `Appended ${
+        specCount - progressCount
+      } new scenario(s) to ${PROGRESS_FILE}`,
+    });
+  }
+};
+
 /**
- * Ensure `progress.md` exists. On first boot (file absent), generate it from
- * the scenario count in `specification.md` and log a notice.
+ * Ensure `progress.md` exists and covers all specification scenarios.
+ * On first boot (file absent), generate from specification.md.
+ * When the spec adds new scenarios, append empty rows.
  */
-export const ensureProgressFile = (log: Logger): Promise<void> =>
-  Deno.stat(PROGRESS_FILE)
-    .then(() => undefined, () => writeProgressTemplate(log));
+export const ensureProgressFile = async (log: Logger): Promise<void> => {
+  try {
+    await Deno.stat(PROGRESS_FILE);
+    await syncProgressWithSpec(log);
+  } catch {
+    await writeProgressTemplate(log);
+  }
+};

@@ -21,18 +21,28 @@ export const CLAUDE_ESCALATED = {
   effort: "high",
 } as const;
 
+export const WORKTREE_BASE_DIR = ".ralph/worktrees";
+
 export const USAGE =
-  `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-1]
+  `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-1] [--parallel <n>]
 
 Options:
   -i, --iterations <n>       Number of agentic loop iterations (required)
   -a, --agent <name>         Agent backend: claude (default) or codex
   -p, --plugin <path>        Path to a plugin module
   -l, --level <0-1>          Starting escalation level for the Claude model ladder
-                             (0=coder/verifier, 1=escalated)`;
+                             (0=coder/verifier, 1=escalated)
+  -P, --parallel <n>         Number of parallel workers (default: 1)`;
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";
 export const VALIDATE_SCRIPT = "specification.validate.sh";
 export const VALIDATE_OUTPUT_DIR = ".ralph/validation";
+/**
+ * Environment variable injected into the validation script pointing to a
+ * temporary file. If the script writes anything to this file, its contents
+ * are used as the validation output instead of the stdio capture.
+ */
+export const RALPH_OUTPUT_FILE_VAR = "RALPH_OUTPUT_FILE";
+
 export const VALIDATE_TEMPLATE = `#!/usr/bin/env bash
 set -euo pipefail
 
@@ -41,6 +51,8 @@ set -euo pipefail
 # Fill in your validation logic below.
 # Exit 0 on success, non-zero on failure.
 # stdout/stderr will be captured and provided to the agent on failure.
+#
+# Tip: write to \$RALPH_OUTPUT_FILE to override the default stdio capture.
 
 echo "TODO: implement validation checks"
 exit 1

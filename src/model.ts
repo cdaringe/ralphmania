@@ -119,6 +119,28 @@ export const parseImplementedCount = (content: string): number =>
 export const parseTotalCount = (content: string): number =>
   (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length;
 
+/** Find scenario numbers that are not COMPLETE or VERIFIED (i.e. actionable). */
+export const findActionableScenarios = (content: string): number[] => {
+  const total = [...content.matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) =>
+    parseInt(m[1], 10)
+  );
+  const done = new Set(
+    [...content.matchAll(/^\|\s*(\d+)\s*\|\s*(COMPLETE|VERIFIED)\s*\|/gm)].map(
+      (m) => parseInt(m[1], 10),
+    ),
+  );
+  return total.filter((n) => !done.has(n));
+};
+
+/** Check whether every scenario row is VERIFIED. */
+export const isAllVerified = (content: string): boolean => {
+  const totalCount = parseTotalCount(content);
+  if (totalCount === 0) return false;
+  const verifiedCount =
+    (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length;
+  return verifiedCount === totalCount;
+};
+
 /** Read persisted escalation state, defaulting to `{}` if missing. */
 export const readEscalationState = async (
   log: Logger,

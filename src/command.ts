@@ -8,7 +8,7 @@ export const buildPrompt = (
     validationFailurePath: string | undefined;
   },
 ): string => {
-  const base = mode === "general" || targetScenario === undefined
+  const base = targetScenario === undefined
     ? BASE_PROMPT
     : `${BASE_PROMPT}
 

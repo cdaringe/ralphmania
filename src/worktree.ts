@@ -1,0 +1,136 @@
+import type { Logger, Result } from "./types.ts";
+import { err, ok } from "./types.ts";
+import { WORKTREE_BASE_DIR } from "./constants.ts";
+
+export type WorktreeInfo = {
+  readonly path: string;
+  readonly branch: string;
+  readonly scenario: number;
+};
+
+export type MergeResult = "merged" | "conflict";
+
+const run = async (
+  args: string[],
+  opts?: { cwd?: string },
+): Promise<{ code: number; stdout: string; stderr: string }> => {
+  const output = await new Deno.Command("git", {
+    args,
+    stdin: "null",
+    stdout: "piped",
+    stderr: "piped",
+    cwd: opts?.cwd,
+  }).output();
+  const decoder = new TextDecoder();
+  return {
+    code: output.code,
+    stdout: decoder.decode(output.stdout).trim(),
+    stderr: decoder.decode(output.stderr).trim(),
+  };
+};
+
+export const createWorktree = async (
+  { scenario, workerIndex, log }: {
+    scenario: number;
+    workerIndex: number;
+    log: Logger;
+  },
+): Promise<Result<WorktreeInfo, string>> => {
+  const timestamp = Date.now();
+  const branch =
+    `ralph/worker-${workerIndex}-scenario-${scenario}-${timestamp}`;
+  const path = `${WORKTREE_BASE_DIR}/worker-${workerIndex}`;
+
+  // Remove stale worktree path if it exists
+  try {
+    await Deno.stat(path);
+    log({
+      tags: ["debug", "worktree"],
+      message: `Removing stale worktree at ${path}`,
+    });
+    await run(["worktree", "remove", "--force", path]);
+  } catch {
+    // Path doesn't exist, which is fine
+  }
+
+  await Deno.mkdir(WORKTREE_BASE_DIR, { recursive: true });
+
+  const result = await run(["worktree", "add", "-b", branch, path, "HEAD"]);
+
+  return result.code !== 0
+    ? err(`Failed to create worktree: ${result.stderr}`)
+    : (log({
+      tags: ["info", "worktree"],
+      message: `Created worktree at ${path} on branch ${branch}`,
+    }),
+      ok({ path, branch, scenario }));
+};
+
+export const hasNewCommits = async (
+  { worktree, log }: { worktree: WorktreeInfo; log: Logger },
+): Promise<boolean> => {
+  const result = await run(["log", "HEAD.." + worktree.branch, "--oneline"], {
+    cwd: undefined,
+  });
+  return result.code !== 0
+    ? (log({
+      tags: ["debug", "worktree"],
+      message:
+        `Failed to check commits for ${worktree.branch}: ${result.stderr}`,
+    }),
+      false)
+    : result.stdout.length > 0;
+};
+
+export const mergeWorktree = async (
+  { worktree, log }: { worktree: WorktreeInfo; log: Logger },
+): Promise<MergeResult> => {
+  const result = await run([
+    "merge",
+    worktree.branch,
+    "--no-edit",
+    "-m",
+    `Merge ${worktree.branch} (scenario ${worktree.scenario})`,
+  ]);
+
+  return result.code !== 0
+    ? (log({
+      tags: ["error", "worktree"],
+      message:
+        `Merge conflict for scenario ${worktree.scenario}, aborting merge`,
+    }),
+      await run(["merge", "--abort"]),
+      "conflict" as const)
+    : (log({
+      tags: ["info", "worktree"],
+      message: `Merged ${worktree.branch} (scenario ${worktree.scenario})`,
+    }),
+      "merged" as const);
+};
+
+export const cleanupWorktree = async (
+  { worktree, log }: { worktree: WorktreeInfo; log: Logger },
+): Promise<Result<void, string>> => {
+  const removeResult = await run([
+    "worktree",
+    "remove",
+    "--force",
+    worktree.path,
+  ]);
+  removeResult.code !== 0 && log({
+    tags: ["error", "worktree"],
+    message:
+      `Failed to remove worktree ${worktree.path}: ${removeResult.stderr}`,
+  });
+
+  const branchResult = await run(["branch", "-D", worktree.branch]);
+  branchResult.code !== 0 && log({
+    tags: ["debug", "worktree"],
+    message:
+      `Failed to delete branch ${worktree.branch}: ${branchResult.stderr}`,
+  });
+
+  return removeResult.code === 0
+    ? ok(undefined)
+    : err(`Failed to remove worktree: ${removeResult.stderr}`);
+};

@@ -6,6 +6,7 @@
   "tasks": {
     "test": "deno test",
     "fmt": "deno fmt",
-    "check": "deno check mod.ts"
+    "check": "deno check mod.ts",
+    "ralph": "deno run -A mod.ts --iterations 30 --agent claude"
   }
 }

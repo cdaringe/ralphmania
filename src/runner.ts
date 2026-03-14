@@ -106,8 +106,18 @@ export const pipeStream = async ({ stream, output, marker }: {
   return found;
 };
 
-const runIteration = async (
-  { iterationNum, agent, signal, log, validationFailurePath, plugin, level }: {
+export const runIteration = async (
+  {
+    iterationNum,
+    agent,
+    signal,
+    log,
+    validationFailurePath,
+    plugin,
+    level,
+    cwd,
+    targetScenarioOverride,
+  }: {
     iterationNum: number;
     agent: Agent;
     signal: AbortSignal;
@@ -115,15 +125,24 @@ const runIteration = async (
     validationFailurePath: string | undefined;
     plugin: Plugin;
     level: EscalationLevel | undefined;
+    cwd?: string;
+    targetScenarioOverride?: number;
   },
 ): Promise<IterationResult> => {
   const ctx: HookContext = { agent, log, iterationNum };
 
-  const rawSelection = await resolveModelSelection({
-    agent,
-    log,
-    minLevel: level,
-  });
+  const rawSelection: ModelSelection = targetScenarioOverride !== undefined
+    ? {
+      model: getModel({ agent, mode: "general" }),
+      mode: "general",
+      targetScenario: targetScenarioOverride,
+      effort: "high",
+    }
+    : await resolveModelSelection({
+      agent,
+      log,
+      minLevel: level,
+    });
   const selection = plugin.onModelSelected
     ? await plugin.onModelSelected({ selection: rawSelection, ctx })
     : rawSelection;
@@ -160,6 +179,7 @@ const runIteration = async (
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
+      cwd,
       env: {
         ...nonInteractiveEnv(),
         ...(selection.effort
@@ -286,6 +306,7 @@ export const runLoopIteration = async (
     plugin,
     signal,
     state,
+    cwd,
   }: {
     agent: Agent;
     iterationNum: number;
@@ -294,6 +315,7 @@ export const runLoopIteration = async (
     plugin: Plugin;
     signal: AbortSignal;
     state: LoopState;
+    cwd?: string;
   },
 ): Promise<LoopState> => {
   log({
@@ -310,6 +332,7 @@ export const runLoopIteration = async (
     validationFailurePath: state.validationFailurePath,
     plugin,
     level,
+    cwd,
   });
 
   log({
@@ -321,6 +344,7 @@ export const runLoopIteration = async (
   const rawValidation: ValidationResult = await runValidation({
     iterationNum,
     log,
+    cwd,
   });
 
   const ctx: HookContext = { agent, log, iterationNum };

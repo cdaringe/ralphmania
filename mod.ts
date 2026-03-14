@@ -33,13 +33,13 @@ export type {
 } from "./src/types.ts";
 export { err, ok, VALID_AGENTS } from "./src/types.ts";
 
-import type { Agent, EscalationLevel, LoopState } from "./src/types.ts";
+import type { Agent, EscalationLevel } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
 import { parseCliArgsInteractive } from "./src/cli.ts";
 import { ensureValidationHook } from "./src/validation.ts";
-import { runLoopIteration, updateReceipts } from "./src/runner.ts";
+import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
-import { getModel } from "./src/model.ts";
+import { getModel, isAllVerified } from "./src/model.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -47,12 +47,14 @@ import {
 } from "./src/constants.ts";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
+import { runParallelLoop } from "./src/parallel.ts";
 
 const printBanner = (
-  { agent, iterations, level }: {
+  { agent, iterations, level, parallel }: {
     agent: Agent;
     iterations: number;
     level: EscalationLevel | undefined;
+    parallel: number;
   },
 ) => {
   const line = dim("─".repeat(46));
@@ -65,6 +67,7 @@ const printBanner = (
   w(`  ${dim("agent")}        ${bold(cyan(agent))}\n`);
   w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
   w(`  ${dim("level")}        ${bold(yellow(String(level ?? "auto")))}\n`);
+  w(`  ${dim("parallel")}     ${bold(yellow(String(parallel)))}\n`);
   w(`\n`);
   w(`  ${bold("Model Ladder")}\n`);
 
@@ -121,7 +124,7 @@ const main = async (): Promise<number> => {
   }
   const plugin = pluginResult.value;
 
-  const { agent, iterations, level } = plugin.onConfigResolved
+  const { agent, iterations, level, parallel } = plugin.onConfigResolved
     ? {
       ...parsed.value,
       ...await plugin.onConfigResolved({
@@ -132,7 +135,7 @@ const main = async (): Promise<number> => {
     }
     : parsed.value;
 
-  printBanner({ agent, iterations, level });
+  printBanner({ agent, iterations, level, parallel });
 
   const shutdownController = new AbortController();
   const onSigint = () => {
@@ -154,38 +157,32 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  let state: LoopState = {
-    validationFailurePath: undefined,
-    task: "build",
-  };
+  const iterationsUsed = await runParallelLoop({
+    agent,
+    iterations,
+    parallelism: parallel,
+    signal: shutdownController.signal,
+    log,
+    plugin,
+    level,
+  });
 
-  let iterationNum = 0;
+  if (iterationsUsed === 130) return 130;
 
-  while (iterationNum < iterations) {
-    if (shutdownController.signal.aborted) {
-      log({ tags: ["error"], message: "Exiting due to signal" });
-      return 130;
-    }
-    state = await runLoopIteration({
-      state,
-      iterationNum,
-      agent,
-      signal: shutdownController.signal,
-      log,
-      plugin,
-      level,
-    });
-    ++iterationNum;
-    if (state.task === "complete") break;
-  }
+  const finalContent = await Deno.readTextFile("./progress.md").catch(() => "");
+  const finalSection = finalContent.split("END_DEMO")[1] ?? "";
+  const allDone = isAllVerified(finalSection);
 
   await plugin.onLoopEnd?.({
-    finalState: { ...state },
-    iterationNum,
+    finalState: {
+      validationFailurePath: undefined,
+      task: allDone ? "complete" : "build",
+    },
+    iterationNum: iterationsUsed,
     log,
   });
 
-  const receiptsResult = state.task === "complete"
+  const receiptsResult = allDone
     ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
       await updateReceipts({ agent, plugin, log }))
     : null;
@@ -193,11 +190,11 @@ const main = async (): Promise<number> => {
   receiptsResult && !receiptsResult.ok &&
     log({ tags: ["error"], message: receiptsResult.error });
 
-  state.task !== "complete" &&
+  !allDone &&
     log({
       tags: ["info"],
       message:
-        `${iterationNum} iterations completed without completion marker.`,
+        `${iterationsUsed} iterations completed without completion marker.`,
     });
 
   return 0;

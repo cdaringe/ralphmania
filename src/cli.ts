@@ -17,6 +17,7 @@ export type CliConfig = {
   iterations: number;
   pluginPath: string | undefined;
   level: EscalationLevel | undefined;
+  parallel: number;
 };
 
 const parseLevel = (
@@ -34,8 +35,15 @@ export const parseCliArgs = (
 ): Result<CliConfig, string> => {
   const args = parseArgs(rawArgs, {
     boolean: ["help"],
-    string: ["agent", "iterations", "plugin", "level"],
-    alias: { a: "agent", i: "iterations", p: "plugin", l: "level", h: "help" },
+    string: ["agent", "iterations", "plugin", "level", "parallel"],
+    alias: {
+      a: "agent",
+      i: "iterations",
+      p: "plugin",
+      l: "level",
+      h: "help",
+      P: "parallel",
+    },
     default: { agent: "claude" },
   });
 
@@ -45,12 +53,21 @@ export const parseCliArgs = (
   const iterations = parseInt(String(args.iterations ?? ""), 10);
   const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
   const levelResult = parseLevel(args.level);
+  const parallel = parseInt(String(args.parallel ?? "1"), 10);
 
   return !levelResult.ok
     ? levelResult
     : !isAgent(agent) || !iterations || isNaN(iterations) || iterations < 1
     ? err(USAGE)
-    : ok({ agent, iterations, pluginPath, level: levelResult.value });
+    : isNaN(parallel) || parallel < 1
+    ? err(`Invalid --parallel: ${args.parallel} (must be >= 1)`)
+    : ok({
+      agent,
+      iterations,
+      pluginPath,
+      level: levelResult.value,
+      parallel,
+    });
 };
 
 /** Parse CLI args, prompting interactively for missing values when running in a TTY. */
@@ -59,8 +76,15 @@ export const parseCliArgsInteractive = async (
 ): Promise<Result<CliConfig, string>> => {
   const args = parseArgs(rawArgs, {
     boolean: ["help"],
-    string: ["agent", "iterations", "plugin", "level"],
-    alias: { a: "agent", i: "iterations", p: "plugin", l: "level", h: "help" },
+    string: ["agent", "iterations", "plugin", "level", "parallel"],
+    alias: {
+      a: "agent",
+      i: "iterations",
+      p: "plugin",
+      l: "level",
+      h: "help",
+      P: "parallel",
+    },
   });
 
   if (args.help) return err(USAGE);
@@ -69,6 +93,10 @@ export const parseCliArgsInteractive = async (
   const levelResult = parseLevel(args.level);
   if (!levelResult.ok) return levelResult;
   const level = levelResult.value;
+  const parallel = parseInt(String(args.parallel ?? "1"), 10);
+  if (isNaN(parallel) || parallel < 1) {
+    return err(`Invalid --parallel: ${args.parallel} (must be >= 1)`);
+  }
   const isTTY = Deno.stdin.isTerminal();
 
   // Resolve agent
@@ -94,7 +122,7 @@ export const parseCliArgsInteractive = async (
     });
   }
 
-  return ok({ agent, iterations, pluginPath, level });
+  return ok({ agent, iterations, pluginPath, level, parallel });
 };
 
 const write = (s: string) => Deno.stdout.writeSync(new TextEncoder().encode(s));

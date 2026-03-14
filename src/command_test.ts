@@ -21,13 +21,14 @@ Deno.test("buildPrompt strong mode with scenario", () => {
   assertStringIncludes(prompt, "ACTUALLY");
 });
 
-Deno.test("buildPrompt general mode ignores targetScenario", () => {
+Deno.test("buildPrompt general mode scopes to targetScenario", () => {
   const prompt = buildPrompt({
     targetScenario: 3,
     mode: "general",
     validationFailurePath: undefined,
   });
-  assertEquals(prompt, BASE_PROMPT);
+  assertStringIncludes(prompt, "scenario 3");
+  assertStringIncludes(prompt, "ACTUALLY");
 });
 
 Deno.test("buildPrompt with validation failure", () => {
