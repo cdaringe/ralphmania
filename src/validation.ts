@@ -83,11 +83,9 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
 
     // If the script wrote to the tmp file, use it instead of the stdio capture.
     const tmpContent = await Deno.readTextFile(tmpOutputPath).catch(() => "");
+    file.close();
     if (tmpContent.trim().length > 0) {
-      file.close();
       await Deno.writeTextFile(outputPath, stripAnsi(tmpContent));
-    } else {
-      file.close();
     }
 
     await Deno.remove(tmpOutputPath).catch(() => {});
