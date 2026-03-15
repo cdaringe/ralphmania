@@ -1,6 +1,8 @@
 import { parseArgs } from "jsr:@std/cli@1/parse-args";
 import { extname } from "jsr:@std/path@1";
 import { RALPH_RECEIPTS_DIRNAME } from "./constants.ts";
+import type { Logger } from "./types.ts";
+import { createLogger } from "./logger.ts";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -23,7 +25,8 @@ export type ServeOptions = {
   open: boolean;
   port: number;
   receiptsDir?: string;
-  /** If provided, server runs for this duration then closes (useful for tests) */
+  log?: Logger;
+  /** If provided, server runs until aborted (useful for tests) */
   signal?: AbortSignal;
 };
 
@@ -44,6 +47,7 @@ export const parseServeArgs = (
 /** Serve the receipts directory as a static HTTP site. */
 export const serveReceipts = async (opts: ServeOptions): Promise<void> => {
   const { open, port, signal } = opts;
+  const log = opts.log ?? createLogger();
   const receiptsDir = opts.receiptsDir ?? RALPH_RECEIPTS_DIRNAME;
   const url = `http://localhost:${port}`;
 
@@ -59,9 +63,14 @@ export const serveReceipts = async (opts: ServeOptions): Promise<void> => {
     } catch {
       // Try index.html fallback for directories
       try {
-        data = await Deno.readFile(`${filePath}/index.html`) as Uint8Array<ArrayBuffer>;
+        data = await Deno.readFile(`${filePath}/index.html`) as Uint8Array<
+          ArrayBuffer
+        >;
         const ct = MIME[".html"] ?? "application/octet-stream";
-        return new Response(data, { status: 200, headers: { "content-type": ct } });
+        return new Response(data, {
+          status: 200,
+          headers: { "content-type": ct },
+        });
       } catch {
         return new Response("Not Found", { status: 404 });
       }
@@ -77,9 +86,9 @@ export const serveReceipts = async (opts: ServeOptions): Promise<void> => {
 
   const server = Deno.serve({ port, signal, onListen: () => {} }, handler);
 
-  console.log(`[ralph:serve] Receipts available at ${url}`);
-  console.log(`[ralph:serve] Serving from ./${receiptsDir}`);
-  console.log(`[ralph:serve] Press Ctrl+C to stop.`);
+  log({ tags: ["info"], message: `Receipts available at ${url}` });
+  log({ tags: ["info"], message: `Serving from ./${receiptsDir}` });
+  log({ tags: ["info"], message: "Press Ctrl+C to stop." });
 
   if (open) {
     const opener = Deno.build.os === "darwin"

@@ -116,7 +116,10 @@ Deno.test("serveReceipts serves correct MIME types", async () => {
 
   const jsRes = await fetch(`http://localhost:${port}/app.js`);
   assertEquals(jsRes.status, 200);
-  assertEquals(jsRes.headers.get("content-type"), "text/javascript; charset=utf-8");
+  assertEquals(
+    jsRes.headers.get("content-type"),
+    "text/javascript; charset=utf-8",
+  );
   await jsRes.body?.cancel();
 
   controller.abort();
