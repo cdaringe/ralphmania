@@ -51,6 +51,6 @@ When `mergeWorktree` returns `"conflict"`, `reconcileMerge` is called automatica
 
 ## Evidence
 
-- All 155 tests pass (`deno test --allow-all`).
+- All 164 tests pass (`deno test --allow-all`). 12 in `src/reconcile_test.ts`.
 - No work is ever discarded: the loop continues until `signal.aborted`, and neither `reconcileMerge` nor `buildReconcilePrompt` instructs agents to run `git merge --abort` (it is explicitly prohibited in the prompts).
 - The `buildMergeRetryPrompt` states: "Do NOT give up. The merge MUST be completed."

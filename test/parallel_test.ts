@@ -367,6 +367,145 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
   assertEquals(failurePaths, [undefined, "/tmp/fail.log", undefined]);
 });
 
+Deno.test("runParallelLoop writes checkpoint after each round", async () => {
+  const content = "| 1 |          |      |";
+  const checkpoints: { iterationsUsed: number }[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 3,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      writeCheckpoint: (cp) => {
+        checkpoints.push(cp);
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  assertEquals(checkpoints.length, 3);
+  assertEquals(checkpoints.map((c) => c.iterationsUsed), [1, 2, 3]);
+});
+
+Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
+  const content = "| 1 |          |      |";
+  let cleared = false;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      clearCheckpoint: () => {
+        cleared = true;
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  assertEquals(cleared, true);
+});
+
+Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => {
+  const content = "| 1 |          |      |";
+  let rounds = 0;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 5,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 3,
+          validationFailurePath: undefined,
+        }),
+      runIteration: () => {
+        rounds++;
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  assertEquals(iterationsUsed, 5);
+  assertEquals(rounds, 2); // only rounds 4 and 5
+});
+
+Deno.test("runParallelLoop restores validationFailurePath from checkpoint", async () => {
+  const content = "| 1 |          |      |";
+  const failurePaths: (string | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 4,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 3,
+          validationFailurePath: "/tmp/saved-fail.log",
+        }),
+      runIteration: (opts) => {
+        failurePaths.push(opts.validationFailurePath);
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  assertEquals(failurePaths, ["/tmp/saved-fail.log"]);
+});
+
+Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async () => {
+  const content = "| 1 |          |      |";
+  const checkpoints: { validationFailurePath: string | undefined }[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 2,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      writeCheckpoint: (cp) => {
+        checkpoints.push(cp);
+        return Promise.resolve();
+      },
+      runValidation: ({ iterationNum }) =>
+        Promise.resolve(
+          iterationNum === 0
+            ? { status: "failed" as const, outputPath: "/tmp/v.log" }
+            : { status: "passed" as const },
+        ),
+    }),
+  });
+
+  assertEquals(checkpoints[0]?.validationFailurePath, "/tmp/v.log");
+  assertEquals(checkpoints[1]?.validationFailurePath, undefined);
+});
+
 Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", async () => {
   const content = "| 1 |          |      |";
   let hasOverride = true;

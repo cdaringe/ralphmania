@@ -71,9 +71,9 @@ When restarted with `--iterations N`, the loop resumes at the checkpointed
 `iterationsUsed` and continues until `iterationsUsed >= N`. Example: stopped at
 iteration 5 of 10 → restart with `--iterations 10` → runs 5 more iterations.
 
-## Tests – `src/parallel_test.ts`
+## Tests
 
-Five new unit tests exercise the checkpoint contract via injected stubs:
+### `test/parallel_test.ts` – 5 checkpoint integration tests via injected stubs
 
 | Test                                             | Assertion                                                             |
 | ------------------------------------------------ | --------------------------------------------------------------------- |
@@ -83,4 +83,15 @@ Five new unit tests exercise the checkpoint contract via injected stubs:
 | `restores validationFailurePath from checkpoint` | First post-resume iteration receives the saved failure path           |
 | `writes checkpoint with validationFailurePath`   | Failure path from validation is persisted in checkpoint               |
 
-All 27 tests in `src/parallel_test.ts` pass (`ok | 27 passed | 0 failed`).
+All 24 tests in `test/parallel_test.ts` pass (`ok | 24 passed | 0 failed`).
+
+### `test/state_test.ts` – 4 unit tests for `src/state.ts`
+
+| Test                                  | Assertion                                            |
+| ------------------------------------- | ---------------------------------------------------- |
+| `returns undefined when file missing` | Fresh start returns `undefined`                      |
+| `write then read round-trips`         | Written checkpoint is faithfully restored            |
+| `clearLoopCheckpoint removes file`    | After clear, read returns `undefined`                |
+| `ignores malformed JSON`              | Gracefully returns `undefined` for unparseable files |
+
+All 4 pass (`ok | 4 passed | 0 failed`).
