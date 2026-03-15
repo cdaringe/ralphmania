@@ -181,17 +181,15 @@ export const runParallelLoop = async (
   // Restore loop state from a prior run, if available.
   const checkpoint = await deps.readCheckpoint();
   let iterationsUsed = checkpoint?.iterationsUsed ?? 0;
-  let validationFailurePath: string | undefined =
-    checkpoint?.validationFailurePath;
-  if (checkpoint) {
-    log({
-      tags: ["info", "parallel"],
-      message:
-        `Resuming from checkpoint: iteration ${iterationsUsed}, validationFailurePath=${
-          validationFailurePath ?? "none"
-        }`,
-    });
-  }
+  let validationFailurePath: string | undefined = checkpoint
+    ?.validationFailurePath;
+  checkpoint && log({
+    tags: ["info", "parallel"],
+    message:
+      `Resuming from checkpoint: iteration ${iterationsUsed}, validationFailurePath=${
+        validationFailurePath ?? "none"
+      }`,
+  });
 
   while (iterationsUsed < iterations) {
     if (signal.aborted) {

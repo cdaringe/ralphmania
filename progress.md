@@ -25,5 +25,5 @@
 | 19 | VERIFIED | [Claude 4-step escalation ladder via CLAUDE_CODE_EFFORT_LEVEL](docs/scenarios/19-claude-escalation-ladder.md)                 |              |
 | 20 | VERIFIED | [Validation tmp output file via RALPH_OUTPUT_FILE](docs/scenarios/20-validation-tmp-output-file.md)                           |              |
 | 21 | COMPLETE | [serve receipts command with --open flag](docs/scenarios/21-serve-receipts.md)                                                |              |
-| 22 | COMPLETE | [Workstream state serializable via .ralph/loop-state.json checkpoint](docs/scenarios/22-state-serialization.md)                  |              |
-| 23 |          |                                                                                                        |              |
+| 22 | COMPLETE | [Workstream state serializable via .ralph/loop-state.json checkpoint](docs/scenarios/22-state-serialization.md)               |              |
+| 23 |          |                                                                                                                               |              |

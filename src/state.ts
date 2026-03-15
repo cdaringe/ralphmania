@@ -1,45 +1,41 @@
 import type { LoopCheckpoint } from "./types.ts";
 import { LOOP_STATE_FILE } from "./constants.ts";
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+
+const parseCheckpoint = (raw: string): LoopCheckpoint | undefined => {
+  const parsed: unknown = JSON.parse(raw);
+  return isRecord(parsed) && typeof parsed.iterationsUsed === "number"
+    ? {
+      iterationsUsed: parsed.iterationsUsed,
+      validationFailurePath: typeof parsed.validationFailurePath === "string"
+        ? parsed.validationFailurePath
+        : undefined,
+    }
+    : undefined;
+};
+
 /**
  * Read the persisted loop checkpoint from disk.
  * Returns `undefined` if no checkpoint exists (fresh start).
  */
-export const readLoopCheckpoint = async (): Promise<
-  LoopCheckpoint | undefined
-> => {
-  try {
-    const raw = await Deno.readTextFile(LOOP_STATE_FILE);
-    const parsed = JSON.parse(raw);
-    if (
-      typeof parsed === "object" && parsed !== null &&
-      typeof parsed.iterationsUsed === "number"
-    ) {
-      return {
-        iterationsUsed: parsed.iterationsUsed,
-        validationFailurePath: typeof parsed.validationFailurePath === "string"
-          ? parsed.validationFailurePath
-          : undefined,
-      };
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-};
+export const readLoopCheckpoint = (): Promise<LoopCheckpoint | undefined> =>
+  Deno.readTextFile(LOOP_STATE_FILE)
+    .then(parseCheckpoint)
+    .catch((): undefined => undefined);
 
 /**
  * Write the current loop checkpoint to disk so it can be restored on restart.
- * Overwrites any previous checkpoint atomically via a temp file.
  */
-export const writeLoopCheckpoint = async (
+export const writeLoopCheckpoint = (
   checkpoint: LoopCheckpoint,
-): Promise<void> => {
-  await Deno.mkdir(".ralph", { recursive: true });
-  await Deno.writeTextFile(LOOP_STATE_FILE, JSON.stringify(checkpoint));
-};
+): Promise<void> =>
+  Deno.mkdir(".ralph", { recursive: true })
+    .then(() =>
+      Deno.writeTextFile(LOOP_STATE_FILE, JSON.stringify(checkpoint))
+    );
 
 /** Remove the checkpoint file when the loop completes cleanly. */
-export const clearLoopCheckpoint = async (): Promise<void> => {
-  await Deno.remove(LOOP_STATE_FILE).catch(() => {});
-};
+export const clearLoopCheckpoint = (): Promise<void> =>
+  Deno.remove(LOOP_STATE_FILE).catch(() => {});

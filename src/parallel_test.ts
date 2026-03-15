@@ -490,7 +490,10 @@ Deno.test("runParallelLoop logs scenario resolution after merges", async () => {
 
 Deno.test("runParallelLoop writes checkpoint after each round", async () => {
   const content = "| 1 |          |      |";
-  const written: { iterationsUsed: number; validationFailurePath: string | undefined }[] = [];
+  const written: {
+    iterationsUsed: number;
+    validationFailurePath: string | undefined;
+  }[] = [];
 
   await runParallelLoop({
     agent: "claude",
@@ -553,7 +556,10 @@ Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => 
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
       readCheckpoint: () =>
-        Promise.resolve({ iterationsUsed: 3, validationFailurePath: undefined }),
+        Promise.resolve({
+          iterationsUsed: 3,
+          validationFailurePath: undefined,
+        }),
       writeCheckpoint: (cp) => {
         written.push(cp.iterationsUsed);
         return Promise.resolve();
