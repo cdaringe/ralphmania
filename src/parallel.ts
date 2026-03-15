@@ -265,27 +265,23 @@ export const runParallelLoop = async (
       // Sequential merge — retry with -X theirs, then reconcile via agent
       for (const wr of results) {
         const has = await deps.hasNewCommits({ worktree: wr.worktree, log });
-        if (!has) continue;
-        const mergeOutcome = await deps.mergeWorktree({
-          worktree: wr.worktree,
-          log,
-        });
-        if (mergeOutcome === "conflict") {
-          log({
+        has &&
+          await deps.mergeWorktree({ worktree: wr.worktree, log }) ===
+            "conflict" &&
+          (log({
             tags: ["info", "parallel"],
             message: yellow(
               `Worker ${wr.workerIndex} scenario ${
                 actionableScenarios[wr.workerIndex]
               }: entering agent reconciliation`,
             ),
-          });
-          await deps.reconcileMerge({
-            worktree: wr.worktree,
-            agent,
-            signal,
-            log,
-          });
-        }
+          }),
+            await deps.reconcileMerge({
+              worktree: wr.worktree,
+              agent,
+              signal,
+              log,
+            }));
       }
 
       // Detect: did each worker's scenario actually land?

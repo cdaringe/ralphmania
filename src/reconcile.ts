@@ -44,6 +44,28 @@ IMPORTANT:
 - Do NOT run \`git merge --abort\`.
 - Resolve every conflict — do not leave any conflict markers.`;
 
+/** Build a broader prompt for when merge fails without conflict markers. */
+export const buildMergeRetryPrompt = (
+  { worktree }: { worktree: WorktreeInfo },
+): string =>
+  `You are merging branch ${worktree.branch} (scenario ${worktree.scenario}) into the current branch.
+
+The previous merge attempt failed without leaving standard conflict markers.
+This may be due to tree conflicts, rename/delete conflicts, or other non-textual issues.
+
+Instructions:
+1. Run \`git status\` to understand the current working tree state.
+2. Run \`git merge ${worktree.branch} --no-edit\` to attempt the merge.
+3. Inspect any errors or issues that arise.
+4. Resolve ALL issues — file additions, deletions, renames, content conflicts — whatever is needed.
+5. Stage all resolved files with \`git add\`.
+6. Complete the merge with \`git commit --no-edit\`.
+
+IMPORTANT:
+- Do NOT give up. The merge MUST be completed.
+- Do NOT run \`git merge --abort\`.
+- Ensure the final result is a committed merge.`;
+
 export type ReconcileDeps = {
   run: (
     args: string[],
@@ -142,13 +164,13 @@ export const reconcileMerge = async (
       `Merge ${worktree.branch} (scenario ${worktree.scenario}, reconciled)`,
     ]);
 
+    // Clean merge — done
     if (mergeResult.code === 0) {
-      log({
+      return void log({
         tags: ["info", "reconcile"],
         message:
           `Merge succeeded on attempt ${attempt} for scenario ${worktree.scenario}`,
       });
-      return;
     }
 
     // Parse conflicted files
@@ -156,45 +178,67 @@ export const reconcileMerge = async (
     const conflictedFiles = parseConflictedFiles(statusResult.stdout);
 
     if (conflictedFiles.length === 0) {
-      // Merge failed but no conflicts detected — unexpected state, commit what we have
+      // Merge failed but no conflict markers — abort and let agent handle it
       log({
         tags: ["info", "reconcile"],
         message:
-          `Merge exited non-zero but no conflicts found for scenario ${worktree.scenario}, completing`,
+          `Merge exited non-zero but no conflicts found for scenario ${worktree.scenario}, spawning agent to resolve`,
       });
-      return;
+      await run(["merge", "--abort"]);
+
+      await spawnAgent({
+        agent,
+        prompt: buildMergeRetryPrompt({ worktree }),
+        signal: AbortSignal.any([
+          signal,
+          AbortSignal.timeout(RECONCILE_TIMEOUT_MS),
+        ]),
+        log,
+      });
+
+      // Check if agent completed the merge (HEAD should have advanced)
+      const logResult = await run(["log", "-1", "--pretty=%s"]);
+      if (logResult.stdout.includes(worktree.branch)) {
+        return void log({
+          tags: ["info", "reconcile"],
+          message:
+            `Agent completed merge on attempt ${attempt} for scenario ${worktree.scenario}`,
+        });
+      }
+
+      // Agent didn't land the merge — loop and retry
+      log({
+        tags: ["info", "reconcile"],
+        message: `Agent did not complete merge on attempt ${attempt}, retrying`,
+      });
+      continue;
     }
 
     log({
       tags: ["info", "reconcile"],
-      message:
-        `${conflictedFiles.length} conflicted file(s): ${conflictedFiles.join(", ")}`,
+      message: `${conflictedFiles.length} conflicted file(s): ${
+        conflictedFiles.join(", ")
+      }`,
     });
 
-    // Build prompt and spawn agent to resolve
-    const prompt = buildReconcilePrompt({ worktree, conflictedFiles });
-    const combinedSignal = AbortSignal.any([
-      signal,
-      AbortSignal.timeout(RECONCILE_TIMEOUT_MS),
-    ]);
-
+    // Spawn agent to resolve conflicts
     await spawnAgent({
       agent,
-      prompt,
-      signal: combinedSignal,
+      prompt: buildReconcilePrompt({ worktree, conflictedFiles }),
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(RECONCILE_TIMEOUT_MS),
+      ]),
       log,
     });
 
-    // Check if agent resolved everything
-    const stillConflicted = await hasUnresolvedConflicts(run);
-
-    if (!stillConflicted) {
-      log({
+    // Agent resolved everything — done
+    if (!(await hasUnresolvedConflicts(run))) {
+      return void log({
         tags: ["info", "reconcile"],
         message:
           `Agent resolved conflicts on attempt ${attempt} for scenario ${worktree.scenario}`,
       });
-      return;
     }
 
     // Still conflicted — abort this merge and retry
