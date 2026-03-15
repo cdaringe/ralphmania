@@ -490,10 +490,7 @@ Deno.test("runParallelLoop logs scenario resolution after merges", async () => {
 
 Deno.test("runParallelLoop writes checkpoint after each round", async () => {
   const content = "| 1 |          |      |";
-  const written: {
-    iterationsUsed: number;
-    validationFailurePath: string | undefined;
-  }[] = [];
+  const written: { iterationsUsed: number; step: string }[] = [];
 
   await runParallelLoop({
     agent: "claude",
@@ -512,9 +509,11 @@ Deno.test("runParallelLoop writes checkpoint after each round", async () => {
     }),
   });
 
-  assertEquals(written.length, 2);
-  assertEquals(written[0].iterationsUsed, 1);
-  assertEquals(written[1].iterationsUsed, 2);
+  // Each round writes agent + validate + done; verify the "done" checkpoints
+  const done = written.filter((c) => c.step === "done");
+  assertEquals(done.length, 2);
+  assertEquals(done[0].iterationsUsed, 1);
+  assertEquals(done[1].iterationsUsed, 2);
 });
 
 Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
@@ -543,7 +542,7 @@ Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
 
 Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => {
   const content = "| 1 |          |      |";
-  const written: number[] = [];
+  const written: { iterationsUsed: number; step: string }[] = [];
 
   await runParallelLoop({
     agent: "claude",
@@ -558,17 +557,21 @@ Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => 
       readCheckpoint: () =>
         Promise.resolve({
           iterationsUsed: 3,
+          step: "done" as const,
           validationFailurePath: undefined,
         }),
       writeCheckpoint: (cp) => {
-        written.push(cp.iterationsUsed);
+        written.push(cp);
         return Promise.resolve();
       },
     }),
   });
 
-  // Started from 3, ran until 5 — wrote checkpoints for iterations 4 and 5
-  assertEquals(written, [4, 5]);
+  // Started from 3, ran until 5 — "done" checkpoints for iterations 4 and 5
+  const done = written.filter((c) => c.step === "done").map((c) =>
+    c.iterationsUsed
+  );
+  assertEquals(done, [4, 5]);
 });
 
 Deno.test("runParallelLoop restores validationFailurePath from checkpoint", async () => {
@@ -588,6 +591,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
       readCheckpoint: () =>
         Promise.resolve({
           iterationsUsed: 3,
+          step: "done" as const,
           validationFailurePath: "/tmp/prior-failure.log",
         }),
       runIteration: (opts) => {
@@ -603,7 +607,8 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
 
 Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async () => {
   const content = "| 1 |          |      |";
-  const written: (string | undefined)[] = [];
+  const written: { step: string; validationFailurePath: string | undefined }[] =
+    [];
 
   await runParallelLoop({
     agent: "claude",
@@ -618,11 +623,13 @@ Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async 
       runValidation: () =>
         Promise.resolve({ status: "failed", outputPath: "/tmp/fail.log" }),
       writeCheckpoint: (cp) => {
-        written.push(cp.validationFailurePath);
+        written.push(cp);
         return Promise.resolve();
       },
     }),
   });
 
-  assertEquals(written, ["/tmp/fail.log"]);
+  // "done" checkpoint carries the failure path from validation
+  const done = written.filter((c) => c.step === "done");
+  assertEquals(done[0]?.validationFailurePath, "/tmp/fail.log");
 });

@@ -1,14 +1,20 @@
-import type { LoopCheckpoint } from "./types.ts";
+import type { LoopCheckpoint, LoopStep } from "./types.ts";
 import { LOOP_STATE_FILE } from "./constants.ts";
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 
+const VALID_STEPS = new Set<string>(["agent", "validate", "done"]);
+
 const parseCheckpoint = (raw: string): LoopCheckpoint | undefined => {
   const parsed: unknown = JSON.parse(raw);
-  return isRecord(parsed) && typeof parsed.iterationsUsed === "number"
+  return isRecord(parsed) &&
+      typeof parsed.iterationsUsed === "number" &&
+      typeof parsed.step === "string" &&
+      VALID_STEPS.has(parsed.step)
     ? {
       iterationsUsed: parsed.iterationsUsed,
+      step: parsed.step as LoopStep,
       validationFailurePath: typeof parsed.validationFailurePath === "string"
         ? parsed.validationFailurePath
         : undefined,

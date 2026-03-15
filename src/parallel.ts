@@ -183,10 +183,13 @@ export const runParallelLoop = async (
   let iterationsUsed = checkpoint?.iterationsUsed ?? 0;
   let validationFailurePath: string | undefined = checkpoint
     ?.validationFailurePath;
+  // When the checkpoint was written before validation, skip agent work on the
+  // first resumed iteration and jump straight to validation.
+  let skipAgentWork = checkpoint?.step === "validate";
   checkpoint && log({
     tags: ["info", "parallel"],
     message:
-      `Resuming from checkpoint: iteration ${iterationsUsed}, validationFailurePath=${
+      `Resuming from checkpoint: iteration ${iterationsUsed}, step=${checkpoint.step}, validationFailurePath=${
         validationFailurePath ?? "none"
       }`,
   });
@@ -207,132 +210,159 @@ export const runParallelLoop = async (
       break;
     }
 
-    // Compute actionable scenarios: NEEDS_REWORK first, then remaining
-    const reworkScenarios = findReworkScenarios(content);
-    const allActionable = findActionableScenarios(content);
-    const reworkSet = new Set(reworkScenarios);
-    const actionableScenarios = [
-      ...reworkScenarios,
-      ...allActionable.filter((s) => !reworkSet.has(s)),
-    ];
-
-    const workerCount = Math.min(parallelism, actionableScenarios.length || 1);
-
-    log({
-      tags: ["info", "parallel"],
-      message:
-        `Round ${iterationsUsed}: launching ${workerCount} worker(s) for scenarios [${
-          actionableScenarios.slice(0, workerCount).join(", ")
-        }]`,
-    });
-
-    // Create worktrees
-    const worktreeResults = await Promise.all(
-      Array.from(
-        { length: workerCount },
-        (_, i) =>
-          deps.createWorktree({
-            scenario: actionableScenarios[i] ?? i,
-            workerIndex: i,
-            log,
-          }),
-      ),
-    );
-    const worktrees = worktreeResults.flatMap((wt, i) =>
-      wt.ok ? [wt.value] : (log({
-        tags: ["error", "parallel"],
-        message: `Failed to create worktree for worker ${i}: ${wt.error}`,
-      }),
-        [])
-    );
-
-    if (worktrees.length === 0) {
+    if (skipAgentWork) {
       log({
-        tags: ["error", "parallel"],
-        message: "No worktrees created, skipping round",
+        tags: ["info", "parallel"],
+        message:
+          `Resuming iteration ${iterationsUsed} at validate step — skipping agent work`,
       });
-      ++iterationsUsed;
-      continue;
-    }
+      skipAgentWork = false;
+    } else {
+      // Checkpoint: about to start agent work for this iteration.
+      await deps.writeCheckpoint({
+        iterationsUsed,
+        step: "agent",
+        validationFailurePath,
+      });
 
-    // Run workers in parallel — each targets a distinct scenario
-    let results: readonly WorkerResult[] = [];
-    try {
-      results = await Promise.all(
-        worktrees.map((wt, i) =>
-          runWorker({
-            agent,
-            workerIndex: i,
-            iterationNum: iterationsUsed,
-            signal,
-            log,
-            plugin,
-            level,
-            worktreePath: wt.path,
-            validationFailurePath,
-            iterate: deps.runIteration,
-            ...(reworkSet.size > 0
-              ? { targetScenarioOverride: actionableScenarios[i] }
-              : {}),
-          }).then((iterationResult): WorkerResult => ({
-            workerIndex: i,
-            iterationResult,
-            worktree: wt,
-          }))
+      // Compute actionable scenarios: NEEDS_REWORK first, then remaining
+      const reworkScenarios = findReworkScenarios(content);
+      const allActionable = findActionableScenarios(content);
+      const reworkSet = new Set(reworkScenarios);
+      const actionableScenarios = [
+        ...reworkScenarios,
+        ...allActionable.filter((s) => !reworkSet.has(s)),
+      ];
+
+      const workerCount = Math.min(
+        parallelism,
+        actionableScenarios.length || 1,
+      );
+
+      log({
+        tags: ["info", "parallel"],
+        message:
+          `Round ${iterationsUsed}: launching ${workerCount} worker(s) for scenarios [${
+            actionableScenarios.slice(0, workerCount).join(", ")
+          }]`,
+      });
+
+      // Create worktrees
+      const worktreeResults = await Promise.all(
+        Array.from(
+          { length: workerCount },
+          (_, i) =>
+            deps.createWorktree({
+              scenario: actionableScenarios[i] ?? i,
+              workerIndex: i,
+              log,
+            }),
         ),
       );
-    } finally {
-      // Discard uncommitted changes (e.g. from deno fmt) before merging
-      await deps.resetWorkingTree({ log });
+      const worktrees = worktreeResults.flatMap((wt, i) =>
+        wt.ok ? [wt.value] : (log({
+          tags: ["error", "parallel"],
+          message: `Failed to create worktree for worker ${i}: ${wt.error}`,
+        }),
+          [])
+      );
 
-      // Sequential merge — retry with -X theirs, then reconcile via agent
-      for (const wr of results) {
-        const has = await deps.hasNewCommits({ worktree: wr.worktree, log });
-        has &&
-          await deps.mergeWorktree({ worktree: wr.worktree, log }) ===
-            "conflict" &&
-          (log({
-            tags: ["info", "parallel"],
-            message: yellow(
-              `Worker ${wr.workerIndex} scenario ${
-                actionableScenarios[wr.workerIndex]
-              }: entering agent reconciliation`,
-            ),
-          }),
-            await deps.reconcileMerge({
-              worktree: wr.worktree,
+      if (worktrees.length === 0) {
+        log({
+          tags: ["error", "parallel"],
+          message: "No worktrees created, skipping round",
+        });
+        ++iterationsUsed;
+        continue;
+      }
+
+      // Run workers in parallel — each targets a distinct scenario
+      let results: readonly WorkerResult[] = [];
+      try {
+        results = await Promise.all(
+          worktrees.map((wt, i) =>
+            runWorker({
               agent,
+              workerIndex: i,
+              iterationNum: iterationsUsed,
               signal,
               log,
-            }));
-      }
+              plugin,
+              level,
+              worktreePath: wt.path,
+              validationFailurePath,
+              iterate: deps.runIteration,
+              ...(reworkSet.size > 0
+                ? { targetScenarioOverride: actionableScenarios[i] }
+                : {}),
+            }).then((iterationResult): WorkerResult => ({
+              workerIndex: i,
+              iterationResult,
+              worktree: wt,
+            }))
+          ),
+        );
+      } finally {
+        // Discard uncommitted changes (e.g. from deno fmt) before merging
+        await deps.resetWorkingTree({ log });
 
-      // Detect: did each worker's scenario actually land?
-      const postMerge = await deps.readProgress();
-      const stillActionable = new Set(findActionableScenarios(postMerge));
-      for (const wr of results) {
-        const scenario = actionableScenarios[wr.workerIndex];
-        scenario !== undefined &&
-          (stillActionable.has(scenario)
-            ? log({
+        // Sequential merge — retry with -X theirs, then reconcile via agent
+        for (const wr of results) {
+          const has = await deps.hasNewCommits({ worktree: wr.worktree, log });
+          has &&
+            await deps.mergeWorktree({ worktree: wr.worktree, log }) ===
+              "conflict" &&
+            (log({
               tags: ["info", "parallel"],
               message: yellow(
-                `Scenario ${scenario}: still actionable after worker ${wr.workerIndex}`,
+                `Worker ${wr.workerIndex} scenario ${
+                  actionableScenarios[wr.workerIndex]
+                }: entering agent reconciliation`,
               ),
-            })
-            : log({
-              tags: ["info", "parallel"],
-              message: green(
-                `Scenario ${scenario}: resolved by worker ${wr.workerIndex}`,
-              ),
-            }));
-      }
+            }),
+              await deps.reconcileMerge({
+                worktree: wr.worktree,
+                agent,
+                signal,
+                log,
+              }));
+        }
 
-      // Cleanup all worktrees
-      await Promise.all(
-        worktrees.map((wt) => deps.cleanupWorktree({ worktree: wt, log })),
-      );
+        // Detect: did each worker's scenario actually land?
+        const postMerge = await deps.readProgress();
+        const stillActionable = new Set(findActionableScenarios(postMerge));
+        for (const wr of results) {
+          const scenario = actionableScenarios[wr.workerIndex];
+          scenario !== undefined &&
+            (stillActionable.has(scenario)
+              ? log({
+                tags: ["info", "parallel"],
+                message: yellow(
+                  `Scenario ${scenario}: still actionable after worker ${wr.workerIndex}`,
+                ),
+              })
+              : log({
+                tags: ["info", "parallel"],
+                message: green(
+                  `Scenario ${scenario}: resolved by worker ${wr.workerIndex}`,
+                ),
+              }));
+        }
+
+        // Cleanup all worktrees
+        await Promise.all(
+          worktrees.map((wt) => deps.cleanupWorktree({ worktree: wt, log })),
+        );
+      }
     }
+
+    // Checkpoint: agent+merge work done, about to validate.  On a subsequent
+    // restart with this checkpoint the agent phase will be skipped.
+    await deps.writeCheckpoint({
+      iterationsUsed,
+      step: "validate",
+      validationFailurePath,
+    });
 
     // Run validation on merged main
     log({
@@ -349,8 +379,13 @@ export const runParallelLoop = async (
 
     ++iterationsUsed;
 
-    // Persist checkpoint so a restart can resume from this point.
-    await deps.writeCheckpoint({ iterationsUsed, validationFailurePath });
+    // Checkpoint: iteration fully complete.  iterationsUsed is already
+    // incremented so the next restart begins the following round.
+    await deps.writeCheckpoint({
+      iterationsUsed,
+      step: "done",
+      validationFailurePath,
+    });
 
     // Check if done
     const updatedContent = await deps.readProgress();

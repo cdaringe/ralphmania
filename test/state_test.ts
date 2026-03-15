@@ -6,12 +6,17 @@ import {
 } from "../src/state.ts";
 
 Deno.test("readLoopCheckpoint returns undefined when file missing", async () => {
+  await clearLoopCheckpoint();
   const result = await readLoopCheckpoint();
   assertEquals(result, undefined);
 });
 
 Deno.test("write then read round-trips checkpoint", async () => {
-  const checkpoint = { iterationsUsed: 5, validationFailurePath: "/tmp/f.log" };
+  const checkpoint = {
+    iterationsUsed: 5,
+    step: "done" as const,
+    validationFailurePath: "/tmp/f.log",
+  };
   await writeLoopCheckpoint(checkpoint);
   const result = await readLoopCheckpoint();
   assertEquals(result, checkpoint);
@@ -21,6 +26,7 @@ Deno.test("write then read round-trips checkpoint", async () => {
 Deno.test("clearLoopCheckpoint removes file", async () => {
   await writeLoopCheckpoint({
     iterationsUsed: 1,
+    step: "agent" as const,
     validationFailurePath: undefined,
   });
   await clearLoopCheckpoint();

@@ -84,12 +84,21 @@ export type LoopState = {
   readonly task: "build" | "complete";
 };
 
+/** The step within an iteration that was last checkpointed. */
+export type LoopStep = "agent" | "validate" | "done";
+
 /**
- * Persisted loop checkpoint written after each round so the workstream can be
- * stopped and restarted without losing progress.
+ * Persisted loop checkpoint written at each major step so the workstream can
+ * be stopped and restarted at the exact point it was interrupted.
+ *
+ * - `"agent"`:    written before spawning worker agents for this iteration.
+ * - `"validate"`: written after agents+merges complete, before validation.
+ * - `"done"`:     written after validation; `iterationsUsed` is already
+ *                 incremented so the next resume starts the following round.
  */
 export type LoopCheckpoint = {
   readonly iterationsUsed: number;
+  readonly step: LoopStep;
   readonly validationFailurePath: string | undefined;
 };
 

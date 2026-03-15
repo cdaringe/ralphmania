@@ -369,7 +369,7 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
 
 Deno.test("runParallelLoop writes checkpoint after each round", async () => {
   const content = "| 1 |          |      |";
-  const checkpoints: { iterationsUsed: number }[] = [];
+  const checkpoints: { iterationsUsed: number; step: string }[] = [];
 
   await runParallelLoop({
     agent: "claude",
@@ -388,8 +388,10 @@ Deno.test("runParallelLoop writes checkpoint after each round", async () => {
     }),
   });
 
-  assertEquals(checkpoints.length, 3);
-  assertEquals(checkpoints.map((c) => c.iterationsUsed), [1, 2, 3]);
+  // Each round writes agent + validate + done — verify the "done" checkpoints
+  const doneCheckpoints = checkpoints.filter((c) => c.step === "done");
+  assertEquals(doneCheckpoints.length, 3);
+  assertEquals(doneCheckpoints.map((c) => c.iterationsUsed), [1, 2, 3]);
 });
 
 Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
@@ -433,6 +435,7 @@ Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => 
       readCheckpoint: () =>
         Promise.resolve({
           iterationsUsed: 3,
+          step: "done" as const,
           validationFailurePath: undefined,
         }),
       runIteration: () => {
@@ -463,6 +466,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
       readCheckpoint: () =>
         Promise.resolve({
           iterationsUsed: 3,
+          step: "done" as const,
           validationFailurePath: "/tmp/saved-fail.log",
         }),
       runIteration: (opts) => {
@@ -477,7 +481,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
 
 Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async () => {
   const content = "| 1 |          |      |";
-  const checkpoints: { validationFailurePath: string | undefined }[] = [];
+  const checkpoints: { step: string; validationFailurePath: string | undefined }[] = [];
 
   await runParallelLoop({
     agent: "claude",
@@ -502,8 +506,42 @@ Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async 
     }),
   });
 
-  assertEquals(checkpoints[0]?.validationFailurePath, "/tmp/v.log");
-  assertEquals(checkpoints[1]?.validationFailurePath, undefined);
+  // "done" checkpoints carry the post-validation failure path
+  const done = checkpoints.filter((c) => c.step === "done");
+  assertEquals(done[0]?.validationFailurePath, "/tmp/v.log");
+  assertEquals(done[1]?.validationFailurePath, undefined);
+});
+
+Deno.test("runParallelLoop resumes at validate step — skips agent work", async () => {
+  const content = "| 1 |          |      |";
+  let agentRuns = 0;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 4,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 2,
+          step: "validate" as const,
+          validationFailurePath: undefined,
+        }),
+      runIteration: () => {
+        agentRuns++;
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  assertEquals(iterationsUsed, 4);
+  // Iteration 2 resumed at validate (no agent); iteration 3 ran agent normally
+  assertEquals(agentRuns, 1);
 });
 
 Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", async () => {
