@@ -1,8 +1,9 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 import {
   extractNdjsonResult,
   ndjsonResultTransform,
   pipeStream,
+  RECEIPTS_PROMPT,
 } from "../src/runner.ts";
 
 Deno.test("pipeStream pipes data and detects marker", async () => {
@@ -200,6 +201,25 @@ Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () 
   assertEquals(output.includes("hello "), true);
   assertEquals(output.includes("[system: init]"), true);
   assertEquals(output.includes("world"), true);
+});
+
+Deno.test("RECEIPTS_PROMPT requires intro for each scenario", () => {
+  assertStringIncludes(
+    RECEIPTS_PROMPT,
+    "A short intro SHALL describe how the scenario's goals are achieved",
+  );
+});
+
+Deno.test("RECEIPTS_PROMPT requires inlined collapsed summary markdown", () => {
+  assertStringIncludes(
+    RECEIPTS_PROMPT,
+    "inlined and collapsed",
+  );
+  assertStringIncludes(RECEIPTS_PROMPT, "<details>");
+});
+
+Deno.test("RECEIPTS_PROMPT targets fastest model receipts directory", () => {
+  assertStringIncludes(RECEIPTS_PROMPT, ".ralph/receipts");
 });
 
 Deno.test("ndjsonResultTransform handles split chunks", async () => {

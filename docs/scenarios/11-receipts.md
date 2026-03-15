@@ -6,66 +6,48 @@
 
 Upon successful execution and all features VERIFIED and no more looping, the
 system SHALL generate evidence receipts in `.ralph/receipts/` using the fastest
-model tier. Receipts are generated only AFTER the loop halts — not within
-individual iterations.
+model tier. Use the existing prompt already found. The summary markdown for the
+VERIFIED scenario SHALL be inlined and collapsed. A short intro SHALL describe
+how the scenario's goals are achieved.
 
 ## Implementation
 
 ### Trigger Condition
 
-`mod.ts` — after the main loop exits, receipts are generated only when
-`state.task === "complete"` (all scenarios verified, validation passed):
+`mod.ts` — receipts generated post-loop only when `allDone === true`:
 
 ```ts
-if (state.task === "complete") {
-  log({ tags: ["info"], message: "Generating evidence receipts..." });
-  const receiptsResult = await updateReceipts({ agent });
-  if (!receiptsResult.ok) {
-    log({ tags: ["error"], message: receiptsResult.error });
-  }
-  return 0;
-}
+const receiptsResult = allDone
+  ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
+    await updateReceipts({ agent, plugin, log }))
+  : undefined;
 ```
 
-### Receipt Generation
+### Receipt Prompt
 
-`updateReceipts({ agent })` exported from `src/runner.ts`:
+`src/runner.ts` exports `RECEIPTS_PROMPT` — the canonical prompt consumed by
+`updateReceipts`. It instructs the agent to:
 
-- Uses `getModel({ agent, mode: "fast" })` — the cheapest model tier.
-- Builds a `CommandSpec` via `buildCommandSpec` with a prompt instructing the
-  agent to update `.ralph/receipts/{index.html,assets}`.
-- Runs the subprocess via `.output()` (not streamed).
-- Uses `nonInteractiveEnv()` and `stdin: "null"`.
+1. Embed playwright test videos (+ description) for scenarios with e2e tests.
+2. Write markdown evidence snippets for scenarios without e2e tests.
+3. Place a VERIFIED/NEEDS_REWORK status at the top of each receipt.
+4. **Write a short intro describing how each scenario's goals are achieved.**
+5. **Inline and collapse the summary markdown for each VERIFIED scenario** (e.g., inside a `<details>` element).
 
-The prompt instructs the agent to:
+Rendering requirements: markdown rendered, videos embedded and playable.
 
-1. For scenarios with e2e tests: embed a video of the passing test +
-   description.
-2. For scenarios without tests: write a markdown write-up with code evidence
-   snippets.
-3. Place a `VERIFIED` or `NEEDS_REWORK` status at the top of each receipt.
-4. Render markdown and embed playable videos in the HTML output.
+### Fastest Model Tier
+
+`updateReceipts` calls `getModel({ agent, mode: "fast" })` — cheapest tier.
 
 ### Output Directory
 
-`src/constants.ts`:
-
-```ts
-export const RALPH_RECEIPTS_DIRNAME = ".ralph/receipts";
-```
-
-### LoopState Simplification
-
-`src/types.ts` — `LoopState.task` is now `"build" | "complete"` only. The former
-`"produce_receipts"` task state has been removed since receipts run once
-post-loop, not as a retry within iterations.
+`RALPH_RECEIPTS_DIRNAME = ".ralph/receipts"` from `src/constants.ts`.
 
 ## Evidence
 
-- `mod.ts`: post-loop `if (state.task === "complete")` block calls
-  `updateReceipts`
-- `src/runner.ts`: `updateReceipts` exported, Phase 3 removed from
-  `runLoopIteration`
-- `src/types.ts`: `LoopState.task` simplified to `"build" | "complete"`
-- `src/constants.ts`: `RALPH_RECEIPTS_DIRNAME = ".ralph/receipts"`
-- `src/model.ts`: `getModel({ agent, mode: "fast" })` used for receipts
+- `src/runner.ts:243` — `RECEIPTS_PROMPT` exported; contains all 5 requirements including intro and collapsed summary
+- `src/runner.ts:260` — `updateReceipts` uses `getModel({ agent, mode: "fast" })`
+- `mod.ts:187` — post-loop receipt generation gated on `allDone`
+- `src/constants.ts` — `RALPH_RECEIPTS_DIRNAME = ".ralph/receipts"`
+- `test/runner_test.ts` — 3 tests verify prompt contains intro requirement, collapsed `<details>` requirement, and receipts dir path

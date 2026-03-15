@@ -240,22 +240,25 @@ export const runIteration = async (
   }
 };
 
-export const updateReceipts = async (
-  { agent, plugin, log }: { agent: Agent; plugin: Plugin; log: Logger },
-): Promise<Result<undefined, string>> => {
-  const prompt = `
-Update ${RALPH_RECEIPTS_DIRNAME}/{index.html,assets} with videos &/or markdown notes
+export const RECEIPTS_PROMPT =
+  `Update ${RALPH_RECEIPTS_DIRNAME}/{index.html,assets} with videos &/or markdown notes
 evidencing completion of every scenario.
 
 1. For user scenarios with e2e tests a receipt SHALL include a video of the playwright test passing and a description of how the test evidences completion.
 2. For requirements that do not have an e2e test a receipt SHALL include a markdown write-up with snippets of code evidence on how the requirement is met.
 3. A status SHALL be placed at the top of each receipt indicating if the scenario is VERIFIED or NEEDS_REWORK based on the validation results and your review of the evidence.
+4. A short intro SHALL describe how the scenario's goals are achieved.
+5. The summary markdown for each VERIFIED scenario SHALL be inlined and collapsed (e.g., inside a <details> element).
 
 Requirements:
 
 1. Markdown SHALL be rendered
-2. Videos SHALL be embedded and playable from the receipt.
-`.trim();
+2. Videos SHALL be embedded and playable from the receipt.`;
+
+export const updateReceipts = async (
+  { agent, plugin, log }: { agent: Agent; plugin: Plugin; log: Logger },
+): Promise<Result<undefined, string>> => {
+  const prompt = RECEIPTS_PROMPT;
   const ctx: HookContext = { agent, log, iterationNum: -1 };
   const rawSelection: ModelSelection = {
     model: getModel({ agent, mode: "fast" }),
