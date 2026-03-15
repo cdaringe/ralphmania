@@ -1,6 +1,7 @@
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const REWORK_THRESHOLD = 1;
 export const ESCALATION_FILE = ".ralph/escalation.json";
+export const LOOP_STATE_FILE = ".ralph/loop-state.json";
 
 /** Coder config: unimplemented scenarios remain. */
 export const CLAUDE_CODER = {

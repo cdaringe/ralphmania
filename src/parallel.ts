@@ -3,6 +3,7 @@ import type {
   EscalationLevel,
   IterationResult,
   Logger,
+  LoopCheckpoint,
   Result,
   ValidationResult,
 } from "./types.ts";
@@ -24,6 +25,11 @@ import {
 } from "./model.ts";
 import type { Plugin } from "./plugin.ts";
 import { dim, green, yellow } from "./colors.ts";
+import {
+  clearLoopCheckpoint,
+  readLoopCheckpoint,
+  writeLoopCheckpoint,
+} from "./state.ts";
 
 export type WorkerResult = {
   readonly workerIndex: number;
@@ -73,6 +79,9 @@ export type ParallelDeps = {
       log: Logger;
     },
   ) => Promise<void>;
+  readCheckpoint: () => Promise<LoopCheckpoint | undefined>;
+  writeCheckpoint: (checkpoint: LoopCheckpoint) => Promise<void>;
+  clearCheckpoint: () => Promise<void>;
 };
 
 const prefixLog = (
@@ -141,6 +150,9 @@ const defaultDeps: ParallelDeps = {
   cleanupWorktree: cleanupWorktreeImpl,
   resetWorkingTree: resetWorkingTreeImpl,
   reconcileMerge: reconcileMergeImpl,
+  readCheckpoint: readLoopCheckpoint,
+  writeCheckpoint: writeLoopCheckpoint,
+  clearCheckpoint: clearLoopCheckpoint,
 };
 
 export const runParallelLoop = async (
@@ -165,8 +177,21 @@ export const runParallelLoop = async (
   },
 ): Promise<number> => {
   const deps = { ...defaultDeps, ...depsOverride };
-  let iterationsUsed = 0;
-  let validationFailurePath: string | undefined;
+
+  // Restore loop state from a prior run, if available.
+  const checkpoint = await deps.readCheckpoint();
+  let iterationsUsed = checkpoint?.iterationsUsed ?? 0;
+  let validationFailurePath: string | undefined =
+    checkpoint?.validationFailurePath;
+  if (checkpoint) {
+    log({
+      tags: ["info", "parallel"],
+      message:
+        `Resuming from checkpoint: iteration ${iterationsUsed}, validationFailurePath=${
+          validationFailurePath ?? "none"
+        }`,
+    });
+  }
 
   while (iterationsUsed < iterations) {
     if (signal.aborted) {
@@ -326,6 +351,9 @@ export const runParallelLoop = async (
 
     ++iterationsUsed;
 
+    // Persist checkpoint so a restart can resume from this point.
+    await deps.writeCheckpoint({ iterationsUsed, validationFailurePath });
+
     // Check if done
     const updatedContent = await deps.readProgress();
     if (isAllVerified(updatedContent)) {
@@ -336,6 +364,9 @@ export const runParallelLoop = async (
       break;
     }
   }
+
+  // Clear checkpoint on clean exit so a fresh run starts from scratch.
+  await deps.clearCheckpoint();
 
   return iterationsUsed;
 };

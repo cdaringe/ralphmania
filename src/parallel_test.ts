@@ -86,6 +86,9 @@ const stubDeps = (
   cleanupWorktree: () => Promise.resolve(ok(undefined)),
   resetWorkingTree: () => Promise.resolve(ok(undefined)),
   reconcileMerge: () => Promise.resolve(),
+  readCheckpoint: () => Promise.resolve(undefined),
+  writeCheckpoint: () => Promise.resolve(),
+  clearCheckpoint: () => Promise.resolve(),
   ...overrides,
 });
 
@@ -481,4 +484,139 @@ Deno.test("runParallelLoop logs scenario resolution after merges", async () => {
   const stillActionable = logged.filter((m) => m.includes("still actionable"));
   assertEquals(resolved.length, 1);
   assertEquals(stillActionable.length, 1);
+});
+
+// --- Checkpoint (state serialization) tests ---
+
+Deno.test("runParallelLoop writes checkpoint after each round", async () => {
+  const content = "| 1 |          |      |";
+  const written: { iterationsUsed: number; validationFailurePath: string | undefined }[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 2,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      writeCheckpoint: (cp) => {
+        written.push(cp);
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  assertEquals(written.length, 2);
+  assertEquals(written[0].iterationsUsed, 1);
+  assertEquals(written[1].iterationsUsed, 2);
+});
+
+Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
+  const content = "| 1 | VERIFIED | done |";
+  let cleared = false;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 5,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      clearCheckpoint: () => {
+        cleared = true;
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  assertEquals(cleared, true);
+});
+
+Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => {
+  const content = "| 1 |          |      |";
+  const written: number[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 5,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      readCheckpoint: () =>
+        Promise.resolve({ iterationsUsed: 3, validationFailurePath: undefined }),
+      writeCheckpoint: (cp) => {
+        written.push(cp.iterationsUsed);
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  // Started from 3, ran until 5 — wrote checkpoints for iterations 4 and 5
+  assertEquals(written, [4, 5]);
+});
+
+Deno.test("runParallelLoop restores validationFailurePath from checkpoint", async () => {
+  const content = "| 1 |          |      |";
+  const failurePaths: (string | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 4,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 3,
+          validationFailurePath: "/tmp/prior-failure.log",
+        }),
+      runIteration: (opts) => {
+        failurePaths.push(opts.validationFailurePath);
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  // First iteration after resume should see the restored failure path
+  assertEquals(failurePaths[0], "/tmp/prior-failure.log");
+});
+
+Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async () => {
+  const content = "| 1 |          |      |";
+  const written: (string | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      runValidation: () =>
+        Promise.resolve({ status: "failed", outputPath: "/tmp/fail.log" }),
+      writeCheckpoint: (cp) => {
+        written.push(cp.validationFailurePath);
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  assertEquals(written, ["/tmp/fail.log"]);
 });

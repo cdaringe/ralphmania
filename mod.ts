@@ -25,6 +25,7 @@ export type {
   EscalationState,
   IterationResult,
   Logger,
+  LoopCheckpoint,
   LoopState,
   ModelSelection,
   Result,

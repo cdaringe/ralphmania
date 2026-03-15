@@ -84,6 +84,15 @@ export type LoopState = {
   readonly task: "build" | "complete";
 };
 
+/**
+ * Persisted loop checkpoint written after each round so the workstream can be
+ * stopped and restarted without losing progress.
+ */
+export type LoopCheckpoint = {
+  readonly iterationsUsed: number;
+  readonly validationFailurePath: string | undefined;
+};
+
 /** The set of supported agent backend identifiers. */
 export const VALID_AGENTS = ["claude", "codex"] as const;
 
