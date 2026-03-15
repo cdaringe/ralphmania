@@ -14,7 +14,7 @@
 | 8  | VERIFIED | [NEEDS_REWORK detection and per-scenario model escalation](docs/scenarios/08-rework-escalation.md)                            |              |
 | 9  | VERIFIED | [Agent scoped to failing scenario during escalation](docs/scenarios/09-scope-to-failing-scenario.md)                          |              |
 | 10 | VERIFIED | [Agent self-reviews all claims, marks VERIFIED or NEEDS_REWORK](docs/scenarios/10-self-review-verification.md)                |              |
-| 11 | VERIFIED | [Evidence receipts generated in .ralph/receipts/ on completion](docs/scenarios/11-receipts.md)                                |              |
+| 11 | NEEDS_REWORK | [Evidence receipts generated in .ralph/receipts/ on completion](docs/scenarios/11-receipts.md)                                | The requirements are not all met for this scenario.             |
 | 12 | VERIFIED | [User-provided plugins with 7 lifecycle hooks](docs/scenarios/12-plugins.md)                                                  |              |
 | 13 | VERIFIED | [Each iteration capped at 60 minutes via AbortSignal.timeout](docs/scenarios/13-iteration-timeout.md)                         |              |
 | 14 | VERIFIED | [Subprocesses run with CI=true, no prompts, stdin null](docs/scenarios/14-non-interactive-environment.md)                     |              |
@@ -25,5 +25,5 @@
 | 19 | VERIFIED | [Claude 4-step escalation ladder via CLAUDE_CODE_EFFORT_LEVEL](docs/scenarios/19-claude-escalation-ladder.md)                 |              |
 | 20 | VERIFIED | [Validation tmp output file via RALPH_OUTPUT_FILE](docs/scenarios/20-validation-tmp-output-file.md)                           |              |
 | 21 | VERIFIED | [serve receipts command with --open flag](docs/scenarios/21-serve-receipts.md)                                                |              |
-| 22 | VERIFIED | [Workstream state serializable via .ralph/loop-state.json checkpoint](docs/scenarios/22-state-serialization.md)               |              |
+| 22 | NEEDS_REWORK | [Workstream state serializable via .ralph/loop-state.json checkpoint](docs/scenarios/22-state-serialization.md)               | The state should include precisely which step of the flow we were at, and the CLI should resume at that point.             |
 | 23 | VERIFIED | [Graceful merge conflict handling via agent reconciliation loop](docs/scenarios/23-merge-conflict-handling.md)                |              |
