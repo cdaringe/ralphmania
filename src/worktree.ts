@@ -91,6 +91,35 @@ export const hasNewCommits = async (
     : result.stdout.length > 0;
 };
 
+const mergeWithTheirs = async (
+  { worktree, log }: { worktree: WorktreeInfo; log: Logger },
+): Promise<MergeResult> => {
+  const result = await run([
+    "merge",
+    worktree.branch,
+    "-X",
+    "theirs",
+    "--no-edit",
+    "-m",
+    `Merge ${worktree.branch} (scenario ${worktree.scenario}, resolved)`,
+  ]);
+
+  return result.code !== 0
+    ? (log({
+      tags: ["error", "worktree"],
+      message:
+        `Merge failed for scenario ${worktree.scenario} even with theirs strategy`,
+    }),
+      await run(["merge", "--abort"]),
+      "conflict" as const)
+    : (log({
+      tags: ["info", "worktree"],
+      message:
+        `Merged ${worktree.branch} (scenario ${worktree.scenario}) via theirs`,
+    }),
+      "merged" as const);
+};
+
 export const mergeWorktree = async (
   { worktree, log }: { worktree: WorktreeInfo; log: Logger },
 ): Promise<MergeResult> => {
@@ -104,17 +133,34 @@ export const mergeWorktree = async (
 
   return result.code !== 0
     ? (log({
-      tags: ["error", "worktree"],
+      tags: ["info", "worktree"],
       message:
-        `Merge conflict for scenario ${worktree.scenario}, aborting merge`,
+        `Merge conflict for scenario ${worktree.scenario}, retrying with theirs strategy`,
     }),
       await run(["merge", "--abort"]),
-      "conflict" as const)
+      await mergeWithTheirs({ worktree, log }))
     : (log({
       tags: ["info", "worktree"],
       message: `Merged ${worktree.branch} (scenario ${worktree.scenario})`,
     }),
       "merged" as const);
+};
+
+export const resetWorkingTree = async (
+  { log }: { log: Logger },
+): Promise<Result<void, string>> => {
+  const result = await run(["checkout", "--", "."]);
+  return result.code !== 0
+    ? (log({
+      tags: ["error", "worktree"],
+      message: `Failed to reset working tree: ${result.stderr}`,
+    }),
+      err(`Failed to reset working tree: ${result.stderr}`))
+    : (log({
+      tags: ["debug", "worktree"],
+      message: "Reset working tree (discarded uncommitted changes)",
+    }),
+      ok(undefined));
 };
 
 export const cleanupWorktree = async (

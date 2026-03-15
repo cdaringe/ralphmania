@@ -24,3 +24,4 @@
 | 18 | VERIFIED | [Model-selection log reports progress status](docs/scenarios/18-model-selection-progress-status.md)                           |              |
 | 19 | VERIFIED | [Claude 4-step escalation ladder via CLAUDE_CODE_EFFORT_LEVEL](docs/scenarios/19-claude-escalation-ladder.md)                 |              |
 | 20 | VERIFIED | [Validation tmp output file via RALPH_OUTPUT_FILE](docs/scenarios/20-validation-tmp-output-file.md)                           |              |
+| 21 |          |                                                                                                                               |              |

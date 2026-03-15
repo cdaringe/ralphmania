@@ -13,9 +13,15 @@ import {
   createWorktree as createWorktreeImpl,
   hasNewCommits as hasNewCommitsImpl,
   mergeWorktree as mergeWorktreeImpl,
+  resetWorkingTree as resetWorkingTreeImpl,
 } from "./worktree.ts";
 import type { WorktreeInfo } from "./worktree.ts";
-import { isAllVerified } from "./model.ts";
+import { reconcileMerge as reconcileMergeImpl } from "./reconcile.ts";
+import {
+  findActionableScenarios,
+  findReworkScenarios,
+  isAllVerified,
+} from "./model.ts";
 import type { Plugin } from "./plugin.ts";
 import { dim, green, yellow } from "./colors.ts";
 
@@ -41,6 +47,7 @@ export type ParallelDeps = {
       plugin: Plugin;
       level: EscalationLevel | undefined;
       cwd?: string;
+      targetScenarioOverride?: number;
     },
   ) => Promise<IterationResult>;
   runValidation: (
@@ -55,6 +62,17 @@ export type ParallelDeps = {
   cleanupWorktree: (
     opts: { worktree: WorktreeInfo; log: Logger },
   ) => Promise<Result<void, string>>;
+  resetWorkingTree: (
+    opts: { log: Logger },
+  ) => Promise<Result<void, string>>;
+  reconcileMerge: (
+    opts: {
+      worktree: WorktreeInfo;
+      agent: Agent;
+      signal: AbortSignal;
+      log: Logger;
+    },
+  ) => Promise<void>;
 };
 
 const prefixLog = (
@@ -79,6 +97,7 @@ const runWorker = async (
     worktreePath,
     validationFailurePath,
     iterate,
+    targetScenarioOverride,
   }: {
     agent: Agent;
     workerIndex: number;
@@ -90,6 +109,7 @@ const runWorker = async (
     worktreePath: string;
     validationFailurePath: string | undefined;
     iterate: ParallelDeps["runIteration"];
+    targetScenarioOverride?: number;
   },
 ): Promise<IterationResult> => {
   const wLog = prefixLog(log, workerIndex);
@@ -102,6 +122,7 @@ const runWorker = async (
     plugin,
     level,
     cwd: worktreePath,
+    ...(targetScenarioOverride !== undefined ? { targetScenarioOverride } : {}),
   });
 };
 
@@ -118,6 +139,8 @@ const defaultDeps: ParallelDeps = {
   hasNewCommits: hasNewCommitsImpl,
   mergeWorktree: mergeWorktreeImpl,
   cleanupWorktree: cleanupWorktreeImpl,
+  resetWorkingTree: resetWorkingTreeImpl,
+  reconcileMerge: reconcileMergeImpl,
 };
 
 export const runParallelLoop = async (
@@ -161,16 +184,35 @@ export const runParallelLoop = async (
       break;
     }
 
+    // Compute actionable scenarios: NEEDS_REWORK first, then remaining
+    const reworkScenarios = findReworkScenarios(content);
+    const allActionable = findActionableScenarios(content);
+    const reworkSet = new Set(reworkScenarios);
+    const actionableScenarios = [
+      ...reworkScenarios,
+      ...allActionable.filter((s) => !reworkSet.has(s)),
+    ];
+
+    const workerCount = Math.min(parallelism, actionableScenarios.length || 1);
+
     log({
       tags: ["info", "parallel"],
-      message: `Round ${iterationsUsed}: launching ${parallelism} worker(s)`,
+      message:
+        `Round ${iterationsUsed}: launching ${workerCount} worker(s) for scenarios [${
+          actionableScenarios.slice(0, workerCount).join(", ")
+        }]`,
     });
 
     // Create worktrees
     const worktreeResults = await Promise.all(
       Array.from(
-        { length: parallelism },
-        (_, i) => deps.createWorktree({ scenario: i, workerIndex: i, log }),
+        { length: workerCount },
+        (_, i) =>
+          deps.createWorktree({
+            scenario: actionableScenarios[i] ?? i,
+            workerIndex: i,
+            log,
+          }),
       ),
     );
     const worktrees = worktreeResults.flatMap((wt, i) =>
@@ -190,7 +232,7 @@ export const runParallelLoop = async (
       continue;
     }
 
-    // Run workers in parallel — each agent decides what to work on
+    // Run workers in parallel — each targets a distinct scenario
     let results: readonly WorkerResult[] = [];
     try {
       results = await Promise.all(
@@ -206,6 +248,9 @@ export const runParallelLoop = async (
             worktreePath: wt.path,
             validationFailurePath,
             iterate: deps.runIteration,
+            ...(reworkSet.size > 0
+              ? { targetScenarioOverride: actionableScenarios[i] }
+              : {}),
           }).then((iterationResult): WorkerResult => ({
             workerIndex: i,
             iterationResult,
@@ -214,17 +259,54 @@ export const runParallelLoop = async (
         ),
       );
     } finally {
-      // Sequential merge of worktrees with new commits
+      // Discard uncommitted changes (e.g. from deno fmt) before merging
+      await deps.resetWorkingTree({ log });
+
+      // Sequential merge — retry with -X theirs, then reconcile via agent
       for (const wr of results) {
         const has = await deps.hasNewCommits({ worktree: wr.worktree, log });
-        has && await deps.mergeWorktree({ worktree: wr.worktree, log }) ===
-            "conflict" &&
+        if (!has) continue;
+        const mergeOutcome = await deps.mergeWorktree({
+          worktree: wr.worktree,
+          log,
+        });
+        if (mergeOutcome === "conflict") {
           log({
             tags: ["info", "parallel"],
             message: yellow(
-              `Worker ${wr.workerIndex} had merge conflict, will retry`,
+              `Worker ${wr.workerIndex} scenario ${
+                actionableScenarios[wr.workerIndex]
+              }: entering agent reconciliation`,
             ),
           });
+          await deps.reconcileMerge({
+            worktree: wr.worktree,
+            agent,
+            signal,
+            log,
+          });
+        }
+      }
+
+      // Detect: did each worker's scenario actually land?
+      const postMerge = await deps.readProgress();
+      const stillActionable = new Set(findActionableScenarios(postMerge));
+      for (const wr of results) {
+        const scenario = actionableScenarios[wr.workerIndex];
+        scenario !== undefined &&
+          (stillActionable.has(scenario)
+            ? log({
+              tags: ["info", "parallel"],
+              message: yellow(
+                `Scenario ${scenario}: still actionable after worker ${wr.workerIndex}`,
+              ),
+            })
+            : log({
+              tags: ["info", "parallel"],
+              message: green(
+                `Scenario ${scenario}: resolved by worker ${wr.workerIndex}`,
+              ),
+            }));
       }
 
       // Cleanup all worktrees

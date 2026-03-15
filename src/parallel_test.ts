@@ -1,10 +1,10 @@
 import { assertEquals } from "jsr:@std/assert";
-import { findActionableScenarios, isAllVerified } from "../src/model.ts";
-import { runParallelLoop } from "../src/parallel.ts";
-import type { ParallelDeps } from "../src/parallel.ts";
-import type { Logger } from "../src/types.ts";
-import { ok } from "../src/types.ts";
-import type { WorktreeInfo } from "../src/worktree.ts";
+import { findActionableScenarios, isAllVerified } from "./model.ts";
+import { runParallelLoop } from "./parallel.ts";
+import type { ParallelDeps } from "./parallel.ts";
+import type { Logger } from "./types.ts";
+import { ok } from "./types.ts";
+import type { WorktreeInfo } from "./worktree.ts";
 
 // --- Model function tests (used by parallel orchestration) ---
 
@@ -167,7 +167,7 @@ Deno.test("runParallelLoop stops early when verified after round", async () => {
         readCount++;
         // First read: not done. Post-round read: all verified.
         return Promise.resolve(
-          readCount <= 1
+          readCount <= 2
             ? "| 1 |          |      |"
             : "| 1 | VERIFIED | done |",
         );
@@ -364,9 +364,37 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
   assertEquals(failurePaths, [undefined, "/tmp/fail.log", undefined]);
 });
 
-Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", async () => {
+// --- New: scenario distribution & merge robustness ---
+
+Deno.test("runParallelLoop passes distinct targetScenarioOverride to workers", async () => {
+  const content =
+    "| 1 | VERIFIED | done |\n| 2 |          |      |\n| 3 | NEEDS_REWORK | fix |\n| 4 |          |      |";
+  const overrides: (number | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 3,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      runIteration: (opts) => {
+        overrides.push(opts.targetScenarioOverride);
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  // NEEDS_REWORK (3) first, then remaining actionable (2, 4)
+  assertEquals(overrides, [3, 2, 4]);
+});
+
+Deno.test("runParallelLoop calls resetWorkingTree before merges", async () => {
   const content = "| 1 |          |      |";
-  let hasOverride = true;
+  const callOrder: string[] = [];
 
   await runParallelLoop({
     agent: "claude",
@@ -378,12 +406,79 @@ Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", asy
     level: undefined,
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
-      runIteration: (opts) => {
-        hasOverride = "targetScenarioOverride" in opts;
-        return Promise.resolve({ status: "continue" });
+      hasNewCommits: () => Promise.resolve(true),
+      resetWorkingTree: () => {
+        callOrder.push("reset");
+        return Promise.resolve(ok(undefined));
+      },
+      mergeWorktree: () => {
+        callOrder.push("merge");
+        return Promise.resolve("merged");
       },
     }),
   });
 
-  assertEquals(hasOverride, false);
+  assertEquals(callOrder, ["reset", "merge"]);
+});
+
+Deno.test("runParallelLoop limits workers to actionable scenario count", async () => {
+  const content =
+    "| 1 | VERIFIED | done |\n| 2 |          |      |\n| 3 | VERIFIED | done |";
+  const workersCreated: number[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 3,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      createWorktree: ({ workerIndex }) => {
+        workersCreated.push(workerIndex);
+        return Promise.resolve(ok(stubWorktree(workerIndex)));
+      },
+    }),
+  });
+
+  // Only 1 actionable scenario (2), so only 1 worker
+  assertEquals(workersCreated, [0]);
+});
+
+Deno.test("runParallelLoop logs scenario resolution after merges", async () => {
+  let readCount = 0;
+  const logged: string[] = [];
+  const testLog: Logger = (opts) => {
+    logged.push(opts.message);
+  };
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 2,
+    signal: AbortSignal.timeout(10_000),
+    log: testLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => {
+        readCount++;
+        // Round start: two actionable. Post-merge: scenario 1 resolved.
+        return Promise.resolve(
+          readCount <= 1
+            ? "| 1 |          |      |\n| 2 |          |      |"
+            : "| 1 | COMPLETE |      |\n| 2 |          |      |",
+        );
+      },
+      hasNewCommits: () => Promise.resolve(true),
+      mergeWorktree: () => Promise.resolve("merged"),
+    }),
+  });
+
+  const resolved = logged.filter((m) => m.includes("resolved by"));
+  const stillActionable = logged.filter((m) => m.includes("still actionable"));
+  assertEquals(resolved.length, 1);
+  assertEquals(stillActionable.length, 1);
 });

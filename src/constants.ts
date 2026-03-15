@@ -22,6 +22,7 @@ export const CLAUDE_ESCALATED = {
 } as const;
 
 export const WORKTREE_BASE_DIR = ".ralph/worktrees";
+export const RECONCILE_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const USAGE =
   `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-1] [--parallel <n>]
@@ -96,5 +97,5 @@ export const BASE_PROMPT = `DO ONLY ONE TASK AT A TIME.
   3.2. All referenced documents & modules should be verified existing and up-to-date.
   3.3. Assess if the user's scenario outcomes met--not just if the prior agent's tasks are completed.
   3.4. Update @progress.md status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
-4. Update .ralph/repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
+4. Update repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
 `;
