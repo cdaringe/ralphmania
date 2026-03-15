@@ -4,7 +4,7 @@
   "license": "MIT",
   "exports": "./mod.ts",
   "tasks": {
-    "test": "deno test",
+    "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net",
     "fmt": "deno fmt",
     "check": "deno check mod.ts",
     "ralph": "deno run -A mod.ts --iterations 30 --agent claude"
