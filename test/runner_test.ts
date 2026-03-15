@@ -3,7 +3,7 @@ import {
   extractNdjsonResult,
   ndjsonResultTransform,
   pipeStream,
-} from "./runner.ts";
+} from "../src/runner.ts";
 
 Deno.test("pipeStream pipes data and detects marker", async () => {
   const data = new TextEncoder().encode(

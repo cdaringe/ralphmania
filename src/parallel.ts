@@ -4,6 +4,7 @@ import type {
   IterationResult,
   Logger,
   Result,
+  ValidationResult,
 } from "./types.ts";
 import { runIteration as runIterationImpl } from "./runner.ts";
 import { runValidation as runValidationImpl } from "./validation.ts";
@@ -44,7 +45,7 @@ export type ParallelDeps = {
   ) => Promise<IterationResult>;
   runValidation: (
     opts: { iterationNum: number; log: Logger; cwd?: string },
-  ) => Promise<unknown>;
+  ) => Promise<ValidationResult>;
   hasNewCommits: (
     opts: { worktree: WorktreeInfo; log: Logger },
   ) => Promise<boolean>;
@@ -76,6 +77,7 @@ const runWorker = async (
     plugin,
     level,
     worktreePath,
+    validationFailurePath,
     iterate,
   }: {
     agent: Agent;
@@ -86,6 +88,7 @@ const runWorker = async (
     plugin: Plugin;
     level: EscalationLevel | undefined;
     worktreePath: string;
+    validationFailurePath: string | undefined;
     iterate: ParallelDeps["runIteration"];
   },
 ): Promise<IterationResult> => {
@@ -95,7 +98,7 @@ const runWorker = async (
     agent,
     signal,
     log: wLog,
-    validationFailurePath: undefined,
+    validationFailurePath,
     plugin,
     level,
     cwd: worktreePath,
@@ -140,6 +143,7 @@ export const runParallelLoop = async (
 ): Promise<number> => {
   const deps = { ...defaultDeps, ...depsOverride };
   let iterationsUsed = 0;
+  let validationFailurePath: string | undefined;
 
   while (iterationsUsed < iterations) {
     if (signal.aborted) {
@@ -200,6 +204,7 @@ export const runParallelLoop = async (
             plugin,
             level,
             worktreePath: wt.path,
+            validationFailurePath,
             iterate: deps.runIteration,
           }).then((iterationResult): WorkerResult => ({
             workerIndex: i,
@@ -233,7 +238,13 @@ export const runParallelLoop = async (
       tags: ["info", "parallel"],
       message: dim("Running validation on merged result..."),
     });
-    await deps.runValidation({ iterationNum: iterationsUsed, log });
+    const validation = await deps.runValidation({
+      iterationNum: iterationsUsed,
+      log,
+    });
+    validationFailurePath = validation.status === "failed"
+      ? validation.outputPath
+      : undefined;
 
     ++iterationsUsed;
 

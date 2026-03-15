@@ -83,6 +83,7 @@ export const computeModelSelection = (
   },
 ): Result<ModelSelection, string> => {
   const scenarioResult = detectScenarioFromProgress(content);
+  const actionableScenarios = findActionableScenarios(content);
 
   return !scenarioResult.ok
     ? scenarioResult
@@ -94,6 +95,7 @@ export const computeModelSelection = (
         ? CLAUDE_VERIFIER
         : CLAUDE_CODER),
       targetScenario: scenarioResult.value,
+      actionableScenarios,
     })
     : (() => {
       const reworkCount = (content.match(/NEEDS_REWORK/g) ?? []).length;
@@ -107,6 +109,7 @@ export const computeModelSelection = (
         mode,
         targetScenario: scenarioResult.value,
         effort: undefined,
+        actionableScenarios,
       });
     })();
 };
@@ -185,6 +188,7 @@ export const resolveModelSelection = async (
     mode: defaultMode,
     targetScenario: undefined,
     effort: undefined,
+    actionableScenarios: [],
   };
 
   const rawContent = await Deno.readTextFile("./progress.md").catch(() => "");
@@ -237,7 +241,14 @@ export const resolveModelSelection = async (
       return defaults;
     }
 
-    const { model, mode, effort, targetScenario } = result.value;
+    // When no NEEDS_REWORK but unimplemented scenarios exist, scope to the
+    // first actionable one so the agent doesn't overlook empty rows.
+    const resolvedTarget = result.value.targetScenario === undefined &&
+        !isVerifierMode
+      ? result.value.actionableScenarios[0]
+      : result.value.targetScenario;
+    const selection = { ...result.value, targetScenario: resolvedTarget };
+    const { model, mode, effort, targetScenario } = selection;
     const reworkCount = reworkScenarios.length;
     const statusMessage = reworkCount > 0
       ? `${reworkCount} NEEDS_REWORK entries → ${model} (effort: ${effort}, level: ${effectiveLevel})`
@@ -253,7 +264,7 @@ export const resolveModelSelection = async (
       });
     }
 
-    return result.value;
+    return selection;
   }
 
   // Codex path: existing 3-tier rework-count escalation

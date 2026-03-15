@@ -1,10 +1,10 @@
 import { assertEquals } from "jsr:@std/assert";
-import { findActionableScenarios, isAllVerified } from "./model.ts";
-import { runParallelLoop } from "./parallel.ts";
-import type { ParallelDeps } from "./parallel.ts";
-import type { Logger } from "./types.ts";
-import { ok } from "./types.ts";
-import type { WorktreeInfo } from "./worktree.ts";
+import { findActionableScenarios, isAllVerified } from "../src/model.ts";
+import { runParallelLoop } from "../src/parallel.ts";
+import type { ParallelDeps } from "../src/parallel.ts";
+import type { Logger } from "../src/types.ts";
+import { ok } from "../src/types.ts";
+import type { WorktreeInfo } from "../src/worktree.ts";
 
 // --- Model function tests (used by parallel orchestration) ---
 
@@ -80,7 +80,7 @@ const stubDeps = (
   createWorktree: ({ workerIndex }) =>
     Promise.resolve(ok(stubWorktree(workerIndex))),
   runIteration: () => Promise.resolve({ status: "continue" }),
-  runValidation: () => Promise.resolve(undefined),
+  runValidation: () => Promise.resolve({ status: "passed" as const }),
   hasNewCommits: () => Promise.resolve(false),
   mergeWorktree: () => Promise.resolve("merged"),
   cleanupWorktree: () => Promise.resolve(ok(undefined)),
@@ -260,7 +260,7 @@ Deno.test("runParallelLoop runs validation after each round", async () => {
       readProgress: () => Promise.resolve(content),
       runValidation: () => {
         validationCount++;
-        return Promise.resolve(undefined);
+        return Promise.resolve({ status: "passed" as const });
       },
     }),
   });
@@ -291,6 +291,75 @@ Deno.test("runParallelLoop cleans up worktrees on worker failure", async () => {
   });
 
   assertEquals(cleanedUp, true);
+});
+
+Deno.test("runParallelLoop passes validation failure path to next round workers", async () => {
+  const content = "| 1 |          |      |";
+  const failurePaths: (string | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 2,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      runIteration: (opts) => {
+        failurePaths.push(opts.validationFailurePath);
+        return Promise.resolve({ status: "continue" });
+      },
+      runValidation: ({ iterationNum }) =>
+        Promise.resolve(
+          iterationNum === 0
+            ? {
+              status: "failed" as const,
+              outputPath: "/tmp/validation-0.log",
+            }
+            : { status: "passed" as const },
+        ),
+    }),
+  });
+
+  assertEquals(failurePaths, [undefined, "/tmp/validation-0.log"]);
+});
+
+Deno.test("runParallelLoop clears validation failure path after passing", async () => {
+  const content = "| 1 |          |      |";
+  const failurePaths: (string | undefined)[] = [];
+  let round = 0;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 3,
+    parallelism: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      runIteration: (opts) => {
+        failurePaths.push(opts.validationFailurePath);
+        return Promise.resolve({ status: "continue" });
+      },
+      runValidation: () => {
+        const r = round++;
+        return Promise.resolve(
+          r === 0
+            ? {
+              status: "failed" as const,
+              outputPath: "/tmp/fail.log",
+            }
+            : { status: "passed" as const },
+        );
+      },
+    }),
+  });
+
+  assertEquals(failurePaths, [undefined, "/tmp/fail.log", undefined]);
 });
 
 Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", async () => {

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { parseScenarioCount } from "./progress.ts";
+import { parseScenarioCount } from "../src/progress.ts";
 
 Deno.test("parseScenarioCount counts data rows in scenario table", () => {
   const content = [

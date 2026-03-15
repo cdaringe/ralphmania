@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
-import { loadPlugin, noopPlugin, resolvePlugin } from "./plugin.ts";
-import type { Plugin } from "./plugin.ts";
-import type { Logger } from "./types.ts";
+import { loadPlugin, noopPlugin, resolvePlugin } from "../src/plugin.ts";
+import type { Plugin } from "../src/plugin.ts";
+import type { Logger } from "../src/types.ts";
 
 const testLog: Logger = () => {};
 
@@ -67,6 +67,7 @@ export const plugin = {
         mode: "general",
         targetScenario: undefined,
         effort: undefined,
+        actionableScenarios: [],
       },
       ctx: { agent: "claude", log: testLog, iterationNum: 1 },
     });

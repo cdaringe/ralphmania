@@ -1,6 +1,10 @@
 import { assertEquals } from "jsr:@std/assert";
-import { cleanupWorktree, createWorktree, hasNewCommits } from "./worktree.ts";
-import type { Logger } from "./types.ts";
+import {
+  cleanupWorktree,
+  createWorktree,
+  hasNewCommits,
+} from "../src/worktree.ts";
+import type { Logger } from "../src/types.ts";
 
 const noopLog: Logger = () => {};
 

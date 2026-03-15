@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
-import { runValidation } from "./validation.ts";
-import { RALPH_OUTPUT_FILE_VAR, VALIDATE_SCRIPT } from "./constants.ts";
+import { runValidation } from "../src/validation.ts";
+import { RALPH_OUTPUT_FILE_VAR, VALIDATE_SCRIPT } from "../src/constants.ts";
 
 const noop = () => {};
 
@@ -39,7 +39,8 @@ Deno.test(
 Deno.test(
   "runValidation: uses RALPH_OUTPUT_FILE content when script writes to it",
   async () => {
-    const script = `echo "this is in stdio"\necho "custom output" > "$${RALPH_OUTPUT_FILE_VAR}"\nexit 1`;
+    const script =
+      `echo "this is in stdio"\necho "custom output" > "$${RALPH_OUTPUT_FILE_VAR}"\nexit 1`;
     await withValidationScript(script, async (cwd) => {
       const result = await runValidation({ iterationNum: 1, log: noop, cwd });
       assertEquals(result.status, "failed");

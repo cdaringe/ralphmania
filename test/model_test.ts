@@ -7,7 +7,7 @@ import {
   parseImplementedCount,
   parseTotalCount,
   updateEscalationState,
-} from "./model.ts";
+} from "../src/model.ts";
 
 // parseImplementedCount tests
 

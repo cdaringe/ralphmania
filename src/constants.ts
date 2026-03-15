@@ -84,18 +84,17 @@ export const nonInteractiveEnv = (): Record<string, string> => ({
   ...NON_INTERACTIVE_ENV_OVERRIDES,
 });
 
-export const BASE_PROMPT = `ONLY DO ONE TASK AT A TIME.
+export const BASE_PROMPT = `DO ONLY ONE TASK AT A TIME.
 
 1. Read @specification.md & @progress.md files. Read .ralph/repo_map.md if it exists.
-2. Find the next highest leverage uninmplemented scenario. Implement & add tests.
+2. Find the next NEEDS_REWORK scenario. If none, find the highest leverage uninmplemented scenario. Implement & add tests.
    2.1. Document your scenario implementation in docs/scenarios/:name.md. Write maximally concise detail, justifying how the scenario is fully completed. Reference key details as evidence for a reviewer.
    2.2. Commit.
    2.3. Update progress.md table with status and filename pointing to docs/scenario/* summary. Do NOT fill in rework notes column--leave that for the reviewer.
-3. If all scenarios are completed, revisit the first non VERIFIED scenario in the progress.md & CRITIQUE if the intent of the scenario is actually completed.
-  3.1. Analyze e2e & integration tests, run code, use browsers, and verify documentation to validate the scenario.
+3. If all all scearios are VERIFIED output ${COMPLETION_MARKER} the exit. Otherwise, find the first complete & non-VERIFIED scenario in the progress.md & CRITIQUE if the intent of the scenario is actually completed.
+  3.1. Ensure e2e & integration tests are present for the scenario.
   3.2. All referenced documents & modules should be verified existing and up-to-date.
   3.3. Assess if the user's scenario outcomes met--not just if the prior agent's tasks are completed.
-  3.4. Update status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes as needed, otherwise specify no notes.
+  3.4. Update @progress.md status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
 4. Update .ralph/repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
-
-Once all claims are VERIFIED, output ${COMPLETION_MARKER}.`;
+`;

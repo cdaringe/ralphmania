@@ -48,7 +48,16 @@ export const createWorktree = async (
       tags: ["debug", "worktree"],
       message: `Removing stale worktree at ${path}`,
     });
-    await run(["worktree", "remove", "--force", path]);
+    const removeResult = await run(["worktree", "remove", "--force", path]);
+    if (removeResult.code !== 0) {
+      log({
+        tags: ["debug", "worktree"],
+        message:
+          `git worktree remove failed (${removeResult.stderr}), forcing cleanup`,
+      });
+      await Deno.remove(path, { recursive: true });
+      await run(["worktree", "prune"]);
+    }
   } catch {
     // Path doesn't exist, which is fine
   }

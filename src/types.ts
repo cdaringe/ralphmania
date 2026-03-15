@@ -59,6 +59,7 @@ export type ModelSelection = {
   readonly mode: ToolMode;
   readonly targetScenario: number | undefined;
   readonly effort: EffortLevel | undefined;
+  readonly actionableScenarios: readonly number[];
 };
 
 /** Outcome of a single agent iteration. */

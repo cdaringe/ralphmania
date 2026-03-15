@@ -137,6 +137,7 @@ export const runIteration = async (
       mode: "general",
       targetScenario: targetScenarioOverride,
       effort: "high",
+      actionableScenarios: [targetScenarioOverride],
     }
     : await resolveModelSelection({
       agent,
@@ -149,8 +150,8 @@ export const runIteration = async (
 
   const rawPrompt = buildPrompt({
     targetScenario: selection.targetScenario,
-    mode: selection.mode,
     validationFailurePath,
+    actionableScenarios: selection.actionableScenarios,
   });
   const prompt = plugin.onPromptBuilt
     ? await plugin.onPromptBuilt({ prompt: rawPrompt, selection, ctx })
@@ -261,6 +262,7 @@ Requirements:
     mode: "fast",
     targetScenario: undefined,
     effort: undefined,
+    actionableScenarios: [],
   };
   const selection = plugin.onModelSelected
     ? await plugin.onModelSelected({ selection: rawSelection, ctx })
@@ -276,16 +278,27 @@ Requirements:
   const cmdString = [spec.command, ...spec.args].join(" ");
 
   try {
-    const output = await new Deno.Command(spec.command, {
+    const child = new Deno.Command(spec.command, {
       args: spec.args,
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
       env: nonInteractiveEnv(),
-    }).output();
-    return output.code
+    }).spawn();
+
+    const stdoutStream = agent === "claude"
+      ? child.stdout.pipeThrough(ndjsonResultTransform())
+      : child.stdout;
+
+    const [status] = await Promise.all([
+      child.status,
+      pipeStream({ stream: stdoutStream, output: Deno.stdout }),
+      pipeStream({ stream: child.stderr, output: Deno.stderr }),
+    ]);
+
+    return status.code
       ? err(
-        `Failed to update receipts with exit code ${output.code} [${cmdString}]`,
+        `Failed to update receipts with exit code ${status.code} [${cmdString}]`,
       )
       : ok(undefined);
   } catch (error) {

@@ -1,16 +1,22 @@
-import type { Agent, CommandSpec, ToolMode } from "./types.ts";
+import type { Agent, CommandSpec } from "./types.ts";
 import { BASE_PROMPT } from "./constants.ts";
 
 export const buildPrompt = (
-  { targetScenario, mode, validationFailurePath }: {
+  { targetScenario, validationFailurePath, actionableScenarios }: {
     targetScenario: number | undefined;
-    mode: ToolMode;
     validationFailurePath: string | undefined;
+    actionableScenarios: readonly number[];
   },
 ): string => {
+  const actionableInfo = actionableScenarios.length > 0
+    ? `\n\nActionable scenarios (not yet COMPLETE or VERIFIED): ${
+      actionableScenarios.join(", ")
+    }`
+    : "";
+
   const base = targetScenario === undefined
-    ? BASE_PROMPT
-    : `${BASE_PROMPT}
+    ? `${BASE_PROMPT}${actionableInfo}`
+    : `${BASE_PROMPT}${actionableInfo}
 
 ACTUALLY:
 - You must work ONLY on scenario ${targetScenario}.

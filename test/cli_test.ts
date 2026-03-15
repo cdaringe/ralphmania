@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { parseCliArgs } from "./cli.ts";
+import { parseCliArgs } from "../src/cli.ts";
 
 Deno.test("parseCliArgs with valid args", () => {
   const result = parseCliArgs(["--iterations", "5", "--agent", "claude"]);

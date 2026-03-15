@@ -1,21 +1,21 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
-import { buildCommandSpec, buildPrompt } from "./command.ts";
-import { BASE_PROMPT } from "./constants.ts";
+import { buildCommandSpec, buildPrompt } from "../src/command.ts";
+import { BASE_PROMPT } from "../src/constants.ts";
 
-Deno.test("buildPrompt general mode without scenario", () => {
+Deno.test("buildPrompt without scenario or actionable", () => {
   const prompt = buildPrompt({
     targetScenario: undefined,
-    mode: "general",
     validationFailurePath: undefined,
+    actionableScenarios: [],
   });
   assertEquals(prompt, BASE_PROMPT);
 });
 
-Deno.test("buildPrompt strong mode with scenario", () => {
+Deno.test("buildPrompt with scenario scopes to it", () => {
   const prompt = buildPrompt({
     targetScenario: 3,
-    mode: "strong",
     validationFailurePath: undefined,
+    actionableScenarios: [3, 7],
   });
   assertStringIncludes(prompt, "scenario 3");
   assertStringIncludes(prompt, "ACTUALLY");
@@ -24,28 +24,50 @@ Deno.test("buildPrompt strong mode with scenario", () => {
 Deno.test("buildPrompt general mode scopes to targetScenario", () => {
   const prompt = buildPrompt({
     targetScenario: 3,
-    mode: "general",
     validationFailurePath: undefined,
+    actionableScenarios: [3],
   });
   assertStringIncludes(prompt, "scenario 3");
   assertStringIncludes(prompt, "ACTUALLY");
 });
 
+Deno.test("buildPrompt includes actionable scenarios in prompt", () => {
+  const prompt = buildPrompt({
+    targetScenario: 5,
+    validationFailurePath: undefined,
+    actionableScenarios: [5, 12, 20],
+  });
+  assertStringIncludes(prompt, "Actionable scenarios");
+  assertStringIncludes(prompt, "5, 12, 20");
+  assertStringIncludes(prompt, "scenario 5");
+});
+
+Deno.test("buildPrompt actionable without target does not scope", () => {
+  const prompt = buildPrompt({
+    targetScenario: undefined,
+    validationFailurePath: undefined,
+    actionableScenarios: [5, 12],
+  });
+  assertStringIncludes(prompt, "Actionable scenarios");
+  assertStringIncludes(prompt, "5, 12");
+  assertEquals(prompt.includes("ACTUALLY"), false);
+});
+
 Deno.test("buildPrompt with validation failure", () => {
   const prompt = buildPrompt({
     targetScenario: undefined,
-    mode: "general",
     validationFailurePath: "/tmp/fail.log",
+    actionableScenarios: [],
   });
   assertStringIncludes(prompt, "VALIDATION FAILED");
   assertStringIncludes(prompt, "/tmp/fail.log");
 });
 
-Deno.test("buildPrompt strong mode with scenario and validation failure", () => {
+Deno.test("buildPrompt with scenario and validation failure", () => {
   const prompt = buildPrompt({
     targetScenario: 2,
-    mode: "strong",
     validationFailurePath: "/tmp/out.log",
+    actionableScenarios: [2],
   });
   assertStringIncludes(prompt, "scenario 2");
   assertStringIncludes(prompt, "VALIDATION FAILED");

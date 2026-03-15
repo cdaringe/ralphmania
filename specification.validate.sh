@@ -8,4 +8,4 @@ set -euo pipefail
 # stdout/stderr will be captured and provided to the agent on failure.
 deno fmt
 deno run check
-deno run test
+deno run -A test

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { err, ok } from "./types.ts";
+import { err, ok } from "../src/types.ts";
 
 Deno.test("ok creates success result", () => {
   const result = ok(42);
