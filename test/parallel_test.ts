@@ -481,7 +481,10 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
 
 Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async () => {
   const content = "| 1 |          |      |";
-  const checkpoints: { step: string; validationFailurePath: string | undefined }[] = [];
+  const checkpoints: {
+    step: string;
+    validationFailurePath: string | undefined;
+  }[] = [];
 
   await runParallelLoop({
     agent: "claude",
