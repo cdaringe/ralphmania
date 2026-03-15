@@ -32,7 +32,8 @@ const receiptsResult = allDone
 2. Write markdown evidence snippets for scenarios without e2e tests.
 3. Place a VERIFIED/NEEDS_REWORK status at the top of each receipt.
 4. **Write a short intro describing how each scenario's goals are achieved.**
-5. **Inline and collapse the summary markdown for each VERIFIED scenario** (e.g., inside a `<details>` element).
+5. **Inline and collapse the summary markdown for each VERIFIED scenario**
+   (e.g., inside a `<details>` element).
 
 Rendering requirements: markdown rendered, videos embedded and playable.
 
@@ -46,8 +47,11 @@ Rendering requirements: markdown rendered, videos embedded and playable.
 
 ## Evidence
 
-- `src/runner.ts:243` — `RECEIPTS_PROMPT` exported; contains all 5 requirements including intro and collapsed summary
-- `src/runner.ts:260` — `updateReceipts` uses `getModel({ agent, mode: "fast" })`
+- `src/runner.ts:243` — `RECEIPTS_PROMPT` exported; contains all 5 requirements
+  including intro and collapsed summary
+- `src/runner.ts:260` — `updateReceipts` uses
+  `getModel({ agent, mode: "fast" })`
 - `mod.ts:187` — post-loop receipt generation gated on `allDone`
 - `src/constants.ts` — `RALPH_RECEIPTS_DIRNAME = ".ralph/receipts"`
-- `test/runner_test.ts` — 3 tests verify prompt contains intro requirement, collapsed `<details>` requirement, and receipts dir path
+- `test/runner_test.ts` — 3 tests verify prompt contains intro requirement,
+  collapsed `<details>` requirement, and receipts dir path

@@ -86,8 +86,7 @@ export const nonInteractiveEnv = (): Record<string, string> => ({
   ...NON_INTERACTIVE_ENV_OVERRIDES,
 });
 
-export const BASE_PROMPT = `DO ONLY ONE TASK AT A TIME.
-
+export const BASE_PROMPT = `
 1. Read @specification.md & @progress.md files. Read .ralph/repo_map.md if it exists.
 2. Find the next NEEDS_REWORK scenario. If none, find the highest leverage uninmplemented scenario. Implement & add tests.
    2.1. Document your scenario implementation in docs/scenarios/:name.md. Write maximally concise detail, justifying how the scenario is fully completed. Reference key details as evidence for a reviewer.
@@ -99,4 +98,4 @@ export const BASE_PROMPT = `DO ONLY ONE TASK AT A TIME.
   3.3. Assess if the user's scenario outcomes met--not just if the prior agent's tasks are completed.
   3.4. Update @progress.md status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
 4. Update repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
-`;
+`.trim();
