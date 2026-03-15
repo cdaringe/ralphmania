@@ -86,6 +86,9 @@ const stubDeps = (
   cleanupWorktree: () => Promise.resolve(ok(undefined)),
   resetWorkingTree: () => Promise.resolve(ok(undefined)),
   reconcileMerge: () => Promise.resolve(),
+  readCheckpoint: () => Promise.resolve(undefined),
+  writeCheckpoint: () => Promise.resolve(),
+  clearCheckpoint: () => Promise.resolve(),
   ...overrides,
 });
 

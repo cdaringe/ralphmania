@@ -26,4 +26,4 @@
 | 20 | VERIFIED | [Validation tmp output file via RALPH_OUTPUT_FILE](docs/scenarios/20-validation-tmp-output-file.md)                           |              |
 | 21 | COMPLETE | [serve receipts command with --open flag](docs/scenarios/21-serve-receipts.md)                                                |              |
 | 22 | COMPLETE | [Workstream state serializable via .ralph/loop-state.json checkpoint](docs/scenarios/22-state-serialization.md)               |              |
-| 23 |          |                                                                                                                               |              |
+| 23 | COMPLETE | [Graceful merge conflict handling via agent reconciliation loop](docs/scenarios/23-merge-conflict-handling.md)                |              |
