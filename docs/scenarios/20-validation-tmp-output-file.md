@@ -30,7 +30,7 @@ The temp file is deleted via `Deno.remove` in both the success and error paths.
 
 ## Evidence
 
-- **`src/validation_test.ts`** — 4 tests covering:
+- **`test/validation_test.ts`** — 4 tests covering:
   - stdio capture used when script does not write to `$RALPH_OUTPUT_FILE`
   - `$RALPH_OUTPUT_FILE` content replaces stdio when the script writes to it
   - Validation still passes (exit 0) even when the file is written
