@@ -36,6 +36,7 @@ export { err, ok, VALID_AGENTS } from "./src/types.ts";
 import type { Agent, EscalationLevel } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
 import { parseCliArgsInteractive } from "./src/cli.ts";
+import { parseServeArgs, serveReceipts } from "./src/serve.ts";
 import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
@@ -201,14 +202,24 @@ const main = async (): Promise<number> => {
 };
 
 if (import.meta.main) {
-  main().then(
-    (code) => {
-      Deno.exitCode = code;
-    },
-    (error) => {
+  // Handle `serve receipts [--open] [--port N]` subcommand
+  if (Deno.args[0] === "serve" && Deno.args[1] === "receipts") {
+    const { open, port } = parseServeArgs(Deno.args.slice(2));
+    serveReceipts({ open, port }).catch((error) => {
       const log = createLogger();
       log({ tags: ["error"], message: `Fatal error: ${error}` });
       Deno.exit(1);
-    },
-  );
+    });
+  } else {
+    main().then(
+      (code) => {
+        Deno.exitCode = code;
+      },
+      (error) => {
+        const log = createLogger();
+        log({ tags: ["error"], message: `Fatal error: ${error}` });
+        Deno.exit(1);
+      },
+    );
+  }
 }
