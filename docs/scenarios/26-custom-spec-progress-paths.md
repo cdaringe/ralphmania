@@ -26,14 +26,14 @@ A plugin returning these fields redirects all file I/O to the custom paths.
 
 The paths flow through the entire system from `mod.ts` down:
 
-| Layer | Change |
-|-------|--------|
-| `mod.ts` | Reads `specFile`/`progressFile` from `onConfigResolved` result; builds `FilePaths`; passes to `ensureProgressFile` and `runParallelLoop` |
-| `src/progress.ts` | `ensureProgressFile(log, paths?)` accepts `FilePaths`; `DEFAULT_FILE_PATHS` exported for fallback |
-| `src/orchestrator.ts` | `runParallelLoop` accepts `specFile?`/`progressFile?`; `readProgressContent` parameterized; both threaded to `runWorker` |
-| `src/runner.ts` | `runIteration` accepts `specFile?`/`progressFile?`; passes to `resolveModelSelection` and `buildPrompt` |
-| `src/model.ts` | `resolveModelSelection` accepts `progressFile?` (defaults to `"./progress.md"`) |
-| `src/command.ts` | `buildPrompt` accepts `specFile?`/`progressFile?`; uses `replaceAll` to rewrite `@specification.md` and `@progress.md` references in the agent prompt |
+| Layer                 | Change                                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mod.ts`              | Reads `specFile`/`progressFile` from `onConfigResolved` result; builds `FilePaths`; passes to `ensureProgressFile` and `runParallelLoop`              |
+| `src/progress.ts`     | `ensureProgressFile(log, paths?)` accepts `FilePaths`; `DEFAULT_FILE_PATHS` exported for fallback                                                     |
+| `src/orchestrator.ts` | `runParallelLoop` accepts `specFile?`/`progressFile?`; `readProgressContent` parameterized; both threaded to `runWorker`                              |
+| `src/runner.ts`       | `runIteration` accepts `specFile?`/`progressFile?`; passes to `resolveModelSelection` and `buildPrompt`                                               |
+| `src/model.ts`        | `resolveModelSelection` accepts `progressFile?` (defaults to `"./progress.md"`)                                                                       |
+| `src/command.ts`      | `buildPrompt` accepts `specFile?`/`progressFile?`; uses `replaceAll` to rewrite `@specification.md` and `@progress.md` references in the agent prompt |
 
 ### Agent prompt rewriting
 
@@ -44,7 +44,7 @@ occurrences are replaced so the agent reads the correct files:
 ```ts
 BASE_PROMPT
   .replaceAll("@specification.md", `@${specFile ?? "specification.md"}`)
-  .replaceAll("@progress.md", `@${progressFile ?? "progress.md"}`)
+  .replaceAll("@progress.md", `@${progressFile ?? "progress.md"}`);
 ```
 
 ### Example plugin
