@@ -119,30 +119,34 @@ export const computeModelSelection = (
 export const parseImplementedCount = (content: string): number =>
   (content.match(/^\|\s*\d+\s*\|\s*(COMPLETE|VERIFIED)\s*\|/gm) ?? []).length;
 
-/** Count total scenario rows in progress.md content. */
+/** Count total non-OBSOLETE scenario rows in progress.md content. */
 export const parseTotalCount = (content: string): number =>
-  (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length;
+  (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length -
+  (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length;
 
-/** Find scenario numbers that are not COMPLETE or VERIFIED (i.e. actionable). */
+/** Find scenario numbers that are not COMPLETE, VERIFIED, or OBSOLETE (i.e. actionable). */
 export const findActionableScenarios = (content: string): number[] => {
   const total = [...content.matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) =>
     parseInt(m[1], 10)
   );
   const done = new Set(
-    [...content.matchAll(/^\|\s*(\d+)\s*\|\s*(COMPLETE|VERIFIED)\s*\|/gm)].map(
-      (m) => parseInt(m[1], 10),
-    ),
+    [
+      ...content.matchAll(
+        /^\|\s*(\d+)\s*\|\s*(COMPLETE|VERIFIED|OBSOLETE)\s*\|/gm,
+      ),
+    ].map((m) => parseInt(m[1], 10)),
   );
   return total.filter((n) => !done.has(n));
 };
 
-/** Check whether every scenario row is VERIFIED. */
+/** Check whether every non-OBSOLETE scenario row is VERIFIED. */
 export const isAllVerified = (
   content: string,
   expectedCount: number,
 ): boolean =>
   expectedCount > 0 &&
-  (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length ===
+  (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length +
+        (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length ===
     expectedCount;
 
 /** Read persisted escalation state, defaulting to `{}` if missing. */

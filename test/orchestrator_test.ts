@@ -71,6 +71,41 @@ Deno.test("isAllVerified returns false when some not done", () => {
   assertEquals(isAllVerified(content, 2), false);
 });
 
+Deno.test("findActionableScenarios skips OBSOLETE scenarios", () => {
+  const content = [
+    "| 1 | OBSOLETE | no longer needed |",
+    "| 2 |          |                  |",
+    "| 3 | VERIFIED | done             |",
+  ].join("\n");
+  assertEquals(findActionableScenarios(content), [2]);
+});
+
+Deno.test("isAllVerified returns true when all VERIFIED and OBSOLETE fill expectedCount", () => {
+  const content = [
+    "| 1 | VERIFIED | done     |",
+    "| 2 | OBSOLETE | skipped  |",
+    "| 3 | VERIFIED | done     |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 3), true);
+});
+
+Deno.test("isAllVerified returns false when OBSOLETE leaves VERIFIED count short", () => {
+  const content = [
+    "| 1 | VERIFIED | done     |",
+    "| 2 | OBSOLETE | skipped  |",
+    "| 3 |          |          |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 3), false);
+});
+
+Deno.test("isAllVerified returns true when all rows are OBSOLETE matching expectedCount", () => {
+  const content = [
+    "| 1 | OBSOLETE | skipped |",
+    "| 2 | OBSOLETE | skipped |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 2), true);
+});
+
 // --- runParallelLoop tests ---
 
 const noopLog: Logger = () => {};
