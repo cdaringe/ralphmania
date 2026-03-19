@@ -5,6 +5,8 @@
   "exports": "./mod.ts",
   "tasks": {
     "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net",
+    "test:coverage": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --clean --coverage=coverage/ && deno coverage coverage/",
+    "test:coverage:html": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --clean --coverage=coverage/ && deno coverage --html coverage/",
     "fmt": "deno fmt",
     "check": "deno check mod.ts",
     "ralph": "deno run -A mod.ts --iterations 15 --agent claude"

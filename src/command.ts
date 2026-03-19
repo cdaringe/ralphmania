@@ -9,7 +9,7 @@ export const buildPrompt = (
   },
 ): string => {
   const actionableInfo = actionableScenarios.length > 0
-    ? `\n\nActionable scenarios (not yet COMPLETE or VERIFIED): ${
+    ? `\n\nActionable scenarios (not yet COMPLETE, VERIFIED, or OBSOLETE): ${
       actionableScenarios.join(", ")
     }`
     : "";

@@ -1,7 +1,7 @@
 import type { Logger } from "./types.ts";
 
 const PROGRESS_FILE = "progress.md";
-const SPEC_FILE = "specification.md";
+export const SPEC_FILE = "specification.md";
 
 /** Parse scenario count by counting data rows in the scenario table. */
 export const parseScenarioCount = (specContent: string): number =>
@@ -46,27 +46,27 @@ const syncProgressWithSpec = async (log: Logger): Promise<void> => {
   );
   const progressCount = parseScenarioCount(progressContent);
 
-  if (specCount > progressCount) {
-    const newRows = Array.from(
-      { length: specCount - progressCount },
-      (_, i) => {
-        const num = progressCount + i + 1;
-        return `| ${
-          String(num).padEnd(2)
-        } |          |                                                                                                        |              |`;
-      },
-    ).join("\n");
-    await Deno.writeTextFile(
-      PROGRESS_FILE,
-      progressContent.trimEnd() + "\n" + newRows + "\n",
-    );
-    log({
-      tags: ["info", "progress"],
-      message: `Appended ${
-        specCount - progressCount
-      } new scenario(s) to ${PROGRESS_FILE}`,
-    });
-  }
+  if (specCount <= progressCount) return;
+
+  const newRows = Array.from(
+    { length: specCount - progressCount },
+    (_, i) => {
+      const num = progressCount + i + 1;
+      return `| ${
+        String(num).padEnd(2)
+      } |          |                                                                                                        |              |`;
+    },
+  ).join("\n");
+  await Deno.writeTextFile(
+    PROGRESS_FILE,
+    progressContent.trimEnd() + "\n" + newRows + "\n",
+  );
+  log({
+    tags: ["info", "progress"],
+    message: `Appended ${
+      specCount - progressCount
+    } new scenario(s) to ${PROGRESS_FILE}`,
+  });
 };
 
 /**

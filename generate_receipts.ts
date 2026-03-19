@@ -12,6 +12,9 @@
  */
 
 import { join } from "jsr:@std/path";
+import { createLogger } from "./src/logger.ts";
+import type { Logger, Result } from "./src/types.ts";
+import { err, ok } from "./src/types.ts";
 
 const SCENARIOS_DIR = "./docs/scenarios";
 const RECEIPTS_DIR = ".ralph/receipts";
@@ -19,156 +22,184 @@ const RECEIPTS_DIR = ".ralph/receipts";
 interface ScenarioData {
   number: number;
   title: string;
+  intro: string;
   requirement: string;
   implementation: string;
   evidence: string;
   testFiles: string[];
   status: "VERIFIED" | "NEEDS_REWORK";
+  hasVideo: boolean;
 }
 
 /**
  * Read and parse a scenario markdown file
  */
-async function readScenario(num: number): Promise<ScenarioData> {
+const readScenario = async (
+  { num, log }: { num: number; log: Logger },
+): Promise<Result<ScenarioData, string>> => {
   const filename = String(num).padStart(2, "0");
-  const filepath = join(SCENARIOS_DIR, `${filename}-*.md`);
 
-  // Find the actual file (pattern matching)
-  const scenariosPath = SCENARIOS_DIR;
-  const files = Deno.readDirSync(scenariosPath);
-  let docFile: string | null = null;
-
-  for (const file of files) {
-    if (
+  const docFile = [...Deno.readDirSync(SCENARIOS_DIR)]
+    .find((file) =>
       file.isFile &&
       file.name.startsWith(filename + "-") &&
       file.name.endsWith(".md")
-    ) {
-      docFile = file.name;
-      break;
-    }
-  }
+    )?.name;
 
   if (!docFile) {
-    throw new Error(`Scenario ${num} documentation not found`);
+    return err(`Scenario ${num} documentation not found`);
   }
 
-  const content = await Deno.readTextFile(
-    join(scenariosPath, docFile),
-  );
-
-  // Parse markdown sections
+  const content = await Deno.readTextFile(join(SCENARIOS_DIR, docFile));
   const sections = parseMarkdown(content);
 
   // Handle both "Requirement" and "Specification" section names
   const requirement = sections.requirement || sections.specification || "";
+  const intro = generateIntro(sections.implementation || "", requirement);
+  const hasVideo = checkVideoExists(num);
 
-  return {
+  log({
+    tags: ["info", "receipt"],
+    message: `Loaded scenario ${String(num).padStart(2, "0")}: ${
+      extractTitle(content)
+    }`,
+  });
+
+  return ok({
     number: num,
     title: extractTitle(content),
+    intro,
     requirement,
     implementation: sections.implementation || "",
     evidence: sections.evidence || sections.evidencereferences || "",
     testFiles: extractTestFiles(sections.implementation),
-    status: "VERIFIED", // All scenarios are verified per the manifest
-  };
-}
+    status: "VERIFIED",
+    hasVideo,
+  });
+};
 
 /**
  * Parse markdown content into sections
  */
-function parseMarkdown(content: string): Record<string, string> {
-  const sections: Record<string, string> = {};
+const parseMarkdown = (content: string): Record<string, string> => {
   const lines = content.split("\n");
-  let currentSection = "";
-  let currentContent = "";
-
-  for (const line of lines) {
-    if (line.startsWith("## ")) {
-      if (currentSection) {
-        sections[currentSection.toLowerCase().replace(/\s+/g, "")] =
-          currentContent.trim();
+  const { sections, currentSection, currentContent } = lines.reduce(
+    (acc, line) => {
+      if (line.startsWith("## ")) {
+        const updated = acc.currentSection
+          ? {
+            ...acc.sections,
+            [acc.currentSection.toLowerCase().replace(/\s+/g, "")]: acc
+              .currentContent.trim(),
+          }
+          : acc.sections;
+        return {
+          sections: updated,
+          currentSection: line.replace("## ", "").trim(),
+          currentContent: "",
+        };
       }
-      currentSection = line.replace("## ", "").trim();
-      currentContent = "";
-    } else if (currentSection) {
-      currentContent += line + "\n";
+      return acc.currentSection
+        ? { ...acc, currentContent: acc.currentContent + line + "\n" }
+        : acc;
+    },
+    {
+      sections: {} as Record<string, string>,
+      currentSection: "",
+      currentContent: "",
+    },
+  );
+
+  return currentSection
+    ? {
+      ...sections,
+      [currentSection.toLowerCase().replace(/\s+/g, "")]: currentContent
+        .trim(),
     }
-  }
-
-  if (currentSection) {
-    sections[currentSection.toLowerCase().replace(/\s+/g, "")] = currentContent
-      .trim();
-  }
-
-  return sections;
-}
+    : sections;
+};
 
 /**
  * Extract scenario title from markdown
  */
-function extractTitle(content: string): string {
-  // Try multiple title formats: # Scenario N: Title, # Scenario N – Title, # Scenario N — Title
-  let match = content.match(
+const extractTitle = (content: string): string => {
+  const match = content.match(
     /^#\s+Scenario\s+\d+[:\s–—]+\s*(.+?)(?:\s*$|\s*\n)/m,
   );
   return match ? match[1].trim() : "Unknown";
-}
+};
+
+/**
+ * Generate a short intro from implementation description
+ */
+const generateIntro = (implementation: string, requirement: string): string => {
+  const lines = implementation.split("\n");
+  const intro = lines.find((line) => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith("###") && !trimmed.startsWith("#");
+  })?.trim() ?? "";
+
+  return intro ||
+    requirement.split("\n")
+      .filter((l) => l.trim() && !l.startsWith("#"))
+      .slice(0, 2)
+      .join(" ")
+      .substring(0, 200);
+};
+
+/**
+ * Check if a video file exists for this scenario
+ */
+const checkVideoExists = (num: number): boolean => {
+  const videoPath = join(
+    RECEIPTS_DIR,
+    "videos",
+    `scenario-${String(num).padStart(2, "0")}.mp4`,
+  );
+  try {
+    Deno.statSync(videoPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Extract test file references from implementation section
  */
-function extractTestFiles(implementation: string): string[] {
-  const files = new Set<string>();
+const extractTestFiles = (implementation: string): string[] => {
+  const files = [...implementation.matchAll(/(?:test|src)\/[\w-]+\.ts/g)]
+    .map((m) => m[0])
+    .filter((f) => f.startsWith("test/"));
 
-  // Look for references like "test/something_test.ts"
-  const filePattern = /(?:test|src)\/[\w-]+\.ts/g;
-  let match;
-
-  while ((match = filePattern.exec(implementation)) !== null) {
-    // Only include test files
-    if (match[0].startsWith("test/")) {
-      files.add(match[0]);
-    }
-  }
-
-  // If no test files found, add a default based on common mapping
-  if (files.size === 0) {
-    files.add("test/runner_test.ts");
-  }
-
-  return Array.from(files).sort();
-}
+  return files.length > 0
+    ? [...new Set(files)].sort()
+    : ["test/runner_test.ts"];
+};
 
 /**
  * Extract code snippet from a file
  */
-async function extractCodeSnippet(
-  filepath: string,
-  lines?: string,
-): Promise<string> {
+const extractCodeSnippet = async (
+  { filepath, lines }: { filepath: string; lines?: string },
+): Promise<string> => {
   try {
     const content = await Deno.readTextFile(filepath);
-    if (!lines) {
-      // Return first 30 lines
-      return content.split("\n").slice(0, 30).join("\n");
-    }
-
-    // Parse line range (e.g., "30-80")
-    const [start, end] = lines.split("-").map(Number);
-    return content
-      .split("\n")
-      .slice(start - 1, end)
-      .join("\n");
+    return lines
+      ? (() => {
+        const [start, end] = lines.split("-").map(Number);
+        return content.split("\n").slice(start - 1, end).join("\n");
+      })()
+      : content.split("\n").slice(0, 30).join("\n");
   } catch {
     return `// Unable to load ${filepath}`;
   }
-}
+};
 
 /**
  * Generate HTML receipt for a scenario
  */
-async function generateReceipt(scenario: ScenarioData): Promise<string> {
+const generateReceipt = (scenario: ScenarioData): string => {
   const statusBadge = scenario.status === "VERIFIED"
     ? '<span class="status-badge status-verified">✅ VERIFIED</span>'
     : '<span class="status-badge status-rework">⚠️ NEEDS_REWORK</span>';
@@ -180,14 +211,40 @@ async function generateReceipt(scenario: ScenarioData): Promise<string> {
     )
     .join("\n");
 
-  const html = `<!DOCTYPE html>
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const videoHtml = scenario.hasVideo
+    ? `
+    <div class="section">
+      <h2>🎬 Test Evidence Video</h2>
+      <video controls width="100%" class="test-video">
+        <source src="videos/scenario-${
+      pad(scenario.number)
+    }.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+      <p><em>E2E test execution showing scenario ${
+      pad(scenario.number)
+    } requirements in action</em></p>
+    </div>`
+    : "";
+
+  const isVerified = scenario.status === "VERIFIED";
+  const requirementTag = isVerified ? "details" : "div";
+  const requirementAttrs = isVerified
+    ? 'open class="details-section"'
+    : 'class="section"';
+  const implTag = isVerified ? "details" : "div";
+  const implAttrs = isVerified
+    ? 'open class="details-section"'
+    : 'class="section"';
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scenario ${
-    String(scenario.number).padStart(2, "0")
-  } - ${scenario.title} | Receipts</title>
+  <title>Scenario ${pad(scenario.number)} - ${scenario.title} | Receipts</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/atom-one-dark.min.css">
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js"><\/script>
   <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/highlight.min.js"><\/script>
@@ -199,25 +256,38 @@ async function generateReceipt(scenario: ScenarioData): Promise<string> {
 
     <header>
       ${statusBadge}
-      <h1>Scenario ${
-    String(scenario.number).padStart(2, "0")
-  }: ${scenario.title}</h1>
+      <h1>Scenario ${pad(scenario.number)}: ${scenario.title}</h1>
       <p class="scenario-meta">Evidence of requirement completion</p>
     </header>
 
-    <div class="section">
-      <h2>📋 Requirement</h2>
+    <div class="section intro-section">
+      <h2>📝 Overview</h2>
+      <p class="intro-text">${scenario.intro}</p>
+    </div>
+
+    <${requirementTag} ${requirementAttrs}>
+      ${
+    isVerified
+      ? "<summary><h2>📋 Requirement</h2></summary>"
+      : "<h2>📋 Requirement</h2>"
+  }
       <div id="requirement" class="requirement markdown-content">
 ${scenario.requirement}
       </div>
-    </div>
+    </${requirementTag}>
 
-    <div class="section">
-      <h2>💻 Implementation</h2>
+    <${implTag} ${implAttrs}>
+      ${
+    isVerified
+      ? "<summary><h2>💻 Implementation</h2></summary>"
+      : "<h2>💻 Implementation</h2>"
+  }
       <div id="implementation" class="markdown-content">
 ${scenario.implementation}
       </div>
-    </div>
+    </${implTag}>
+
+    ${videoHtml}
 
     <div class="section">
       <h2>🧪 Test Evidence</h2>
@@ -226,7 +296,7 @@ ${scenario.implementation}
         <p><strong>To verify:</strong></p>
         <pre><code>deno test --allow-all</code></pre>
         <p style="margin-top: 10px; font-size: 0.9em; color: #666;">All tests pass, confirming scenario ${
-    String(scenario.number).padStart(2, "0")
+    pad(scenario.number)
   } requirement is satisfied.</p>
       </div>
     </div>
@@ -239,9 +309,7 @@ ${scenario.evidence}
     </div>
 
     <footer>
-      <p>Receipt generated for Scenario ${
-    String(scenario.number).padStart(2, "0")
-  }</p>
+      <p>Receipt generated for Scenario ${pad(scenario.number)}</p>
       <p>All scenarios verified and tested ✓</p>
     </footer>
   </div>
@@ -272,14 +340,12 @@ ${scenario.evidence}
   </script>
 </body>
 </html>`;
-
-  return html;
-}
+};
 
 /**
  * Generate default CSS stylesheet
  */
-async function generateDefaultCss(filepath: string) {
+const generateDefaultCss = async (filepath: string): Promise<void> => {
   const css = `/* Ralphmania Receipt Styles */
 
 * {
@@ -465,6 +531,57 @@ video {
   background: #000;
 }
 
+.test-video {
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+details {
+  margin: 30px 0;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border-left: 4px solid #0066cc;
+}
+
+details[open] {
+  background: #f0f6ff;
+}
+
+details summary {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+details summary:hover {
+  color: #0066cc;
+}
+
+details summary::marker {
+  color: #0066cc;
+}
+
+.details-section h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  display: inline;
+}
+
+.intro-section {
+  background: #e8f4f8;
+  border-left-color: #0288d1;
+}
+
+.intro-text {
+  font-size: 1.05em;
+  line-height: 1.8;
+  color: #0d47a1;
+  margin: 0;
+}
+
 footer {
   text-align: center;
   margin-top: 50px;
@@ -623,12 +740,12 @@ footer {
 `;
 
   await Deno.writeTextFile(filepath, css);
-}
+};
 
 /**
  * Generate index page linking all scenarios
  */
-function generateIndex(scenarios: ScenarioData[]): string {
+const generateIndex = (scenarios: ScenarioData[]): string => {
   const totalScenarios = scenarios.length;
   const verifiedCount = scenarios.filter((s) => s.status === "VERIFIED").length;
   const needsReworkCount = totalScenarios - verifiedCount;
@@ -710,92 +827,104 @@ ${scenarioLinks}
   </div>
 </body>
 </html>`;
-}
+};
 
 /**
  * Auto-discover all scenario files
  */
-async function discoverScenarios(): Promise<number[]> {
-  const scenarios: number[] = [];
+const discoverScenarios = (log: Logger): number[] => {
   try {
-    for (const file of Deno.readDirSync(SCENARIOS_DIR)) {
-      if (file.isFile && file.name.endsWith(".md")) {
-        const match = file.name.match(/^(\d+)-/);
-        if (match) {
-          scenarios.push(parseInt(match[1], 10));
-        }
-      }
-    }
+    return [...Deno.readDirSync(SCENARIOS_DIR)]
+      .filter((file) => file.isFile && file.name.endsWith(".md"))
+      .map((file) => file.name.match(/^(\d+)-/))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map((m) => parseInt(m[1], 10))
+      .sort((a, b) => a - b);
   } catch (e) {
-    console.error("Failed to read scenarios directory:", e);
+    log({
+      tags: ["error", "receipt"],
+      message: `Failed to read scenarios directory: ${e}`,
+    });
+    return [];
   }
-  return scenarios.sort((a, b) => a - b);
-}
+};
 
 /**
- * Ensure receipts directory exists with assets
+ * Ensure receipts directory exists with assets and videos subdirs
  */
-async function ensureReceiptsDir() {
+const ensureReceiptsDir = async (
+  log: Logger,
+): Promise<Result<void, string>> => {
   try {
     await Deno.mkdir(RECEIPTS_DIR, { recursive: true });
     await Deno.mkdir(join(RECEIPTS_DIR, "assets"), { recursive: true });
+    await Deno.mkdir(join(RECEIPTS_DIR, "videos"), { recursive: true });
+    return ok(undefined);
   } catch (e) {
-    if (!(e instanceof Deno.errors.AlreadyExists)) {
-      throw e;
-    }
+    return e instanceof Deno.errors.AlreadyExists
+      ? ok(undefined)
+      : err(`Failed to create receipts directory: ${e}`);
   }
-}
+};
 
 /**
  * Main execution
  */
-async function main() {
-  await ensureReceiptsDir();
-
-  console.log("📋 Generating receipt documentation...\n");
-
-  const scenarios: ScenarioData[] = [];
-
-  // Auto-discover all scenarios
-  const scenarioNumbers = await discoverScenarios();
-  console.log(`Found ${scenarioNumbers.length} scenarios\n`);
-
-  // Read all scenarios
-  for (const i of scenarioNumbers) {
-    try {
-      const scenario = await readScenario(i);
-      scenarios.push(scenario);
-      console.log(
-        `✓ Loaded scenario ${String(i).padStart(2, "0")}: ${scenario.title}`,
-      );
-    } catch (e) {
-      console.error(`✗ Failed to load scenario ${i}:`, e.message);
-    }
+const main = async (log: Logger): Promise<void> => {
+  const dirResult = await ensureReceiptsDir(log);
+  if (!dirResult.ok) {
+    log({ tags: ["error", "receipt"], message: dirResult.error });
+    return;
   }
 
-  console.log(
-    `\n📝 Generating HTML receipts for ${scenarios.length} scenarios...\n`,
+  log({
+    tags: ["info", "receipt"],
+    message: "Generating receipt documentation...",
+  });
+
+  const scenarioNumbers = discoverScenarios(log);
+  log({
+    tags: ["info", "receipt"],
+    message: `Found ${scenarioNumbers.length} scenarios`,
+  });
+
+  // Read all scenarios in parallel
+  const results = await Promise.all(
+    scenarioNumbers.map((num) => readScenario({ num, log })),
+  );
+  const scenarios = results.flatMap((r) =>
+    r.ok
+      ? [r.value]
+      : (log({ tags: ["error", "receipt"], message: r.error }), [])
   );
 
-  // Generate individual receipts
-  for (const scenario of scenarios) {
-    const html = await generateReceipt(scenario);
-    const filename = join(
-      RECEIPTS_DIR,
-      `scenario-${String(scenario.number).padStart(2, "0")}.html`,
-    );
+  log({
+    tags: ["info", "receipt"],
+    message: `Generating HTML receipts for ${scenarios.length} scenarios...`,
+  });
 
-    await Deno.writeTextFile(filename, html);
-    console.log(
-      `✓ Generated scenario-${String(scenario.number).padStart(2, "0")}.html`,
-    );
-  }
+  // Generate individual receipts
+  await Promise.all(
+    scenarios.map(async (scenario) => {
+      const html = generateReceipt(scenario);
+      const filename = join(
+        RECEIPTS_DIR,
+        `scenario-${String(scenario.number).padStart(2, "0")}.html`,
+      );
+      await Deno.writeTextFile(filename, html);
+      log({
+        tags: ["info", "receipt"],
+        message: `Generated scenario-${
+          String(scenario.number).padStart(2, "0")
+        }.html`,
+      });
+    }),
+  );
 
   // Generate index
   const indexHtml = generateIndex(scenarios);
-  const indexPath = join(RECEIPTS_DIR, "index.html");
-  await Deno.writeTextFile(indexPath, indexHtml);
-  console.log(`\n✓ Generated index.html`);
+  await Deno.writeTextFile(join(RECEIPTS_DIR, "index.html"), indexHtml);
+  log({ tags: ["info", "receipt"], message: "Generated index.html" });
 
   // Ensure CSS exists
   const cssPath = join(RECEIPTS_DIR, "assets", "style.css");
@@ -803,12 +932,17 @@ async function main() {
     await Deno.stat(cssPath);
   } catch {
     await generateDefaultCss(cssPath);
-    console.log(`✓ Generated assets/style.css`);
+    log({ tags: ["info", "receipt"], message: "Generated assets/style.css" });
   }
 
-  console.log("\n✅ Receipt generation complete!");
-  console.log(`   ${scenarios.length} scenario receipts generated`);
-  console.log(`   View at: ${RECEIPTS_DIR}/index.html`);
-}
+  log({
+    tags: ["info", "receipt"],
+    message:
+      `Receipt generation complete! ${scenarios.length} scenario receipts at ${RECEIPTS_DIR}/index.html`,
+  });
+};
 
-main().catch(console.error);
+main(createLogger()).catch((e) => {
+  const log = createLogger();
+  log({ tags: ["error", "receipt"], message: `Fatal error: ${e}` });
+});
