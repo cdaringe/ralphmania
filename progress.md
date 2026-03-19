@@ -28,5 +28,5 @@
 | 22 | VERIFIED | [Workstream state serializable via .ralph/loop-state.json checkpoint](docs/scenarios/22-state-serialization.md)               |              |
 | 23 | VERIFIED | [Graceful merge conflict handling via agent reconciliation loop](docs/scenarios/23-merge-conflict-handling.md)                |              |
 | 24 | VERIFIED | [All receipt markdown properly rendered via markdown-it](docs/scenarios/24-receipt-markdown-rendering.md)                     |              |
-| 25 | COMPLETE | [OBSOLETE scenario support in completeness checks and task selection](docs/scenarios/25-obsolete-scenarios.md)                |              |
-| 26 | COMPLETE  | [Custom spec/progress paths via plugin onConfigResolved](docs/scenarios/26-custom-spec-progress-paths.md)              |              |
+| 25 | VERIFIED | [OBSOLETE scenario support in completeness checks and task selection](docs/scenarios/25-obsolete-scenarios.md)                |              |
+| 26 | VERIFIED | [Custom spec/progress paths via plugin onConfigResolved](docs/scenarios/26-custom-spec-progress-paths.md)              |              |
