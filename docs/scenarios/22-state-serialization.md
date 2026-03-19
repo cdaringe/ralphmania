@@ -11,87 +11,87 @@
 
 Three pieces of durable state together fully reconstruct the workstream:
 
-| State                                               | File                     | Managed by                         |
-| --------------------------------------------------- | ------------------------ | ---------------------------------- |
-| Scenario statuses                                   | `progress.md`            | git-committed by each agent worker |
-| Per-scenario escalation levels                      | `.ralph/escalation.json` | `src/model.ts`                     |
-| Loop iteration counter + validation failure context | `.ralph/loop-state.json` | `src/state.ts` (new)               |
+| State                                                    | File                     | Managed by                         |
+| -------------------------------------------------------- | ------------------------ | ---------------------------------- |
+| Scenario statuses                                        | `progress.md`            | git-committed by each agent worker |
+| Per-scenario escalation levels                           | `.ralph/escalation.json` | `src/model.ts`                     |
+| Iteration counter + current step + validation failure    | `.ralph/loop-state.json` | `src/state.ts`                     |
 
 `progress.md` and `.ralph/escalation.json` were already persisted to disk before
 this scenario. This change adds the **loop checkpoint** for the remaining
-in-memory loop variables.
+in-memory loop variables, including **precisely which step of the loop** was
+active when the process was stopped.
 
-### New files
+### `src/state.ts`
 
-**`src/state.ts`** – three exported functions:
+Three exported functions manage the checkpoint file:
 
 - `readLoopCheckpoint()` – reads `.ralph/loop-state.json`; returns `undefined`
   on a fresh start or missing file.
-- `writeLoopCheckpoint(checkpoint)` – atomically writes
-  `{ iterationsUsed,
-  validationFailurePath }` after each completed round.
+- `writeLoopCheckpoint(checkpoint)` – writes `{ iterationsUsed, step, validationFailurePath }`.
 - `clearLoopCheckpoint()` – deletes the file on clean loop exit so subsequent
   fresh runs start from scratch.
 
-**Type** `LoopCheckpoint` added to `src/types.ts`:
+### `LoopCheckpoint` type (`src/types.ts`)
 
 ```ts
+export type LoopStep = "agent" | "validate" | "done";
+
 export type LoopCheckpoint = {
   readonly iterationsUsed: number;
+  readonly step: LoopStep;           // which phase was active when stopped
   readonly validationFailurePath: string | undefined;
 };
 ```
 
-Constant `LOOP_STATE_FILE = ".ralph/loop-state.json"` added to
-`src/constants.ts`.
+The `step` field records exactly where in the iteration lifecycle the process
+was when the checkpoint was written.
 
-### Changes to `src/parallel.ts`
+### Checkpoint write points in `src/parallel.ts`
 
-`ParallelDeps` gains three injectable checkpoint methods:
+| When written                                    | `step` value | Resume behaviour                                   |
+| ----------------------------------------------- | ------------ | -------------------------------------------------- |
+| Before spawning workers for an iteration        | `"agent"`    | Re-runs agent work for that iteration              |
+| After workers complete, before running validate | `"validate"` | Skips agent work, jumps straight to validation     |
+| After validation, iteration counter incremented | `"done"`     | Starts the next iteration from scratch             |
+
+### Resume logic
+
+On startup `runParallelLoop` calls `deps.readCheckpoint()`:
+
+1. Restores `iterationsUsed` and `validationFailurePath` from the checkpoint.
+2. Sets `skipAgentWork = true` when `checkpoint.step === "validate"`, so the
+   first resumed iteration skips the agent phase and goes directly to
+   validation.
+3. Logs a resume message including the iteration number and step name.
+4. Calls `deps.clearCheckpoint()` on clean exit so the next run starts fresh.
+
+### Constant (`src/constants.ts`)
 
 ```ts
-readCheckpoint: (() => Promise<LoopCheckpoint | undefined>);
-writeCheckpoint: ((checkpoint: LoopCheckpoint) => Promise<void>);
-clearCheckpoint: (() => Promise<void>);
+LOOP_STATE_FILE = ".ralph/loop-state.json"
 ```
-
-`runParallelLoop` now:
-
-1. **On entry** – calls `deps.readCheckpoint()` and restores `iterationsUsed`
-   and `validationFailurePath` from the saved checkpoint (if present), logging a
-   resume message.
-2. **After each round** – calls `deps.writeCheckpoint(...)` with the updated
-   values so any subsequent kill-and-restart resumes from the correct round.
-3. **On clean exit** – calls `deps.clearCheckpoint()` so a fresh invocation
-   starts at iteration 0.
-
-### Restart semantics
-
-When restarted with `--iterations N`, the loop resumes at the checkpointed
-`iterationsUsed` and continues until `iterationsUsed >= N`. Example: stopped at
-iteration 5 of 10 → restart with `--iterations 10` → runs 5 more iterations.
 
 ## Tests
 
-### `test/parallel_test.ts` – 5 checkpoint integration tests via injected stubs
+### `test/parallel_test.ts` – 6 checkpoint integration tests
 
-| Test                                             | Assertion                                                             |
-| ------------------------------------------------ | --------------------------------------------------------------------- |
-| `writes checkpoint after each round`             | `writeCheckpoint` called once per round with correct `iterationsUsed` |
-| `clears checkpoint on clean exit`                | `clearCheckpoint` called after the loop ends                          |
-| `resumes iterationsUsed from checkpoint`         | Starting from checkpoint=3 with max=5 only triggers rounds 4 and 5    |
-| `restores validationFailurePath from checkpoint` | First post-resume iteration receives the saved failure path           |
-| `writes checkpoint with validationFailurePath`   | Failure path from validation is persisted in checkpoint               |
-
-All 24 tests in `test/parallel_test.ts` pass (`ok | 24 passed | 0 failed`).
+| Test                                              | Assertion                                                               |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `writes checkpoint after each round`              | agent + validate + done checkpoints written per iteration               |
+| `clears checkpoint on clean exit`                 | `clearCheckpoint` called after the loop ends                            |
+| `resumes iterationsUsed from checkpoint`          | Starting from checkpoint=3 with max=5 only triggers 2 more rounds      |
+| `restores validationFailurePath from checkpoint`  | First post-resume iteration receives the saved failure path             |
+| `writes checkpoint with validationFailurePath`    | Failure path from validation is persisted in done checkpoint            |
+| `resumes at validate step — skips agent work`     | When checkpoint step="validate", agent phase skipped for that iteration |
 
 ### `test/state_test.ts` – 4 unit tests for `src/state.ts`
 
 | Test                                  | Assertion                                            |
 | ------------------------------------- | ---------------------------------------------------- |
 | `returns undefined when file missing` | Fresh start returns `undefined`                      |
-| `write then read round-trips`         | Written checkpoint is faithfully restored            |
+| `write then read round-trips`         | Written checkpoint (incl. `step`) is faithfully restored |
 | `clearLoopCheckpoint removes file`    | After clear, read returns `undefined`                |
 | `ignores malformed JSON`              | Gracefully returns `undefined` for unparseable files |
 
-All 4 pass (`ok | 4 passed | 0 failed`).
+All 168 tests pass (`deno test --allow-all`).
