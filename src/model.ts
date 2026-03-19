@@ -143,14 +143,11 @@ export const findActionableScenarios = (content: string): number[] => {
 export const isAllVerified = (
   content: string,
   expectedCount: number,
-): boolean => {
-  if (expectedCount === 0) return false;
-  const verified =
-    (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length;
-  const obsolete =
-    (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length;
-  return verified + obsolete === expectedCount;
-};
+): boolean =>
+  expectedCount > 0 &&
+  (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length +
+        (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length ===
+    expectedCount;
 
 /** Read persisted escalation state, defaulting to `{}` if missing. */
 export const readEscalationState = async (
