@@ -121,22 +121,20 @@ const main = async (): Promise<number> => {
   }
   const plugin = pluginResult.value;
 
-  const configResolved = plugin.onConfigResolved
-    ? {
-      ...parsed.value,
-      ...await plugin.onConfigResolved({
-        agent: parsed.value.agent,
-        iterations: parsed.value.iterations,
-        log,
-      }),
-    }
-    : parsed.value;
+  const configHookResult = plugin.onConfigResolved
+    ? await plugin.onConfigResolved({
+      agent: parsed.value.agent,
+      iterations: parsed.value.iterations,
+      log,
+    })
+    : undefined;
 
-  const { agent, iterations, level, parallel } = configResolved;
+  const agent = configHookResult?.agent ?? parsed.value.agent;
+  const iterations = configHookResult?.iterations ?? parsed.value.iterations;
+  const { level, parallel } = parsed.value;
   const filePaths: FilePaths = {
-    specFile: (configResolved as { specFile?: string }).specFile ??
-      DEFAULT_FILE_PATHS.specFile,
-    progressFile: (configResolved as { progressFile?: string }).progressFile ??
+    specFile: configHookResult?.specFile ?? DEFAULT_FILE_PATHS.specFile,
+    progressFile: configHookResult?.progressFile ??
       DEFAULT_FILE_PATHS.progressFile,
   };
 
