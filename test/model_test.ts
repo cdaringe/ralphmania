@@ -7,13 +7,14 @@ import {
   parseImplementedCount,
   parseTotalCount,
   updateEscalationState,
+  validateProgressStatuses,
 } from "../src/model.ts";
 
 // parseImplementedCount tests
 
-Deno.test("parseImplementedCount counts COMPLETE rows", () => {
+Deno.test("parseImplementedCount counts WORK_COMPLETE rows", () => {
   const content = [
-    "| 1  | COMPLETE | done |",
+    "| 1  | WORK_COMPLETE | done |",
     "| 2  |          |      |",
     "| 3  | VERIFIED | yep  |",
   ].join("\n");
@@ -30,7 +31,7 @@ Deno.test("parseTotalCount counts all scenario rows", () => {
   const content = [
     "| #  | Status |",
     "| -- | ------ |",
-    "| 1  | COMPLETE |",
+    "| 1  | WORK_COMPLETE |",
     "| 2  |          |",
   ].join("\n");
   assertEquals(parseTotalCount(content), 2);
@@ -106,7 +107,7 @@ Deno.test("detectScenarioFromProgress empty content", () => {
 
 Deno.test("findReworkScenarios finds all rework scenario numbers", () => {
   const content = [
-    "| 1 | COMPLETE |",
+    "| 1 | WORK_COMPLETE |",
     "| 2 | NEEDS_REWORK | fix it |",
     "| 3 | VERIFIED |",
     "| 5 | NEEDS_REWORK | broken |",
@@ -115,7 +116,7 @@ Deno.test("findReworkScenarios finds all rework scenario numbers", () => {
 });
 
 Deno.test("findReworkScenarios returns empty for no rework", () => {
-  assertEquals(findReworkScenarios("| 1 | COMPLETE |"), []);
+  assertEquals(findReworkScenarios("| 1 | WORK_COMPLETE |"), []);
 });
 
 Deno.test("findReworkScenarios returns empty for empty content", () => {
@@ -182,7 +183,7 @@ Deno.test("computeModelSelection claude level 0 coder mode", () => {
 });
 
 Deno.test("computeModelSelection claude level 0 verifier mode", () => {
-  const content = "| 1 | COMPLETE |";
+  const content = "| 1 | WORK_COMPLETE |";
   const result = computeModelSelection({
     content,
     agent: "claude",
@@ -256,6 +257,36 @@ Deno.test("computeModelSelection codex above threshold", () => {
     assertEquals(result.value.targetScenario, 5);
     assertEquals(result.value.effort, undefined);
   }
+});
+
+// validateProgressStatuses tests
+
+Deno.test("validateProgressStatuses returns empty for all valid statuses", () => {
+  const content = [
+    "| 1 | WIP |",
+    "| 2 | WORK_COMPLETE |",
+    "| 3 | VERIFIED |",
+    "| 4 | NEEDS_REWORK |",
+    "| 5 | OBSOLETE |",
+  ].join("\n");
+  assertEquals(validateProgressStatuses(content), []);
+});
+
+Deno.test("validateProgressStatuses detects invalid statuses", () => {
+  const content = [
+    "| 1 | VERIFIED |",
+    "| 2 | COMPLETE |",
+    "| 3 | DONE |",
+  ].join("\n");
+  assertEquals(validateProgressStatuses(content), [
+    { scenario: 2, status: "COMPLETE" },
+    { scenario: 3, status: "DONE" },
+  ]);
+});
+
+Deno.test("validateProgressStatuses ignores rows without status", () => {
+  const content = "| 1 |          |";
+  assertEquals(validateProgressStatuses(content), []);
 });
 
 Deno.test("computeModelSelection claude without escalation level falls through to codex path", () => {

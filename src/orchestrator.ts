@@ -22,6 +22,7 @@ import {
   findActionableScenarios,
   findReworkScenarios,
   isAllVerified,
+  validateProgressStatuses,
 } from "./model.ts";
 import type { Plugin } from "./plugin.ts";
 import { dim, green, yellow } from "./colors.ts";
@@ -221,6 +222,20 @@ export const runParallelLoop = async (
     }
 
     const content = await deps.readProgress();
+
+    // Validate that all scenario statuses are recognized values.
+    const invalidStatuses = validateProgressStatuses(content);
+    if (invalidStatuses.length > 0) {
+      for (const { scenario, status } of invalidStatuses) {
+        log({
+          tags: ["error", "orchestrator"],
+          message:
+            `Scenario ${scenario} has invalid status "${status}". Valid statuses: WIP, WORK_COMPLETE, VERIFIED, NEEDS_REWORK, OBSOLETE`,
+        });
+      }
+      // Feed invalid status info as validation failure so the worker corrects it
+      validationFailurePath = undefined;
+    }
 
     if (isAllVerified(content, expectedScenarioCount)) {
       log({

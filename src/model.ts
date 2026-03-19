@@ -14,6 +14,7 @@ import {
   CLAUDE_VERIFIER,
   ESCALATION_FILE,
   REWORK_THRESHOLD,
+  VALID_STATUSES,
 } from "./constants.ts";
 
 export const getModel = (
@@ -115,16 +116,17 @@ export const computeModelSelection = (
     })();
 };
 
-/** Count rows with COMPLETE or VERIFIED status in progress.md content. */
+/** Count rows with WORK_COMPLETE or VERIFIED status in progress.md content. */
 export const parseImplementedCount = (content: string): number =>
-  (content.match(/^\|\s*\d+\s*\|\s*(COMPLETE|VERIFIED)\s*\|/gm) ?? []).length;
+  (content.match(/^\|\s*\d+\s*\|\s*(WORK_COMPLETE|VERIFIED)\s*\|/gm) ?? [])
+    .length;
 
 /** Count total non-OBSOLETE scenario rows in progress.md content. */
 export const parseTotalCount = (content: string): number =>
   (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length -
   (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length;
 
-/** Find scenario numbers that are not COMPLETE, VERIFIED, or OBSOLETE (i.e. actionable). */
+/** Find scenario numbers that are not WORK_COMPLETE, VERIFIED, or OBSOLETE (i.e. actionable). */
 export const findActionableScenarios = (content: string): number[] => {
   const total = [...content.matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) =>
     parseInt(m[1], 10)
@@ -132,7 +134,7 @@ export const findActionableScenarios = (content: string): number[] => {
   const done = new Set(
     [
       ...content.matchAll(
-        /^\|\s*(\d+)\s*\|\s*(COMPLETE|VERIFIED|OBSOLETE)\s*\|/gm,
+        /^\|\s*(\d+)\s*\|\s*(WORK_COMPLETE|VERIFIED|OBSOLETE)\s*\|/gm,
       ),
     ].map((m) => parseInt(m[1], 10)),
   );
@@ -178,6 +180,20 @@ export const writeEscalationState = async (
       message: `Failed to write escalation state: ${e}`,
     });
   }
+};
+
+/**
+ * Validate that every scenario row in progress.md uses a recognized status.
+ * Returns an array of `{ scenario, status }` for each invalid entry.
+ */
+export const validateProgressStatuses = (
+  content: string,
+): { scenario: number; status: string }[] => {
+  const validSet = new Set<string>(VALID_STATUSES);
+  const rows = [...content.matchAll(/^\|\s*(\d+)\s*\|\s*([^\s|]+)\s*\|/gm)];
+  return rows
+    .map((m) => ({ scenario: parseInt(m[1], 10), status: m[2] }))
+    .filter((r) => !validSet.has(r.status));
 };
 
 const formatStatusMessage = (

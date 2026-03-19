@@ -22,6 +22,20 @@ export const CLAUDE_ESCALATED = {
   effort: "high",
 } as const;
 
+/**
+ * The only statuses allowed in the progress.md Status column.
+ * Any other value is treated as invalid and must be corrected.
+ */
+export const VALID_STATUSES = [
+  "WIP",
+  "WORK_COMPLETE",
+  "VERIFIED",
+  "NEEDS_REWORK",
+  "OBSOLETE",
+] as const;
+
+export type ScenarioStatus = (typeof VALID_STATUSES)[number];
+
 export const WORKTREE_BASE_DIR = ".ralph/worktrees";
 export const RECONCILE_TIMEOUT_MS = 10 * 60 * 1000;
 

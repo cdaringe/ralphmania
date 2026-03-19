@@ -8,9 +8,9 @@ import type { WorktreeInfo } from "../src/worktree.ts";
 
 // --- Model function tests (used by parallel orchestration) ---
 
-Deno.test("findActionableScenarios finds scenarios without COMPLETE or VERIFIED", () => {
+Deno.test("findActionableScenarios finds scenarios without WORK_COMPLETE or VERIFIED", () => {
   const content = [
-    "| 1 | COMPLETE | done |",
+    "| 1 | WORK_COMPLETE | done |",
     "| 2 |          |      |",
     "| 3 | VERIFIED | yep  |",
     "| 4 | NEEDS_REWORK | fix |",
@@ -21,7 +21,7 @@ Deno.test("findActionableScenarios finds scenarios without COMPLETE or VERIFIED"
 
 Deno.test("findActionableScenarios returns empty when all done", () => {
   const content = [
-    "| 1 | COMPLETE | done |",
+    "| 1 | WORK_COMPLETE | done |",
     "| 2 | VERIFIED | yep  |",
   ].join("\n");
   assertEquals(findActionableScenarios(content), []);
@@ -51,10 +51,10 @@ Deno.test("isAllVerified returns false when rows missing from progress", () => {
   assertEquals(isAllVerified(content, 5), false);
 });
 
-Deno.test("isAllVerified returns false when some COMPLETE", () => {
+Deno.test("isAllVerified returns false when some WORK_COMPLETE", () => {
   const content = [
     "| 1 | VERIFIED | done |",
-    "| 2 | COMPLETE | yep  |",
+    "| 2 | WORK_COMPLETE | yep  |",
   ].join("\n");
   assertEquals(isAllVerified(content, 2), false);
 });
@@ -631,6 +631,29 @@ Deno.test("runParallelLoop always prescribes targetScenarioOverride to workers",
 
   // Worker 0 must be prescribed scenario 1 (the only actionable one)
   assertEquals(override, 1);
+});
+
+Deno.test("runParallelLoop logs error for invalid progress statuses", async () => {
+  const content = "| 1 | COMPLETE | done |\n| 2 | VERIFIED | done |";
+  const errors: string[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioCount: 2,
+    signal: AbortSignal.timeout(10_000),
+    log: (opts) => {
+      if (opts.tags[0] === "error") errors.push(opts.message);
+    },
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+    }),
+  });
+
+  assertEquals(errors.some((e) => e.includes('invalid status "COMPLETE"')), true);
 });
 
 Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", async () => {

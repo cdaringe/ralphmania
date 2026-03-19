@@ -23,7 +23,7 @@ export const buildPrompt = (
     : BASE_PROMPT;
 
   const actionableInfo = actionableScenarios.length > 0
-    ? `\n\nActionable scenarios (not yet COMPLETE, VERIFIED, or OBSOLETE): ${
+    ? `\n\nActionable scenarios (not yet WORK_COMPLETE, VERIFIED, or OBSOLETE): ${
       actionableScenarios.join(", ")
     }`
     : "";
