@@ -1,5 +1,5 @@
-import { assertEquals } from "jsr:@std/assert";
-import { assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@^1.0.11";
+import { assertStringIncludes } from "jsr:@std/assert@^1.0.11";
 
 /**
  * Scenario 24: The receipts SHALL ensure all markdown is properly rendered.

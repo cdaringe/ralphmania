@@ -11,7 +11,7 @@
  * - Test evidence and assertions
  */
 
-import { join } from "jsr:@std/path";
+import { join } from "jsr:@std/path@^1.0.0";
 import { createLogger } from "./src/logger.ts";
 import type { Logger, Result } from "./src/types.ts";
 import { err, ok } from "./src/types.ts";
@@ -39,7 +39,8 @@ const readScenario = async (
 ): Promise<Result<ScenarioData, string>> => {
   const filename = String(num).padStart(2, "0");
 
-  const docFile = [...Deno.readDirSync(SCENARIOS_DIR)]
+  const entries = await Array.fromAsync(Deno.readDir(SCENARIOS_DIR));
+  const docFile = entries
     .find((file) =>
       file.isFile &&
       file.name.startsWith(filename + "-") &&
@@ -176,25 +177,6 @@ const extractTestFiles = (implementation: string): string[] => {
   return files.length > 0
     ? [...new Set(files)].sort()
     : ["test/runner_test.ts"];
-};
-
-/**
- * Extract code snippet from a file
- */
-const extractCodeSnippet = async (
-  { filepath, lines }: { filepath: string; lines?: string },
-): Promise<string> => {
-  try {
-    const content = await Deno.readTextFile(filepath);
-    return lines
-      ? (() => {
-        const [start, end] = lines.split("-").map(Number);
-        return content.split("\n").slice(start - 1, end).join("\n");
-      })()
-      : content.split("\n").slice(0, 30).join("\n");
-  } catch {
-    return `// Unable to load ${filepath}`;
-  }
 };
 
 /**
@@ -853,9 +835,7 @@ const discoverScenarios = (log: Logger): number[] => {
 /**
  * Ensure receipts directory exists with assets and videos subdirs
  */
-const ensureReceiptsDir = async (
-  log: Logger,
-): Promise<Result<void, string>> => {
+const ensureReceiptsDir = async (): Promise<Result<void, string>> => {
   try {
     await Deno.mkdir(RECEIPTS_DIR, { recursive: true });
     await Deno.mkdir(join(RECEIPTS_DIR, "assets"), { recursive: true });
@@ -872,7 +852,7 @@ const ensureReceiptsDir = async (
  * Main execution
  */
 const main = async (log: Logger): Promise<void> => {
-  const dirResult = await ensureReceiptsDir(log);
+  const dirResult = await ensureReceiptsDir();
   if (!dirResult.ok) {
     log({ tags: ["error", "receipt"], message: dirResult.error });
     return;

@@ -1,14 +1,13 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "jsr:@std/assert@^1.0.11";
 import {
-  buildMergeRetryPrompt,
   buildReconcilePrompt,
   hasUnresolvedConflicts,
   parseConflictedFiles,
   reconcileMerge,
-} from "./reconcile.ts";
-import type { ReconcileDeps } from "./reconcile.ts";
-import type { Logger } from "./types.ts";
-import type { WorktreeInfo } from "./worktree.ts";
+} from "../src/reconcile.ts";
+import type { ReconcileDeps } from "../src/reconcile.ts";
+import type { Logger } from "../src/types.ts";
+import type { WorktreeInfo } from "../src/worktree.ts";
 
 const noopLog: Logger = () => {};
 

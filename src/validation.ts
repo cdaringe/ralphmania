@@ -51,11 +51,12 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const stripAnsi = (text: string): string =>
+    // deno-lint-ignore no-control-regex
     text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
 
   const tee = (dest: typeof Deno.stdout) =>
     new WritableStream<Uint8Array>({
-      write(chunk) {
+      write(chunk: Uint8Array): void {
         dest.writeSync(chunk);
         file.writeSync(encoder.encode(stripAnsi(decoder.decode(chunk))));
       },

@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { runValidation } from "../src/validation.ts";
 import { RALPH_OUTPUT_FILE_VAR, VALIDATE_SCRIPT } from "../src/constants.ts";
 
@@ -80,6 +80,7 @@ Deno.test(
         const log = await Deno.readTextFile(result.outputPath);
         assertEquals(log.includes("red text"), true);
         // Should not contain ANSI escape sequences
+        // deno-lint-ignore no-control-regex
         assertEquals(/\x1b\[/.test(log), false);
       }
     });

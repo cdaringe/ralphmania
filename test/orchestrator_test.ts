@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { findActionableScenarios, isAllVerified } from "../src/model.ts";
 import { runParallelLoop } from "../src/orchestrator.ts";
 import type { ParallelDeps } from "../src/orchestrator.ts";

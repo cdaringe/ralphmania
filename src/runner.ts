@@ -20,7 +20,7 @@ import { getModel, resolveModelSelection } from "./model.ts";
 import { buildCommandSpec, buildPrompt } from "./command.ts";
 import { runValidation } from "./validation.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
-import { bold, cyan, dim, green, magenta, yellow } from "./colors.ts";
+import { cyan, dim, green, magenta, yellow } from "./colors.ts";
 
 /**
  * Parse an NDJSON line from `claude --output-format=stream-json` and extract
@@ -45,7 +45,10 @@ export const ndjsonResultTransform = (): TransformStream<
   const encoder = new TextEncoder();
   let buffer = "";
   return new TransformStream({
-    transform(chunk, controller) {
+    transform(
+      chunk: Uint8Array,
+      controller: TransformStreamDefaultController<Uint8Array>,
+    ): void {
       buffer += decoder.decode(chunk, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
@@ -58,7 +61,7 @@ export const ndjsonResultTransform = (): TransformStream<
         }
       });
     },
-    flush(controller) {
+    flush(controller: TransformStreamDefaultController<Uint8Array>): void {
       const trimmed = buffer.trim();
       if (!trimmed) return;
       const result = extractNdjsonResult(trimmed);

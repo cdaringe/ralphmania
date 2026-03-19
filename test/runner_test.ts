@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1.0.11";
 import {
   extractNdjsonResult,
   ndjsonResultTransform,
@@ -11,16 +11,16 @@ Deno.test("pipeStream pipes data and detects marker", async () => {
     "hello <promise>COMPLETE</promise> world",
   );
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(data);
       controller.close();
     },
   });
   const written: Uint8Array[] = [];
   const output = {
-    write: async (d: Uint8Array) => {
+    write: (d: Uint8Array): Promise<number> => {
       written.push(d);
-      return d.length;
+      return Promise.resolve(d.length);
     },
   };
   const found = await pipeStream({
@@ -35,13 +35,13 @@ Deno.test("pipeStream pipes data and detects marker", async () => {
 Deno.test("pipeStream returns false when marker not found", async () => {
   const data = new TextEncoder().encode("hello world");
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(data);
       controller.close();
     },
   });
   const output = {
-    write: async (d: Uint8Array) => d.length,
+    write: (d: Uint8Array): Promise<number> => Promise.resolve(d.length),
   };
   const found = await pipeStream({ stream, output, marker: "NOTFOUND" });
   assertEquals(found, false);
@@ -50,13 +50,13 @@ Deno.test("pipeStream returns false when marker not found", async () => {
 Deno.test("pipeStream handles missing marker param", async () => {
   const data = new TextEncoder().encode("test data");
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(data);
       controller.close();
     },
   });
   const output = {
-    write: async (d: Uint8Array) => d.length,
+    write: (d: Uint8Array): Promise<number> => Promise.resolve(d.length),
   };
   const found = await pipeStream({ stream, output });
   assertEquals(found, false);
@@ -65,7 +65,7 @@ Deno.test("pipeStream handles missing marker param", async () => {
 Deno.test("pipeStream handles multiple chunks", async () => {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(encoder.encode("chunk1 "));
       controller.enqueue(encoder.encode("chunk2 MARKER "));
       controller.enqueue(encoder.encode("chunk3"));
@@ -75,9 +75,9 @@ Deno.test("pipeStream handles multiple chunks", async () => {
   const chunks: string[] = [];
   const decoder = new TextDecoder();
   const output = {
-    write: async (d: Uint8Array) => {
+    write: (d: Uint8Array): Promise<number> => {
       chunks.push(decoder.decode(d));
-      return d.length;
+      return Promise.resolve(d.length);
     },
   };
   const found = await pipeStream({ stream, output, marker: "MARKER" });
@@ -90,14 +90,14 @@ Deno.test("pipeStream detects marker split across two chunks", async () => {
   const marker = "<promise>COMPLETE</promise>";
   const mid = Math.floor(marker.length / 2);
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(encoder.encode("before " + marker.slice(0, mid)));
       controller.enqueue(encoder.encode(marker.slice(mid) + " after"));
       controller.close();
     },
   });
   const output = {
-    write: async (d: Uint8Array) => d.length,
+    write: (d: Uint8Array): Promise<number> => Promise.resolve(d.length),
   };
   const found = await pipeStream({ stream, output, marker });
   assertEquals(found, true);
@@ -105,12 +105,12 @@ Deno.test("pipeStream detects marker split across two chunks", async () => {
 
 Deno.test("pipeStream handles empty stream", async () => {
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.close();
     },
   });
   const output = {
-    write: async (d: Uint8Array) => d.length,
+    write: (d: Uint8Array): Promise<number> => Promise.resolve(d.length),
   };
   const found = await pipeStream({ stream, output, marker: "anything" });
   assertEquals(found, false);
@@ -183,7 +183,7 @@ Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () 
   ].join("");
 
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(encoder.encode(input));
       controller.close();
     },
@@ -191,7 +191,7 @@ Deno.test("ndjsonResultTransform extracts results from NDJSON stream", async () 
 
   const chunks: string[] = [];
   const writable = new WritableStream<Uint8Array>({
-    write(chunk) {
+    write(chunk: Uint8Array): void {
       chunks.push(decoder.decode(chunk));
     },
   });
@@ -230,7 +230,7 @@ Deno.test("ndjsonResultTransform handles split chunks", async () => {
   const mid = Math.floor(line.length / 2);
 
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
       controller.enqueue(encoder.encode(line.slice(0, mid)));
       controller.enqueue(encoder.encode(line.slice(mid)));
       controller.close();
@@ -239,7 +239,7 @@ Deno.test("ndjsonResultTransform handles split chunks", async () => {
 
   const chunks: string[] = [];
   const writable = new WritableStream<Uint8Array>({
-    write(chunk) {
+    write(chunk: Uint8Array): void {
       chunks.push(decoder.decode(chunk));
     },
   });

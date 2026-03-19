@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1.0.11";
 import { buildCommandSpec, buildPrompt } from "../src/command.ts";
 import { BASE_PROMPT } from "../src/constants.ts";
 

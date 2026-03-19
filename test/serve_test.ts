@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { parseServeArgs, serveReceipts } from "../src/serve.ts";
 
 Deno.test("parseServeArgs defaults", () => {
