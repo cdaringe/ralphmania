@@ -160,6 +160,7 @@ export const runParallelLoop = async (
     agent,
     iterations,
     parallelism,
+    expectedScenarioCount,
     signal,
     log,
     plugin,
@@ -169,6 +170,7 @@ export const runParallelLoop = async (
     agent: Agent;
     iterations: number;
     parallelism: number;
+    expectedScenarioCount: number;
     signal: AbortSignal;
     log: Logger;
     plugin: Plugin;
@@ -187,7 +189,7 @@ export const runParallelLoop = async (
   // first resumed iteration and jump straight to validation.
   let skipAgentWork = checkpoint?.step === "validate";
   checkpoint && log({
-    tags: ["info", "parallel"],
+    tags: ["info", "orchestrator"],
     message:
       `Resuming from checkpoint: iteration ${iterationsUsed}, step=${checkpoint.step}, validationFailurePath=${
         validationFailurePath ?? "none"
@@ -202,9 +204,9 @@ export const runParallelLoop = async (
 
     const content = await deps.readProgress();
 
-    if (isAllVerified(content)) {
+    if (isAllVerified(content, expectedScenarioCount)) {
       log({
-        tags: ["info", "parallel"],
+        tags: ["info", "orchestrator"],
         message: green("All scenarios VERIFIED"),
       });
       break;
@@ -212,7 +214,7 @@ export const runParallelLoop = async (
 
     if (skipAgentWork) {
       log({
-        tags: ["info", "parallel"],
+        tags: ["info", "orchestrator"],
         message:
           `Resuming iteration ${iterationsUsed} at validate step — skipping agent work`,
       });
@@ -240,7 +242,7 @@ export const runParallelLoop = async (
       );
 
       log({
-        tags: ["info", "parallel"],
+        tags: ["info", "orchestrator"],
         message:
           `Round ${iterationsUsed}: launching ${workerCount} worker(s) for scenarios [${
             actionableScenarios.slice(0, workerCount).join(", ")
@@ -261,7 +263,7 @@ export const runParallelLoop = async (
       );
       const worktrees = worktreeResults.flatMap((wt, i) =>
         wt.ok ? [wt.value] : (log({
-          tags: ["error", "parallel"],
+          tags: ["error", "orchestrator"],
           message: `Failed to create worktree for worker ${i}: ${wt.error}`,
         }),
           [])
@@ -269,7 +271,7 @@ export const runParallelLoop = async (
 
       if (worktrees.length === 0) {
         log({
-          tags: ["error", "parallel"],
+          tags: ["error", "orchestrator"],
           message: "No worktrees created, skipping round",
         });
         ++iterationsUsed;
@@ -313,7 +315,7 @@ export const runParallelLoop = async (
             await deps.mergeWorktree({ worktree: wr.worktree, log }) ===
               "conflict" &&
             (log({
-              tags: ["info", "parallel"],
+              tags: ["info", "orchestrator"],
               message: yellow(
                 `Worker ${wr.workerIndex} scenario ${
                   actionableScenarios[wr.workerIndex]
@@ -331,23 +333,23 @@ export const runParallelLoop = async (
         // Detect: did each worker's scenario actually land?
         const postMerge = await deps.readProgress();
         const stillActionable = new Set(findActionableScenarios(postMerge));
-        for (const wr of results) {
+        results.forEach((wr) => {
           const scenario = actionableScenarios[wr.workerIndex];
           scenario !== undefined &&
             (stillActionable.has(scenario)
               ? log({
-                tags: ["info", "parallel"],
+                tags: ["info", "orchestrator"],
                 message: yellow(
                   `Scenario ${scenario}: still actionable after worker ${wr.workerIndex}`,
                 ),
               })
               : log({
-                tags: ["info", "parallel"],
+                tags: ["info", "orchestrator"],
                 message: green(
                   `Scenario ${scenario}: resolved by worker ${wr.workerIndex}`,
                 ),
               }));
-        }
+        });
 
         // Cleanup all worktrees
         await Promise.all(
@@ -366,7 +368,7 @@ export const runParallelLoop = async (
 
     // Run validation on merged main
     log({
-      tags: ["info", "parallel"],
+      tags: ["info", "orchestrator"],
       message: dim("Running validation on merged result..."),
     });
     const validation = await deps.runValidation({
@@ -389,9 +391,9 @@ export const runParallelLoop = async (
 
     // Check if done
     const updatedContent = await deps.readProgress();
-    if (isAllVerified(updatedContent)) {
+    if (isAllVerified(updatedContent, expectedScenarioCount)) {
       log({
-        tags: ["info", "parallel"],
+        tags: ["info", "orchestrator"],
         message: green("All scenarios VERIFIED"),
       });
       break;

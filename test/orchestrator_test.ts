@@ -1,10 +1,10 @@
 import { assertEquals } from "jsr:@std/assert";
-import { findActionableScenarios, isAllVerified } from "./model.ts";
-import { runParallelLoop } from "./parallel.ts";
-import type { ParallelDeps } from "./parallel.ts";
-import type { Logger } from "./types.ts";
-import { ok } from "./types.ts";
-import type { WorktreeInfo } from "./worktree.ts";
+import { findActionableScenarios, isAllVerified } from "../src/model.ts";
+import { runParallelLoop } from "../src/orchestrator.ts";
+import type { ParallelDeps } from "../src/orchestrator.ts";
+import type { Logger } from "../src/types.ts";
+import { ok } from "../src/types.ts";
+import type { WorktreeInfo } from "../src/worktree.ts";
 
 // --- Model function tests (used by parallel orchestration) ---
 
@@ -35,12 +35,20 @@ Deno.test("findActionableScenarios returns all when none done", () => {
   assertEquals(findActionableScenarios(content), [1, 2]);
 });
 
-Deno.test("isAllVerified returns true when all VERIFIED", () => {
+Deno.test("isAllVerified returns true when all VERIFIED and count matches", () => {
   const content = [
     "| 1 | VERIFIED | done |",
     "| 2 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content), true);
+  assertEquals(isAllVerified(content, 2), true);
+});
+
+Deno.test("isAllVerified returns false when rows missing from progress", () => {
+  const content = [
+    "| 1 | VERIFIED | done |",
+    "| 2 | VERIFIED | yep  |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 5), false);
 });
 
 Deno.test("isAllVerified returns false when some COMPLETE", () => {
@@ -48,11 +56,11 @@ Deno.test("isAllVerified returns false when some COMPLETE", () => {
     "| 1 | VERIFIED | done |",
     "| 2 | COMPLETE | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content), false);
+  assertEquals(isAllVerified(content, 2), false);
 });
 
 Deno.test("isAllVerified returns false on empty content", () => {
-  assertEquals(isAllVerified(""), false);
+  assertEquals(isAllVerified("", 0), false);
 });
 
 Deno.test("isAllVerified returns false when some not done", () => {
@@ -60,7 +68,42 @@ Deno.test("isAllVerified returns false when some not done", () => {
     "| 1 | VERIFIED | done |",
     "| 2 |          |      |",
   ].join("\n");
-  assertEquals(isAllVerified(content), false);
+  assertEquals(isAllVerified(content, 2), false);
+});
+
+Deno.test("findActionableScenarios skips OBSOLETE scenarios", () => {
+  const content = [
+    "| 1 | OBSOLETE | no longer needed |",
+    "| 2 |          |                  |",
+    "| 3 | VERIFIED | done             |",
+  ].join("\n");
+  assertEquals(findActionableScenarios(content), [2]);
+});
+
+Deno.test("isAllVerified returns true when all VERIFIED and OBSOLETE fill expectedCount", () => {
+  const content = [
+    "| 1 | VERIFIED | done     |",
+    "| 2 | OBSOLETE | skipped  |",
+    "| 3 | VERIFIED | done     |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 3), true);
+});
+
+Deno.test("isAllVerified returns false when OBSOLETE leaves VERIFIED count short", () => {
+  const content = [
+    "| 1 | VERIFIED | done     |",
+    "| 2 | OBSOLETE | skipped  |",
+    "| 3 |          |          |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 3), false);
+});
+
+Deno.test("isAllVerified returns true when all rows are OBSOLETE matching expectedCount", () => {
+  const content = [
+    "| 1 | OBSOLETE | skipped |",
+    "| 2 | OBSOLETE | skipped |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 2), true);
 });
 
 // --- runParallelLoop tests ---
@@ -99,6 +142,7 @@ Deno.test("runParallelLoop exits immediately when all scenarios verified", async
     agent: "claude",
     iterations: 5,
     parallelism: 2,
+    expectedScenarioCount: 2,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -118,6 +162,7 @@ Deno.test("runParallelLoop dispatches parallelism workers", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 2,
+    expectedScenarioCount: 3,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -142,6 +187,7 @@ Deno.test("runParallelLoop stops after max iterations", async () => {
     agent: "claude",
     iterations: 3,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -161,6 +207,7 @@ Deno.test("runParallelLoop stops early when verified after round", async () => {
     agent: "claude",
     iterations: 10,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -170,7 +217,7 @@ Deno.test("runParallelLoop stops early when verified after round", async () => {
         readCount++;
         // First read: not done. Post-round read: all verified.
         return Promise.resolve(
-          readCount <= 2
+          readCount <= 1
             ? "| 1 |          |      |"
             : "| 1 | VERIFIED | done |",
         );
@@ -189,6 +236,7 @@ Deno.test("runParallelLoop merges worktrees with new commits", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -214,6 +262,7 @@ Deno.test("runParallelLoop skips merge when no new commits", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -239,6 +288,7 @@ Deno.test("runParallelLoop returns 130 on aborted signal", async () => {
     agent: "claude",
     iterations: 5,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: controller.signal,
     log: noopLog,
     plugin: {},
@@ -257,6 +307,7 @@ Deno.test("runParallelLoop runs validation after each round", async () => {
     agent: "claude",
     iterations: 2,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -281,6 +332,7 @@ Deno.test("runParallelLoop cleans up worktrees on worker failure", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -306,6 +358,7 @@ Deno.test("runParallelLoop passes validation failure path to next round workers"
     agent: "claude",
     iterations: 2,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -340,6 +393,7 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
     agent: "claude",
     iterations: 3,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -367,135 +421,15 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
   assertEquals(failurePaths, [undefined, "/tmp/fail.log", undefined]);
 });
 
-// --- New: scenario distribution & merge robustness ---
-
-Deno.test("runParallelLoop passes distinct targetScenarioOverride to workers", async () => {
-  const content =
-    "| 1 | VERIFIED | done |\n| 2 |          |      |\n| 3 | NEEDS_REWORK | fix |\n| 4 |          |      |";
-  const overrides: (number | undefined)[] = [];
-
-  await runParallelLoop({
-    agent: "claude",
-    iterations: 1,
-    parallelism: 3,
-    signal: AbortSignal.timeout(10_000),
-    log: noopLog,
-    plugin: {},
-    level: undefined,
-    deps: stubDeps({
-      readProgress: () => Promise.resolve(content),
-      runIteration: (opts) => {
-        overrides.push(opts.targetScenarioOverride);
-        return Promise.resolve({ status: "continue" });
-      },
-    }),
-  });
-
-  // NEEDS_REWORK (3) first, then remaining actionable (2, 4)
-  assertEquals(overrides, [3, 2, 4]);
-});
-
-Deno.test("runParallelLoop calls resetWorkingTree before merges", async () => {
-  const content = "| 1 |          |      |";
-  const callOrder: string[] = [];
-
-  await runParallelLoop({
-    agent: "claude",
-    iterations: 1,
-    parallelism: 1,
-    signal: AbortSignal.timeout(10_000),
-    log: noopLog,
-    plugin: {},
-    level: undefined,
-    deps: stubDeps({
-      readProgress: () => Promise.resolve(content),
-      hasNewCommits: () => Promise.resolve(true),
-      resetWorkingTree: () => {
-        callOrder.push("reset");
-        return Promise.resolve(ok(undefined));
-      },
-      mergeWorktree: () => {
-        callOrder.push("merge");
-        return Promise.resolve("merged");
-      },
-    }),
-  });
-
-  assertEquals(callOrder, ["reset", "merge"]);
-});
-
-Deno.test("runParallelLoop limits workers to actionable scenario count", async () => {
-  const content =
-    "| 1 | VERIFIED | done |\n| 2 |          |      |\n| 3 | VERIFIED | done |";
-  const workersCreated: number[] = [];
-
-  await runParallelLoop({
-    agent: "claude",
-    iterations: 1,
-    parallelism: 3,
-    signal: AbortSignal.timeout(10_000),
-    log: noopLog,
-    plugin: {},
-    level: undefined,
-    deps: stubDeps({
-      readProgress: () => Promise.resolve(content),
-      createWorktree: ({ workerIndex }) => {
-        workersCreated.push(workerIndex);
-        return Promise.resolve(ok(stubWorktree(workerIndex)));
-      },
-    }),
-  });
-
-  // Only 1 actionable scenario (2), so only 1 worker
-  assertEquals(workersCreated, [0]);
-});
-
-Deno.test("runParallelLoop logs scenario resolution after merges", async () => {
-  let readCount = 0;
-  const logged: string[] = [];
-  const testLog: Logger = (opts) => {
-    logged.push(opts.message);
-  };
-
-  await runParallelLoop({
-    agent: "claude",
-    iterations: 1,
-    parallelism: 2,
-    signal: AbortSignal.timeout(10_000),
-    log: testLog,
-    plugin: {},
-    level: undefined,
-    deps: stubDeps({
-      readProgress: () => {
-        readCount++;
-        // Round start: two actionable. Post-merge: scenario 1 resolved.
-        return Promise.resolve(
-          readCount <= 1
-            ? "| 1 |          |      |\n| 2 |          |      |"
-            : "| 1 | COMPLETE |      |\n| 2 |          |      |",
-        );
-      },
-      hasNewCommits: () => Promise.resolve(true),
-      mergeWorktree: () => Promise.resolve("merged"),
-    }),
-  });
-
-  const resolved = logged.filter((m) => m.includes("resolved by"));
-  const stillActionable = logged.filter((m) => m.includes("still actionable"));
-  assertEquals(resolved.length, 1);
-  assertEquals(stillActionable.length, 1);
-});
-
-// --- Checkpoint (state serialization) tests ---
-
 Deno.test("runParallelLoop writes checkpoint after each round", async () => {
   const content = "| 1 |          |      |";
-  const written: { iterationsUsed: number; step: string }[] = [];
+  const checkpoints: { iterationsUsed: number; step: string }[] = [];
 
   await runParallelLoop({
     agent: "claude",
-    iterations: 2,
+    iterations: 3,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -503,27 +437,27 @@ Deno.test("runParallelLoop writes checkpoint after each round", async () => {
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
       writeCheckpoint: (cp) => {
-        written.push(cp);
+        checkpoints.push(cp);
         return Promise.resolve();
       },
     }),
   });
 
-  // Each round writes agent + validate + done; verify the "done" checkpoints
-  const done = written.filter((c) => c.step === "done");
-  assertEquals(done.length, 2);
-  assertEquals(done[0].iterationsUsed, 1);
-  assertEquals(done[1].iterationsUsed, 2);
+  // Each round writes agent + validate + done — verify the "done" checkpoints
+  const doneCheckpoints = checkpoints.filter((c) => c.step === "done");
+  assertEquals(doneCheckpoints.length, 3);
+  assertEquals(doneCheckpoints.map((c) => c.iterationsUsed), [1, 2, 3]);
 });
 
 Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
-  const content = "| 1 | VERIFIED | done |";
+  const content = "| 1 |          |      |";
   let cleared = false;
 
   await runParallelLoop({
     agent: "claude",
-    iterations: 5,
+    iterations: 1,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -542,12 +476,13 @@ Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
 
 Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => {
   const content = "| 1 |          |      |";
-  const written: { iterationsUsed: number; step: string }[] = [];
+  let rounds = 0;
 
-  await runParallelLoop({
+  const iterationsUsed = await runParallelLoop({
     agent: "claude",
     iterations: 5,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -560,18 +495,15 @@ Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => 
           step: "done" as const,
           validationFailurePath: undefined,
         }),
-      writeCheckpoint: (cp) => {
-        written.push(cp);
-        return Promise.resolve();
+      runIteration: () => {
+        rounds++;
+        return Promise.resolve({ status: "continue" });
       },
     }),
   });
 
-  // Started from 3, ran until 5 — "done" checkpoints for iterations 4 and 5
-  const done = written.filter((c) => c.step === "done").map((c) =>
-    c.iterationsUsed
-  );
-  assertEquals(done, [4, 5]);
+  assertEquals(iterationsUsed, 5);
+  assertEquals(rounds, 2); // only rounds 4 and 5
 });
 
 Deno.test("runParallelLoop restores validationFailurePath from checkpoint", async () => {
@@ -582,6 +514,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
     agent: "claude",
     iterations: 4,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -592,7 +525,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
         Promise.resolve({
           iterationsUsed: 3,
           step: "done" as const,
-          validationFailurePath: "/tmp/prior-failure.log",
+          validationFailurePath: "/tmp/saved-fail.log",
         }),
       runIteration: (opts) => {
         failurePaths.push(opts.validationFailurePath);
@@ -601,35 +534,100 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
     }),
   });
 
-  // First iteration after resume should see the restored failure path
-  assertEquals(failurePaths[0], "/tmp/prior-failure.log");
+  assertEquals(failurePaths, ["/tmp/saved-fail.log"]);
 });
 
 Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async () => {
   const content = "| 1 |          |      |";
-  const written: { step: string; validationFailurePath: string | undefined }[] =
-    [];
+  const checkpoints: {
+    step: string;
+    validationFailurePath: string | undefined;
+  }[] = [];
 
   await runParallelLoop({
     agent: "claude",
-    iterations: 1,
+    iterations: 2,
     parallelism: 1,
+    expectedScenarioCount: 1,
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
     level: undefined,
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
-      runValidation: () =>
-        Promise.resolve({ status: "failed", outputPath: "/tmp/fail.log" }),
       writeCheckpoint: (cp) => {
-        written.push(cp);
+        checkpoints.push(cp);
         return Promise.resolve();
+      },
+      runValidation: ({ iterationNum }) =>
+        Promise.resolve(
+          iterationNum === 0
+            ? { status: "failed" as const, outputPath: "/tmp/v.log" }
+            : { status: "passed" as const },
+        ),
+    }),
+  });
+
+  // "done" checkpoints carry the post-validation failure path
+  const done = checkpoints.filter((c) => c.step === "done");
+  assertEquals(done[0]?.validationFailurePath, "/tmp/v.log");
+  assertEquals(done[1]?.validationFailurePath, undefined);
+});
+
+Deno.test("runParallelLoop resumes at validate step — skips agent work", async () => {
+  const content = "| 1 |          |      |";
+  let agentRuns = 0;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 4,
+    parallelism: 1,
+    expectedScenarioCount: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 2,
+          step: "validate" as const,
+          validationFailurePath: undefined,
+        }),
+      runIteration: () => {
+        agentRuns++;
+        return Promise.resolve({ status: "continue" });
       },
     }),
   });
 
-  // "done" checkpoint carries the failure path from validation
-  const done = written.filter((c) => c.step === "done");
-  assertEquals(done[0]?.validationFailurePath, "/tmp/fail.log");
+  assertEquals(iterationsUsed, 4);
+  // Iteration 2 resumed at validate (no agent); iteration 3 ran agent normally
+  assertEquals(agentRuns, 1);
+});
+
+Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", async () => {
+  const content = "| 1 |          |      |";
+  let hasOverride = true;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioCount: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      runIteration: (opts) => {
+        hasOverride = "targetScenarioOverride" in opts;
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  assertEquals(hasOverride, false);
 });

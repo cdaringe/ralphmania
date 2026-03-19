@@ -93,7 +93,7 @@ export const parseCliArgsInteractive = async (
   const levelResult = parseLevel(args.level);
   if (!levelResult.ok) return levelResult;
   const level = levelResult.value;
-  const parallel = parseInt(String(args.parallel ?? "1"), 10);
+  const parallel = parseInt(String(args.parallel ?? "2"), 10);
   if (isNaN(parallel) || parallel < 1) {
     return err(`Invalid --parallel: ${args.parallel} (must be >= 1)`);
   }

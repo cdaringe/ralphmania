@@ -42,6 +42,7 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel, isAllVerified } from "./src/model.ts";
+import { parseScenarioCount, SPEC_FILE } from "./src/progress.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -49,7 +50,7 @@ import {
 } from "./src/constants.ts";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
-import { runParallelLoop } from "./src/parallel.ts";
+import { runParallelLoop } from "./src/orchestrator.ts";
 
 const printBanner = (
   { agent, iterations, level, parallel }: {
@@ -73,37 +74,29 @@ const printBanner = (
   w(`\n`);
   w(`  ${bold("Model Ladder")}\n`);
 
-  if (agent === "claude") {
-    const roles = [
+  const roles = agent === "claude"
+    ? [
       { label: "coder", ...CLAUDE_CODER },
       { label: "verifier", ...CLAUDE_VERIFIER },
       { label: "escalated", ...CLAUDE_ESCALATED },
-    ];
-    roles.forEach(({ label, model, mode, effort }) => {
-      w(
-        `  ${dim(label)} ${green("→")} ${model} ${
-          dim(`(${mode}, effort: ${effort})`)
-        }\n`,
-      );
-    });
-  } else {
-    const fast = getModel({ agent, mode: "fast" });
-    const general = getModel({ agent, mode: "general" });
-    const strong = getModel({ agent, mode: "strong" });
-    w(
-      `  ${dim("fast")}    ${green("→")} ${fast}    ${
-        dim("(default build)")
-      }\n`,
-    );
-    w(
-      `  ${dim("general")} ${green("→")} ${general} ${
-        dim("(rework escalation)")
-      }\n`,
-    );
-    w(
-      `  ${dim("strong")}  ${green("→")} ${strong}  ${dim("(heavy rework)")}\n`,
-    );
-  }
+    ].map(({ label, model, mode, effort }) => ({
+      label,
+      model,
+      desc: `(${mode}, effort: ${effort})`,
+    }))
+    : ([
+      { label: "fast", desc: "(default build)" },
+      { label: "general", desc: "(rework escalation)" },
+      { label: "strong", desc: "(heavy rework)" },
+    ] as const).map(({ label, desc }) => ({
+      label,
+      model: getModel({ agent, mode: label }),
+      desc,
+    }));
+
+  roles.forEach(({ label, model, desc }) => {
+    w(`  ${dim(label)} ${green("→")} ${model} ${dim(desc)}\n`);
+  });
 
   w(`${line}\n\n`);
 };
@@ -159,10 +152,16 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
+  const specContent = await Deno.readTextFile(SPEC_FILE).catch(
+    () => "",
+  );
+  const expectedScenarioCount = parseScenarioCount(specContent);
+
   const iterationsUsed = await runParallelLoop({
     agent,
     iterations,
     parallelism: parallel,
+    expectedScenarioCount,
     signal: shutdownController.signal,
     log,
     plugin,
@@ -173,7 +172,7 @@ const main = async (): Promise<number> => {
 
   const finalContent = await Deno.readTextFile("./progress.md").catch(() => "");
   const finalSection = finalContent.split("END_DEMO")[1] ?? "";
-  const allDone = isAllVerified(finalSection);
+  const allDone = isAllVerified(finalSection, expectedScenarioCount);
 
   await plugin.onLoopEnd?.({
     finalState: {
@@ -187,7 +186,7 @@ const main = async (): Promise<number> => {
   const receiptsResult = allDone
     ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
       await updateReceipts({ agent, plugin, log }))
-    : null;
+    : undefined;
 
   receiptsResult && !receiptsResult.ok &&
     log({ tags: ["error"], message: receiptsResult.error });

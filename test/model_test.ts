@@ -36,6 +36,15 @@ Deno.test("parseTotalCount counts all scenario rows", () => {
   assertEquals(parseTotalCount(content), 2);
 });
 
+Deno.test("parseTotalCount excludes OBSOLETE rows", () => {
+  const content = [
+    "| 1  | VERIFIED |",
+    "| 2  | OBSOLETE |",
+    "| 3  |          |",
+  ].join("\n");
+  assertEquals(parseTotalCount(content), 2);
+});
+
 // getModel tests
 
 Deno.test("getModel claude fast", () => {
