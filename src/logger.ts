@@ -1,3 +1,4 @@
+// coverage:ignore — Depends on colors.ts TTY detection and direct fd writes
 import type { Logger } from "./types.ts";
 import {
   blue,

@@ -689,3 +689,93 @@ Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", a
   // Each worker gets a distinct scenario; no duplicates
   assertEquals(overrides.sort((a, b) => a - b), [1, 2, 3]);
 });
+
+Deno.test("runParallelLoop skips round when all worktree creations fail", async () => {
+  const content = "| 1 |          |      |";
+  let iterationRan = false;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioCount: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      createWorktree: () =>
+        Promise.resolve({ ok: false, error: "git failed" } as const),
+      runIteration: () => {
+        iterationRan = true;
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  assertEquals(iterationRan, false);
+  assertEquals(iterationsUsed, 1);
+});
+
+Deno.test("runParallelLoop triggers reconcileMerge on conflict", async () => {
+  const content = "| 1 |          |      |";
+  let reconciled = false;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioCount: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      hasNewCommits: () => Promise.resolve(true),
+      mergeWorktree: () => Promise.resolve("conflict"),
+      reconcileMerge: () => {
+        reconciled = true;
+        return Promise.resolve();
+      },
+    }),
+  });
+
+  assertEquals(reconciled, true);
+});
+
+Deno.test("runParallelLoop logs resolved/still-actionable after merge", async () => {
+  let readCount = 0;
+  const messages: string[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioCount: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: (opts) => {
+      messages.push(opts.message);
+    },
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => {
+        readCount++;
+        return Promise.resolve(
+          readCount <= 1
+            ? "| 1 |          |      |"
+            : "| 1 | VERIFIED | done |",
+        );
+      },
+      hasNewCommits: () => Promise.resolve(true),
+      mergeWorktree: () => Promise.resolve("merged"),
+    }),
+  });
+
+  assertEquals(
+    messages.some((m) => m.includes("Scenario 1: resolved")),
+    true,
+  );
+});

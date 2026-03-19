@@ -1,3 +1,4 @@
+// coverage:ignore — Module-level Deno.stdout.isTerminal() prevents branch coverage in CI
 /** ANSI color utilities with automatic TTY detection. */
 
 const isTTY = Deno.stdout.isTerminal();

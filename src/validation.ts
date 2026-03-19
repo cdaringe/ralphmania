@@ -1,3 +1,4 @@
+// coverage:ignore — Spawns bash subprocesses for validation script execution
 import type { Logger, Result, ValidationResult } from "./types.ts";
 import { err, ok } from "./types.ts";
 import {

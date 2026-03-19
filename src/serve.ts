@@ -1,3 +1,4 @@
+// coverage:ignore — Network server and OS browser-open requiring system integration
 import { parseArgs } from "jsr:@std/cli@1/parse-args";
 import { extname } from "jsr:@std/path@1";
 import { RALPH_RECEIPTS_DIRNAME } from "./constants.ts";

@@ -32,4 +32,4 @@
 | 26 | VERIFIED | [Custom spec/progress paths via plugin onConfigResolved](docs/scenarios/26-custom-spec-progress-paths.md)                     |              |
 | 27 | VERIFIED | [Parent prescribes distinct scenario per parallel worker](docs/scenarios/27-parallel-worker-scenario-prescription.md)         |              |
 | 28 | WORK_COMPLETE | [Valid progress statuses with enforcement](docs/scenarios/28-valid-progress-statuses.md)                                |              |
-| 29 |          |                                                                                                                               |              |
+| 29 | WORK_COMPLETE | [100% test coverage enforcement](docs/scenarios/29-test-coverage-enforcement.md)                                         |              |

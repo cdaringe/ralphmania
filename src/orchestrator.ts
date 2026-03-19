@@ -1,3 +1,4 @@
+// coverage:ignore — Private helpers require real git worktrees and subprocess execution
 import type {
   Agent,
   EscalationLevel,

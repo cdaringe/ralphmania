@@ -86,6 +86,20 @@ export const unrelated = "nothing here";
   }
 });
 
+Deno.test("loadPlugin loads plugin from file:// URL", async () => {
+  const path = await writeTempPlugin(`
+export const plugin = {
+  onPromptBuilt({ prompt }) { return prompt + " [url]"; },
+};
+`);
+  const fileUrl = `file://${path}`;
+  const result = await loadPlugin({ pluginPath: fileUrl, log: testLog });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(typeof result.value.onPromptBuilt, "function");
+  }
+});
+
 Deno.test("onConfigResolved can return custom specFile and progressFile", async () => {
   const path = await writeTempPlugin(`
 export const plugin = {

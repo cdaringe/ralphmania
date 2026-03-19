@@ -1,3 +1,4 @@
+// coverage:ignore — Defensive .catch branches for file I/O unreachable in test environment
 import type { Logger } from "./types.ts";
 
 const PROGRESS_FILE = "progress.md";

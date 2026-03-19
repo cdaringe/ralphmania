@@ -299,3 +299,248 @@ Deno.test("computeModelSelection claude without escalation level falls through t
     assertEquals(result.value.effort, undefined);
   }
 });
+
+// resolveModelSelection tests
+
+import {
+  readEscalationState,
+  resolveModelSelection,
+  writeEscalationState,
+} from "../src/model.ts";
+import type { Logger } from "../src/types.ts";
+import { ESCALATION_FILE } from "../src/constants.ts";
+
+const noopLog: Logger = () => {};
+
+const writeTempProgress = async (content: string): Promise<string> => {
+  const dir = await Deno.makeTempDir();
+  const path = `${dir}/progress.md`;
+  await Deno.writeTextFile(path, `<!-- END_DEMO -->\n${content}`);
+  return path;
+};
+
+// readEscalationState / writeEscalationState tests
+
+Deno.test("readEscalationState returns {} when file missing", async () => {
+  // Temporarily rename the escalation file if it exists
+  let existed = false;
+  try {
+    await Deno.rename(ESCALATION_FILE, ESCALATION_FILE + ".bak");
+    existed = true;
+  } catch { /* file doesn't exist */ }
+  try {
+    const result = await readEscalationState(noopLog);
+    assertEquals(result, {});
+  } finally {
+    if (existed) {
+      await Deno.rename(ESCALATION_FILE + ".bak", ESCALATION_FILE);
+    }
+  }
+});
+
+Deno.test("readEscalationState reads valid state", async () => {
+  const original = await Deno.readTextFile(ESCALATION_FILE).catch(() => null);
+  try {
+    await Deno.mkdir(".ralph", { recursive: true });
+    await Deno.writeTextFile(ESCALATION_FILE, '{"3":1}');
+    const result = await readEscalationState(noopLog);
+    assertEquals(result, { "3": 1 });
+  } finally {
+    if (original !== null) {
+      await Deno.writeTextFile(ESCALATION_FILE, original);
+    } else {
+      await Deno.remove(ESCALATION_FILE).catch(() => {});
+    }
+  }
+});
+
+Deno.test("writeEscalationState persists state", async () => {
+  const original = await Deno.readTextFile(ESCALATION_FILE).catch(() => null);
+  try {
+    await writeEscalationState({ "5": 1 }, noopLog);
+    const content = JSON.parse(await Deno.readTextFile(ESCALATION_FILE));
+    assertEquals(content, { "5": 1 });
+  } finally {
+    if (original !== null) {
+      await Deno.writeTextFile(ESCALATION_FILE, original);
+    } else {
+      await Deno.remove(ESCALATION_FILE).catch(() => {});
+    }
+  }
+});
+
+Deno.test("resolveModelSelection returns defaults for missing file", async () => {
+  const result = await resolveModelSelection({
+    agent: "claude",
+    log: noopLog,
+    progressFile: "/tmp/nonexistent-ralph-progress-test.md",
+  });
+  assertEquals(result.mode, "fast");
+});
+
+Deno.test("resolveModelSelection returns defaults for file without END_DEMO", async () => {
+  const dir = await Deno.makeTempDir();
+  const path = `${dir}/progress.md`;
+  await Deno.writeTextFile(path, "no sigil here");
+  const result = await resolveModelSelection({
+    agent: "claude",
+    log: noopLog,
+    progressFile: path,
+  });
+  assertEquals(result.mode, "fast");
+});
+
+Deno.test("resolveModelSelection claude resolves with rework scenarios", async () => {
+  const path = await writeTempProgress(
+    "| 1 | NEEDS_REWORK | fix |\n| 2 | VERIFIED | done |",
+  );
+  const result = await resolveModelSelection({
+    agent: "claude",
+    log: noopLog,
+    progressFile: path,
+    minLevel: 0,
+  });
+  assertEquals(result.targetScenario, 1);
+});
+
+Deno.test("resolveModelSelection claude verifier mode", async () => {
+  const path = await writeTempProgress(
+    "| 1 | WORK_COMPLETE | done |\n| 2 | VERIFIED | done |",
+  );
+  const result = await resolveModelSelection({
+    agent: "claude",
+    log: noopLog,
+    progressFile: path,
+    minLevel: 0,
+  });
+  assertEquals(result.model, "opus");
+});
+
+Deno.test("resolveModelSelection claude scopes to actionable scenario", async () => {
+  const path = await writeTempProgress(
+    "| 1 | VERIFIED | done |\n| 2 |          |      |",
+  );
+  const result = await resolveModelSelection({
+    agent: "claude",
+    log: noopLog,
+    progressFile: path,
+    minLevel: 0,
+  });
+  assertEquals(result.targetScenario, 2);
+});
+
+Deno.test("resolveModelSelection codex resolves with rework", async () => {
+  const path = await writeTempProgress("| 1 | NEEDS_REWORK | fix |");
+  const result = await resolveModelSelection({
+    agent: "codex",
+    log: noopLog,
+    progressFile: path,
+  });
+  assertEquals(result.mode, "general");
+});
+
+Deno.test("resolveModelSelection codex no rework uses fast", async () => {
+  const path = await writeTempProgress("| 1 | VERIFIED | done |");
+  const result = await resolveModelSelection({
+    agent: "codex",
+    log: noopLog,
+    progressFile: path,
+  });
+  assertEquals(result.mode, "fast");
+});
+
+Deno.test("resolveModelSelection codex above threshold uses strong", async () => {
+  const path = await writeTempProgress(
+    "| 1 | NEEDS_REWORK | fix |\n| 2 | NEEDS_REWORK | fix |",
+  );
+  const result = await resolveModelSelection({
+    agent: "codex",
+    log: noopLog,
+    progressFile: path,
+  });
+  assertEquals(result.mode, "strong");
+});
+
+Deno.test("resolveModelSelection claude with minLevel 1 escalates", async () => {
+  const path = await writeTempProgress(
+    "| 1 | NEEDS_REWORK | fix |\n| 2 | VERIFIED | done |",
+  );
+  const result = await resolveModelSelection({
+    agent: "claude",
+    log: noopLog,
+    progressFile: path,
+    minLevel: 1,
+  });
+  assertEquals(result.model, "opus");
+  assertEquals(result.mode, "strong");
+});
+
+Deno.test("resolveModelSelection claude logs status message for rework", async () => {
+  const path = await writeTempProgress("| 1 | NEEDS_REWORK | fix |");
+  const messages: string[] = [];
+  const log: Logger = (opts) => {
+    messages.push(opts.message);
+  };
+  await resolveModelSelection({
+    agent: "claude",
+    log,
+    progressFile: path,
+    minLevel: 0,
+  });
+  assertEquals(
+    messages.some((m) => m.includes("NEEDS_REWORK")),
+    true,
+  );
+});
+
+Deno.test("resolveModelSelection claude logs status for no rework", async () => {
+  const path = await writeTempProgress("| 1 |          |      |");
+  const messages: string[] = [];
+  const log: Logger = (opts) => {
+    messages.push(opts.message);
+  };
+  await resolveModelSelection({
+    agent: "claude",
+    log,
+    progressFile: path,
+    minLevel: 0,
+  });
+  assertEquals(
+    messages.some((m) => m.includes("implemented")),
+    true,
+  );
+});
+
+Deno.test("resolveModelSelection codex logs status for rework", async () => {
+  const path = await writeTempProgress("| 1 | NEEDS_REWORK | fix |");
+  const messages: string[] = [];
+  const log: Logger = (opts) => {
+    messages.push(opts.message);
+  };
+  await resolveModelSelection({
+    agent: "codex",
+    log,
+    progressFile: path,
+  });
+  assertEquals(
+    messages.some((m) => m.includes("NEEDS_REWORK")),
+    true,
+  );
+});
+
+Deno.test("resolveModelSelection codex logs status for no rework", async () => {
+  const path = await writeTempProgress("| 1 | VERIFIED | done |");
+  const messages: string[] = [];
+  const log: Logger = (opts) => {
+    messages.push(opts.message);
+  };
+  await resolveModelSelection({
+    agent: "codex",
+    log,
+    progressFile: path,
+  });
+  assertEquals(
+    messages.some((m) => m.includes("implemented")),
+    true,
+  );
+});

@@ -34,6 +34,44 @@ Deno.test("clearLoopCheckpoint removes file", async () => {
   assertEquals(result, undefined);
 });
 
+Deno.test("readLoopCheckpoint returns undefined for invalid step", async () => {
+  await Deno.mkdir(".ralph", { recursive: true });
+  await Deno.writeTextFile(
+    ".ralph/loop-state.json",
+    JSON.stringify({ iterationsUsed: 1, step: "bogus" }),
+  );
+  const result = await readLoopCheckpoint();
+  assertEquals(result, undefined);
+  await clearLoopCheckpoint();
+});
+
+Deno.test("readLoopCheckpoint omits non-string validationFailurePath", async () => {
+  await Deno.mkdir(".ralph", { recursive: true });
+  await Deno.writeTextFile(
+    ".ralph/loop-state.json",
+    JSON.stringify({
+      iterationsUsed: 2,
+      step: "agent",
+      validationFailurePath: 42,
+    }),
+  );
+  const result = await readLoopCheckpoint();
+  assertEquals(result, {
+    iterationsUsed: 2,
+    step: "agent",
+    validationFailurePath: undefined,
+  });
+  await clearLoopCheckpoint();
+});
+
+Deno.test("readLoopCheckpoint returns undefined for missing fields", async () => {
+  await Deno.mkdir(".ralph", { recursive: true });
+  await Deno.writeTextFile(".ralph/loop-state.json", JSON.stringify({ foo: 1 }));
+  const result = await readLoopCheckpoint();
+  assertEquals(result, undefined);
+  await clearLoopCheckpoint();
+});
+
 Deno.test("readLoopCheckpoint ignores malformed JSON", async () => {
   await Deno.mkdir(".ralph", { recursive: true });
   await Deno.writeTextFile(".ralph/loop-state.json", "not json");

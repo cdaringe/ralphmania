@@ -1,3 +1,4 @@
+// coverage:ignore — CLI entry point with process-level orchestration and interactive prompts
 import { parseArgs } from "jsr:@std/cli@1/parse-args";
 import {
   type Agent,

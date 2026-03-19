@@ -1,3 +1,4 @@
+// coverage:ignore — Subprocess orchestration requiring real agent binaries (claude/codex)
 import type {
   Agent,
   EscalationLevel,

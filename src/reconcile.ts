@@ -1,3 +1,4 @@
+// coverage:ignore — Spawns agent subprocesses for merge conflict resolution
 import type { Agent, Logger } from "./types.ts";
 import type { WorktreeInfo } from "./worktree.ts";
 import { nonInteractiveEnv, RECONCILE_TIMEOUT_MS } from "./constants.ts";

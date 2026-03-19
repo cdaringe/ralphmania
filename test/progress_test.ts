@@ -45,6 +45,44 @@ Deno.test("DEFAULT_FILE_PATHS has expected defaults", () => {
   assertEquals(DEFAULT_FILE_PATHS.progressFile, "progress.md");
 });
 
+Deno.test("ensureProgressFile creates 10 rows when spec file missing", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/nonexistent-spec.md`;
+  const progressFile = `${dir}/progress.md`;
+  await ensureProgressFile(noop, { specFile, progressFile });
+  const content = await Deno.readTextFile(progressFile);
+  assertStringIncludes(content, "| 10");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("ensureProgressFile sync no-ops when spec missing and progress exists", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/nonexistent.md`;
+  const progressFile = `${dir}/progress.md`;
+  await Deno.writeTextFile(progressFile, "<!-- END_DEMO -->\n| 1 | WIP | |\n");
+  const before = await Deno.readTextFile(progressFile);
+  await ensureProgressFile(noop, { specFile, progressFile });
+  const after = await Deno.readTextFile(progressFile);
+  assertEquals(before, after);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("ensureProgressFile sync no-ops when spec has equal rows", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/spec.md`;
+  const progressFile = `${dir}/progress.md`;
+  await Deno.writeTextFile(specFile, "| 1 | CLI | foo |\n");
+  await Deno.writeTextFile(
+    progressFile,
+    "<!-- END_DEMO -->\n| 1 | VERIFIED | done | |\n",
+  );
+  const before = await Deno.readTextFile(progressFile);
+  await ensureProgressFile(noop, { specFile, progressFile });
+  const after = await Deno.readTextFile(progressFile);
+  assertEquals(before, after);
+  await Deno.remove(dir, { recursive: true });
+});
+
 Deno.test("ensureProgressFile creates progress at custom path from custom specFile", async () => {
   const dir = await Deno.makeTempDir();
   const specFile = `${dir}/my-spec.md`;
@@ -62,6 +100,46 @@ Deno.test("ensureProgressFile creates progress at custom path from custom specFi
   assertStringIncludes(content, "| 1 ");
   assertStringIncludes(content, "| 2 ");
 
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("ensureProgressFile defaults to 10 rows when spec is empty", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/spec.md`;
+  const progressFile = `${dir}/progress.md`;
+  await Deno.writeTextFile(specFile, "no scenario table here");
+  await ensureProgressFile(noop, { specFile, progressFile });
+  const content = await Deno.readTextFile(progressFile);
+  assertStringIncludes(content, "| 10");
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("ensureProgressFile does not append when spec has fewer rows than progress", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/spec.md`;
+  const progressFile = `${dir}/progress.md`;
+  await Deno.writeTextFile(specFile, "| 1 | CLI | foo |\n");
+  await Deno.writeTextFile(
+    progressFile,
+    "<!-- END_DEMO -->\n# Progress\n| 1 | VERIFIED | done | |\n| 2 | WIP | wip | |\n",
+  );
+  await ensureProgressFile(noop, { specFile, progressFile });
+  const content = await Deno.readTextFile(progressFile);
+  // Should not have added row 3
+  assertEquals(content.includes("| 3 "), false);
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("ensureProgressFile sync skips when spec has no scenarios", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/spec.md`;
+  const progressFile = `${dir}/progress.md`;
+  await Deno.writeTextFile(specFile, "no table");
+  await Deno.writeTextFile(progressFile, "<!-- END_DEMO -->\n| 1 | WIP | |\n");
+  const before = await Deno.readTextFile(progressFile);
+  await ensureProgressFile(noop, { specFile, progressFile });
+  const after = await Deno.readTextFile(progressFile);
+  assertEquals(before, after);
   await Deno.remove(dir, { recursive: true });
 });
 
