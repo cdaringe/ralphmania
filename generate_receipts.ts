@@ -207,8 +207,8 @@ async function generateReceipt(scenario: ScenarioData): Promise<string> {
 
     <div class="section">
       <h2>📋 Requirement</h2>
-      <div class="requirement">
-        ${scenario.requirement.replace(/\n/g, "<br>")}
+      <div id="requirement" class="requirement markdown-content">
+${scenario.requirement}
       </div>
     </div>
 
@@ -249,7 +249,7 @@ ${scenario.evidence}
   <script>
     // Render markdown content
     const md = window.markdownit({
-      html: false,
+      html: true,
       highlight: function(str, lang) {
         if (lang && hljs.getLanguage(lang)) {
           try {
@@ -262,9 +262,11 @@ ${scenario.evidence}
       }
     });
 
+    const reqEl = document.getElementById('requirement');
     const implEl = document.getElementById('implementation');
     const evidenceEl = document.getElementById('evidence');
 
+    if (reqEl) reqEl.innerHTML = md.render(reqEl.textContent || '');
     if (implEl) implEl.innerHTML = md.render(implEl.textContent || '');
     if (evidenceEl) evidenceEl.innerHTML = md.render(evidenceEl.textContent || '');
   </script>
