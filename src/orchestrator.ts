@@ -314,9 +314,7 @@ export const runParallelLoop = async (
               iterate: deps.runIteration,
               specFile,
               progressFile,
-              ...(reworkSet.size > 0
-                ? { targetScenarioOverride: actionableScenarios[i] }
-                : {}),
+              targetScenarioOverride: actionableScenarios[i],
             }).then((iterationResult): WorkerResult => ({
               workerIndex: i,
               iterationResult,

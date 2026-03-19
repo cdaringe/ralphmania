@@ -607,9 +607,9 @@ Deno.test("runParallelLoop resumes at validate step — skips agent work", async
   assertEquals(agentRuns, 1);
 });
 
-Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", async () => {
+Deno.test("runParallelLoop always prescribes targetScenarioOverride to workers", async () => {
   const content = "| 1 |          |      |";
-  let hasOverride = true;
+  let override: number | undefined = undefined;
 
   await runParallelLoop({
     agent: "claude",
@@ -623,11 +623,46 @@ Deno.test("runParallelLoop does not pass targetScenarioOverride to workers", asy
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
       runIteration: (opts) => {
-        hasOverride = "targetScenarioOverride" in opts;
+        override = opts.targetScenarioOverride;
         return Promise.resolve({ status: "continue" });
       },
     }),
   });
 
-  assertEquals(hasOverride, false);
+  // Worker 0 must be prescribed scenario 1 (the only actionable one)
+  assertEquals(override, 1);
+});
+
+Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", async () => {
+  const content = [
+    "| 1 |          |      |",
+    "| 2 |          |      |",
+    "| 3 |          |      |",
+  ].join("\n");
+  const overrides: number[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 3,
+    expectedScenarioCount: 3,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      createWorktree: ({ workerIndex }) =>
+        Promise.resolve(ok(stubWorktree(workerIndex))),
+      runIteration: (opts) => {
+        if (opts.targetScenarioOverride !== undefined) {
+          overrides.push(opts.targetScenarioOverride);
+        }
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  // Each worker gets a distinct scenario; no duplicates
+  assertEquals(overrides.sort((a, b) => a - b), [1, 2, 3]);
 });
