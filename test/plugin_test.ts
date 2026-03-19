@@ -85,3 +85,26 @@ export const unrelated = "nothing here";
     assertEquals(result.value.onPromptBuilt, undefined);
   }
 });
+
+Deno.test("onConfigResolved can return custom specFile and progressFile", async () => {
+  const path = await writeTempPlugin(`
+export const plugin = {
+  onConfigResolved({ agent, iterations }) {
+    return { agent, iterations, specFile: "custom/spec.md", progressFile: "custom/progress.md" };
+  },
+};
+`);
+  const result = await loadPlugin({ pluginPath: path, log: testLog });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const resolved = await result.value.onConfigResolved?.({
+      agent: "claude",
+      iterations: 5,
+      log: testLog,
+    });
+    assertEquals(resolved?.specFile, "custom/spec.md");
+    assertEquals(resolved?.progressFile, "custom/progress.md");
+    assertEquals(resolved?.agent, "claude");
+    assertEquals(resolved?.iterations, 5);
+  }
+});

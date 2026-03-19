@@ -307,10 +307,11 @@ const resolveCodexSelection = (
 };
 
 export const resolveModelSelection = async (
-  { agent, log, minLevel }: {
+  { agent, log, minLevel, progressFile = "./progress.md" }: {
     agent: Agent;
     log: Logger;
     minLevel?: EscalationLevel;
+    progressFile?: string;
   },
 ): Promise<ModelSelection> => {
   const defaultMode = "fast" as const;
@@ -322,7 +323,7 @@ export const resolveModelSelection = async (
     actionableScenarios: [],
   };
 
-  const rawContent = await Deno.readTextFile("./progress.md").catch(() => "");
+  const rawContent = await Deno.readTextFile(progressFile).catch(() => "");
   const content = rawContent.split("END_DEMO")[1];
 
   if (!content) {

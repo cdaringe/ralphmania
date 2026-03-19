@@ -25,23 +25,39 @@ ${rows}
 `;
 };
 
-const writeProgressTemplate = async (log: Logger): Promise<void> => {
-  const specContent = await Deno.readTextFile(SPEC_FILE).catch(() => "");
+export type FilePaths = {
+  specFile: string;
+  progressFile: string;
+};
+
+export const DEFAULT_FILE_PATHS: FilePaths = {
+  specFile: SPEC_FILE,
+  progressFile: PROGRESS_FILE,
+};
+
+const writeProgressTemplate = async (
+  log: Logger,
+  paths: FilePaths,
+): Promise<void> => {
+  const specContent = await Deno.readTextFile(paths.specFile).catch(() => "");
   const count = parseScenarioCount(specContent) || 10;
-  await Deno.writeTextFile(PROGRESS_FILE, generateProgressTemplate(count));
+  await Deno.writeTextFile(paths.progressFile, generateProgressTemplate(count));
   log({
     tags: ["info", "progress"],
     message:
-      `Created ${PROGRESS_FILE} with ${count} scenario rows — fill it in as you implement scenarios.`,
+      `Created ${paths.progressFile} with ${count} scenario rows — fill it in as you implement scenarios.`,
   });
 };
 
-const syncProgressWithSpec = async (log: Logger): Promise<void> => {
-  const specContent = await Deno.readTextFile(SPEC_FILE).catch(() => "");
+const syncProgressWithSpec = async (
+  log: Logger,
+  paths: FilePaths,
+): Promise<void> => {
+  const specContent = await Deno.readTextFile(paths.specFile).catch(() => "");
   const specCount = parseScenarioCount(specContent);
   if (specCount === 0) return;
 
-  const progressContent = await Deno.readTextFile(PROGRESS_FILE).catch(
+  const progressContent = await Deno.readTextFile(paths.progressFile).catch(
     () => "",
   );
   const progressCount = parseScenarioCount(progressContent);
@@ -58,27 +74,30 @@ const syncProgressWithSpec = async (log: Logger): Promise<void> => {
     },
   ).join("\n");
   await Deno.writeTextFile(
-    PROGRESS_FILE,
+    paths.progressFile,
     progressContent.trimEnd() + "\n" + newRows + "\n",
   );
   log({
     tags: ["info", "progress"],
     message: `Appended ${
       specCount - progressCount
-    } new scenario(s) to ${PROGRESS_FILE}`,
+    } new scenario(s) to ${paths.progressFile}`,
   });
 };
 
 /**
- * Ensure `progress.md` exists and covers all specification scenarios.
- * On first boot (file absent), generate from specification.md.
+ * Ensure `progress.md` (or a custom path) exists and covers all specification
+ * scenarios. On first boot (file absent), generate from `specification.md`.
  * When the spec adds new scenarios, append empty rows.
  */
-export const ensureProgressFile = async (log: Logger): Promise<void> => {
+export const ensureProgressFile = async (
+  log: Logger,
+  paths: FilePaths = DEFAULT_FILE_PATHS,
+): Promise<void> => {
   try {
-    await Deno.stat(PROGRESS_FILE);
-    await syncProgressWithSpec(log);
+    await Deno.stat(paths.progressFile);
+    await syncProgressWithSpec(log, paths);
   } catch {
-    await writeProgressTemplate(log);
+    await writeProgressTemplate(log, paths);
   }
 };

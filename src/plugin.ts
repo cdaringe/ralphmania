@@ -34,14 +34,28 @@ export type HookContext = {
  * ```
  */
 export type Plugin = {
-  /** Override the resolved agent and iteration count before the loop starts. */
+  /**
+   * Override the resolved agent, iteration count, and file paths before the
+   * loop starts. Return `specFile` and/or `progressFile` to redirect
+   * ralphmania to read `specification.md` / `progress.md` from custom paths.
+   */
   onConfigResolved?: (opts: {
     agent: Agent;
     iterations: number;
     log: Logger;
   }) =>
-    | { agent: Agent; iterations: number }
-    | Promise<{ agent: Agent; iterations: number }>;
+    | {
+      agent: Agent;
+      iterations: number;
+      specFile?: string;
+      progressFile?: string;
+    }
+    | Promise<{
+      agent: Agent;
+      iterations: number;
+      specFile?: string;
+      progressFile?: string;
+    }>;
 
   /** Override the model selection for the current iteration. */
   onModelSelected?: (opts: {

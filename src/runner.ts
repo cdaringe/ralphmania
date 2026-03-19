@@ -117,6 +117,8 @@ export const runIteration = async (
     level,
     cwd,
     targetScenarioOverride,
+    specFile,
+    progressFile,
   }: {
     iterationNum: number;
     agent: Agent;
@@ -127,6 +129,8 @@ export const runIteration = async (
     level: EscalationLevel | undefined;
     cwd?: string;
     targetScenarioOverride?: number;
+    specFile?: string;
+    progressFile?: string;
   },
 ): Promise<IterationResult> => {
   const ctx: HookContext = { agent, log, iterationNum };
@@ -143,6 +147,7 @@ export const runIteration = async (
       agent,
       log,
       minLevel: level,
+      progressFile,
     });
   const selection = plugin.onModelSelected
     ? await plugin.onModelSelected({ selection: rawSelection, ctx })
@@ -152,6 +157,8 @@ export const runIteration = async (
     targetScenario: selection.targetScenario,
     validationFailurePath,
     actionableScenarios: selection.actionableScenarios,
+    specFile,
+    progressFile,
   });
   const prompt = plugin.onPromptBuilt
     ? await plugin.onPromptBuilt({ prompt: rawPrompt, selection, ctx })

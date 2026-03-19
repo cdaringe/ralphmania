@@ -54,6 +54,8 @@ export type ParallelDeps = {
       level: EscalationLevel | undefined;
       cwd?: string;
       targetScenarioOverride?: number;
+      specFile?: string;
+      progressFile?: string;
     },
   ) => Promise<IterationResult>;
   runValidation: (
@@ -107,6 +109,8 @@ const runWorker = async (
     validationFailurePath,
     iterate,
     targetScenarioOverride,
+    specFile,
+    progressFile,
   }: {
     agent: Agent;
     workerIndex: number;
@@ -119,6 +123,8 @@ const runWorker = async (
     validationFailurePath: string | undefined;
     iterate: ParallelDeps["runIteration"];
     targetScenarioOverride?: number;
+    specFile?: string;
+    progressFile?: string;
   },
 ): Promise<IterationResult> => {
   const wLog = prefixLog(log, workerIndex);
@@ -131,12 +137,16 @@ const runWorker = async (
     plugin,
     level,
     cwd: worktreePath,
+    specFile,
+    progressFile,
     ...(targetScenarioOverride !== undefined ? { targetScenarioOverride } : {}),
   });
 };
 
-const readProgressContent = async (): Promise<string> => {
-  const raw = await Deno.readTextFile("./progress.md").catch(() => "");
+const readProgressContent = async (
+  progressFile = "./progress.md",
+): Promise<string> => {
+  const raw = await Deno.readTextFile(progressFile).catch(() => "");
   return raw.split("END_DEMO")[1] ?? "";
 };
 
@@ -165,6 +175,8 @@ export const runParallelLoop = async (
     log,
     plugin,
     level,
+    specFile,
+    progressFile,
     deps: depsOverride,
   }: {
     agent: Agent;
@@ -175,10 +187,16 @@ export const runParallelLoop = async (
     log: Logger;
     plugin: Plugin;
     level: EscalationLevel | undefined;
+    specFile?: string;
+    progressFile?: string;
     deps?: Partial<ParallelDeps>;
   },
 ): Promise<number> => {
-  const deps = { ...defaultDeps, ...depsOverride };
+  const deps = {
+    ...defaultDeps,
+    readProgress: () => readProgressContent(progressFile),
+    ...depsOverride,
+  };
 
   // Restore loop state from a prior run, if available.
   const checkpoint = await deps.readCheckpoint();
@@ -294,6 +312,8 @@ export const runParallelLoop = async (
               worktreePath: wt.path,
               validationFailurePath,
               iterate: deps.runIteration,
+              specFile,
+              progressFile,
               ...(reworkSet.size > 0
                 ? { targetScenarioOverride: actionableScenarios[i] }
                 : {}),

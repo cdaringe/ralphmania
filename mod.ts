@@ -42,7 +42,9 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel, isAllVerified } from "./src/model.ts";
-import { parseScenarioCount, SPEC_FILE } from "./src/progress.ts";
+import { DEFAULT_FILE_PATHS, parseScenarioCount } from "./src/progress.ts";
+import type { FilePaths } from "./src/progress.ts";
+export type { FilePaths } from "./src/progress.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -119,7 +121,7 @@ const main = async (): Promise<number> => {
   }
   const plugin = pluginResult.value;
 
-  const { agent, iterations, level, parallel } = plugin.onConfigResolved
+  const configResolved = plugin.onConfigResolved
     ? {
       ...parsed.value,
       ...await plugin.onConfigResolved({
@@ -129,6 +131,14 @@ const main = async (): Promise<number> => {
       }),
     }
     : parsed.value;
+
+  const { agent, iterations, level, parallel } = configResolved;
+  const filePaths: FilePaths = {
+    specFile: (configResolved as { specFile?: string }).specFile ??
+      DEFAULT_FILE_PATHS.specFile,
+    progressFile: (configResolved as { progressFile?: string }).progressFile ??
+      DEFAULT_FILE_PATHS.progressFile,
+  };
 
   printBanner({ agent, iterations, level, parallel });
 
@@ -144,7 +154,7 @@ const main = async (): Promise<number> => {
   };
   Deno.addSignalListener("SIGINT", onSigint);
 
-  await ensureProgressFile(log);
+  await ensureProgressFile(log, filePaths);
 
   const hookResult = await ensureValidationHook(log);
   if (!hookResult.ok) {
@@ -152,7 +162,7 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  const specContent = await Deno.readTextFile(SPEC_FILE).catch(
+  const specContent = await Deno.readTextFile(filePaths.specFile).catch(
     () => "",
   );
   const expectedScenarioCount = parseScenarioCount(specContent);
@@ -166,11 +176,15 @@ const main = async (): Promise<number> => {
     log,
     plugin,
     level,
+    specFile: filePaths.specFile,
+    progressFile: filePaths.progressFile,
   });
 
   if (iterationsUsed === 130) return 130;
 
-  const finalContent = await Deno.readTextFile("./progress.md").catch(() => "");
+  const finalContent = await Deno.readTextFile(filePaths.progressFile).catch(
+    () => "",
+  );
   const finalSection = finalContent.split("END_DEMO")[1] ?? "";
   const allDone = isAllVerified(finalSection, expectedScenarioCount);
 

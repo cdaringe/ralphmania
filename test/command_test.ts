@@ -86,6 +86,52 @@ Deno.test("buildCommandSpec claude", () => {
   assertStringIncludes(spec.args.join(" "), "test prompt");
 });
 
+Deno.test("buildPrompt uses custom specFile in prompt references", () => {
+  const prompt = buildPrompt({
+    targetScenario: undefined,
+    validationFailurePath: undefined,
+    actionableScenarios: [],
+    specFile: "docs/my-spec.md",
+  });
+  assertStringIncludes(prompt, "@docs/my-spec.md");
+  assertEquals(prompt.includes("@specification.md"), false);
+});
+
+Deno.test("buildPrompt uses custom progressFile in prompt references", () => {
+  const prompt = buildPrompt({
+    targetScenario: undefined,
+    validationFailurePath: undefined,
+    actionableScenarios: [],
+    progressFile: "docs/my-progress.md",
+  });
+  assertStringIncludes(prompt, "@docs/my-progress.md");
+  assertEquals(prompt.includes("@progress.md"), false);
+});
+
+Deno.test("buildPrompt uses both custom specFile and progressFile", () => {
+  const prompt = buildPrompt({
+    targetScenario: undefined,
+    validationFailurePath: undefined,
+    actionableScenarios: [],
+    specFile: "custom/spec.md",
+    progressFile: "custom/progress.md",
+  });
+  assertStringIncludes(prompt, "@custom/spec.md");
+  assertStringIncludes(prompt, "@custom/progress.md");
+  assertEquals(prompt.includes("@specification.md"), false);
+  assertEquals(prompt.includes("@progress.md"), false);
+});
+
+Deno.test("buildPrompt keeps defaults when no custom paths given", () => {
+  const prompt = buildPrompt({
+    targetScenario: undefined,
+    validationFailurePath: undefined,
+    actionableScenarios: [],
+  });
+  assertStringIncludes(prompt, "@specification.md");
+  assertStringIncludes(prompt, "@progress.md");
+});
+
 Deno.test("buildCommandSpec codex", () => {
   const spec = buildCommandSpec({
     agent: "codex",

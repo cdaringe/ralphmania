@@ -1,5 +1,12 @@
-import { assertEquals } from "jsr:@std/assert";
-import { parseScenarioCount } from "../src/progress.ts";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import {
+  DEFAULT_FILE_PATHS,
+  ensureProgressFile,
+  parseScenarioCount,
+} from "../src/progress.ts";
+import type { Logger } from "../src/types.ts";
+
+const noop: Logger = () => {};
 
 Deno.test("parseScenarioCount counts data rows in scenario table", () => {
   const content = [
@@ -31,4 +38,52 @@ Deno.test("parseScenarioCount handles multi-digit scenario numbers", () => {
     "| 20 | UX  | desc |",
   ].join("\n");
   assertEquals(parseScenarioCount(content), 3);
+});
+
+Deno.test("DEFAULT_FILE_PATHS has expected defaults", () => {
+  assertEquals(DEFAULT_FILE_PATHS.specFile, "specification.md");
+  assertEquals(DEFAULT_FILE_PATHS.progressFile, "progress.md");
+});
+
+Deno.test("ensureProgressFile creates progress at custom path from custom specFile", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/my-spec.md`;
+  const progressFile = `${dir}/my-progress.md`;
+
+  // Write a minimal spec with 2 scenarios
+  await Deno.writeTextFile(
+    specFile,
+    "| 1 | CLI | foo |\n| 2 | UX | bar |\n",
+  );
+
+  await ensureProgressFile(noop, { specFile, progressFile });
+
+  const content = await Deno.readTextFile(progressFile);
+  assertStringIncludes(content, "| 1 ");
+  assertStringIncludes(content, "| 2 ");
+
+  await Deno.remove(dir, { recursive: true });
+});
+
+Deno.test("ensureProgressFile appends new rows to custom progress path", async () => {
+  const dir = await Deno.makeTempDir();
+  const specFile = `${dir}/spec.md`;
+  const progressFile = `${dir}/progress.md`;
+
+  await Deno.writeTextFile(
+    specFile,
+    "| 1 | CLI | foo |\n| 2 | UX | bar |\n",
+  );
+  // Existing progress with only 1 row
+  await Deno.writeTextFile(
+    progressFile,
+    "<!-- END_DEMO -->\n# Progress\n| 1 | VERIFIED | done | |\n",
+  );
+
+  await ensureProgressFile(noop, { specFile, progressFile });
+
+  const content = await Deno.readTextFile(progressFile);
+  assertStringIncludes(content, "| 2 ");
+
+  await Deno.remove(dir, { recursive: true });
 });

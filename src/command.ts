@@ -2,12 +2,26 @@ import type { Agent, CommandSpec } from "./types.ts";
 import { BASE_PROMPT } from "./constants.ts";
 
 export const buildPrompt = (
-  { targetScenario, validationFailurePath, actionableScenarios }: {
+  {
+    targetScenario,
+    validationFailurePath,
+    actionableScenarios,
+    specFile,
+    progressFile,
+  }: {
     targetScenario: number | undefined;
     validationFailurePath: string | undefined;
     actionableScenarios: readonly number[];
+    specFile?: string;
+    progressFile?: string;
   },
 ): string => {
+  const prompt = (specFile || progressFile)
+    ? BASE_PROMPT
+      .replaceAll("@specification.md", `@${specFile ?? "specification.md"}`)
+      .replaceAll("@progress.md", `@${progressFile ?? "progress.md"}`)
+    : BASE_PROMPT;
+
   const actionableInfo = actionableScenarios.length > 0
     ? `\n\nActionable scenarios (not yet COMPLETE, VERIFIED, or OBSOLETE): ${
       actionableScenarios.join(", ")
@@ -15,8 +29,8 @@ export const buildPrompt = (
     : "";
 
   const base = targetScenario === undefined
-    ? `${BASE_PROMPT}${actionableInfo}`
-    : `${BASE_PROMPT}${actionableInfo}
+    ? `${prompt}${actionableInfo}`
+    : `${prompt}${actionableInfo}
 
 ACTUALLY:
 - You must work ONLY on scenario ${targetScenario}.
