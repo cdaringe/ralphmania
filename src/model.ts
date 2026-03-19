@@ -40,7 +40,9 @@ export const detectScenarioFromProgress = (
     .find((line) => /^\|\s*\d+\s*\|\s*NEEDS_REWORK\s*\|/.test(line));
   if (!reworkLine) return ok(undefined);
   const scenario = parseInt(reworkLine.match(/^\|\s*(\d+)/)?.[1] ?? "", 10);
-  if (isNaN(scenario)) return err(`Failed to parse scenario number from line: ${reworkLine}`);
+  if (isNaN(scenario)) {
+    return err(`Failed to parse scenario number from line: ${reworkLine}`);
+  }
   return ok(scenario);
 };
 

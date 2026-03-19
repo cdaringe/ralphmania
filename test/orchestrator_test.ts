@@ -653,7 +653,10 @@ Deno.test("runParallelLoop logs error for invalid progress statuses", async () =
     }),
   });
 
-  assertEquals(errors.some((e) => e.includes('invalid status "COMPLETE"')), true);
+  assertEquals(
+    errors.some((e) => e.includes('invalid status "COMPLETE"')),
+    true,
+  );
 });
 
 Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", async () => {

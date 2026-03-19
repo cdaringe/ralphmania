@@ -66,7 +66,10 @@ Deno.test("readLoopCheckpoint omits non-string validationFailurePath", async () 
 
 Deno.test("readLoopCheckpoint returns undefined for missing fields", async () => {
   await Deno.mkdir(".ralph", { recursive: true });
-  await Deno.writeTextFile(".ralph/loop-state.json", JSON.stringify({ foo: 1 }));
+  await Deno.writeTextFile(
+    ".ralph/loop-state.json",
+    JSON.stringify({ foo: 1 }),
+  );
   const result = await readLoopCheckpoint();
   assertEquals(result, undefined);
   await clearLoopCheckpoint();
