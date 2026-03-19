@@ -168,7 +168,8 @@ const checkVideoExists = (num: number): boolean => {
  * Extract test file references from implementation section
  */
 const extractTestFiles = (implementation: string): string[] => {
-  const files = [...implementation.matchAll(/(?:test|src)\/[\w-]+\.ts/g)]
+  const impl = implementation || "";
+  const files = [...impl.matchAll(/(?:test|src)\/[\w-]+\.ts/g)]
     .map((m) => m[0])
     .filter((f) => f.startsWith("test/"));
 
