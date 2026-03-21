@@ -33,4 +33,4 @@
 | 27 | VERIFIED | [Parent prescribes distinct scenario per parallel worker](docs/scenarios/27-parallel-worker-scenario-prescription.md)         |              |
 | 28 | VERIFIED | [Valid progress statuses with enforcement](docs/scenarios/28-valid-progress-statuses.md)                                      |              |
 | 29 | VERIFIED | [100% test coverage enforcement](docs/scenarios/29-test-coverage-enforcement.md)                                              |              |
-| 30 | WORK_COMPLETE | [Strict Deno lint enforcement as quality gate](docs/scenarios/30-lint-enforcement.md)                                    |              |
+| 30 | VERIFIED | [Strict Deno lint enforcement as quality gate](docs/scenarios/30-lint-enforcement.md)                                         |              |
