@@ -7,5 +7,6 @@ set -euo pipefail
 # Exit 0 on success, non-zero on failure.
 # stdout/stderr will be captured and provided to the agent on failure.
 deno fmt
+deno lint
 deno run check
 deno run -A test
