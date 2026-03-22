@@ -42,19 +42,19 @@ failure context back to the agent loop (scenario 7).
 
 Four tests verify the complete enforcement chain:
 
-| Test | Assertion |
-|------|-----------|
-| `deno.json has lint rules configured` | `lint.rules.tags` and `lint.rules.include` exist |
+| Test                                             | Assertion                                                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `deno.json has lint rules configured`            | `lint.rules.tags` and `lint.rules.include` exist                                                   |
 | `deno.json lint rules include strict type rules` | `explicit-function-return-type`, `explicit-module-boundary-types`, `no-non-null-assertion` present |
-| `deno lint passes with no violations` | `deno lint` subprocess exits with code 0 |
-| `specification.validate.sh includes deno lint` | script text contains `deno lint` |
+| `deno lint passes with no violations`            | `deno lint` subprocess exits with code 0                                                           |
+| `specification.validate.sh includes deno lint`   | script text contains `deno lint`                                                                   |
 
 All four tests pass (`ok | 4 passed | 0 failed`).
 
 ## Evidence
 
-- `deno.json` lines 6–30: `lint.rules` block with `tags: ["recommended"]` and
-  15 additional strict rules.
+- `deno.json` lines 6–30: `lint.rules` block with `tags: ["recommended"]` and 15
+  additional strict rules.
 - `specification.validate.sh` line 10: `deno lint` invocation.
 - `test/lint_test.ts`: four dedicated lint-enforcement tests.
 - Running `deno lint` against all 33 project files: `Checked 33 files` (no

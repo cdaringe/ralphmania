@@ -21,7 +21,8 @@ graph TD
     subgraph MainLoop ["Main Loop"]
         PLoop[runParallelLoop] --> ReadProgress[Read progress.md]
         ReadProgress --> FindActionable[Find Actionable Scenarios]
-        FindActionable --> SpawnWorkers
+        FindActionable --> SelectModels[Select Models]
+        SelectModels --> SpawnWorkers
     end
 
     subgraph SpawnWorkers ["Parallel Workers (parallel.ts)"]
@@ -29,9 +30,10 @@ graph TD
         CreateWT[Create Git Worktrees] --> W1[Worker 0]
         CreateWT --> W2[Worker 1]
         CreateWT --> WN[Worker N...]
-        W1 --> Merge[Merge Branches]
-        W2 --> Merge
-        WN --> Merge
+        W1 --> MQ[Merge Queue]
+        W2 --> MQ
+        WN --> MQ
+        MQ --> Merge[Merge Next Branch]
     end
 
     subgraph WorkerDetail ["Single Worker (runner.ts)"]
@@ -56,9 +58,11 @@ graph TD
         CaptureLog --> VResult{Passed?}
     end
 
-    VResult -->|yes| CheckDone{All VERIFIED?}
+    VResult -->|yes| QueueCheck{Merge queue empty?}
     VResult -->|no| FeedBack[Feed failure to next iteration]
     FeedBack --> ReadProgress
+    QueueCheck -->|no| MQ
+    QueueCheck -->|yes| CheckDone{All VERIFIED?}
     CheckDone -->|no| ReadProgress
     CheckDone -->|yes| Receipts[Generate Receipts]
     Receipts --> Exit([Exit 0])
@@ -86,15 +90,22 @@ sequenceDiagram
     participant Main as main branch
     participant WT as Git Worktree
     participant Agent as AI Agent
+    participant MQ as Merge Queue
     participant Reconciler as Reconcile Agent
 
     Main->>WT: Create worktree (.ralph/worktrees/worker-N/)
     WT->>Agent: Run iteration (scoped to scenario)
     Agent->>WT: Commit changes
-    WT->>Main: git merge --no-edit
+    WT->>MQ: Enqueue worktree (on-disk)
+    Note over MQ: Workers enqueue as they finish (any order)
+    MQ->>Main: Dequeue & git merge --no-edit
     alt Merge conflict
         Main->>Reconciler: Spawn reconciliation agent
         Reconciler->>Main: Resolve conflicts & commit
+    end
+    Main->>Main: Validate
+    alt Queue non-empty
+        Main->>MQ: Dequeue next
     end
     Main->>Main: Cleanup worktree + branch
 ```
@@ -178,4 +189,6 @@ UNIMPLEMENTED ──→ COMPLETE ──→ VERIFIED
        │              ▼
        └──── NEEDS_REWORK
               (user marks)
+
+Any non-VERIFIED status ──→ OBSOLETE (user marks in progress.md, terminal)
 ```

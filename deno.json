@@ -36,6 +36,6 @@
     "test:coverage:enforce": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --clean --coverage=coverage/ && bash -c 'deno coverage coverage/ 2>&1 | deno run --allow-read scripts/check-coverage.ts'",
     "fmt": "deno fmt",
     "check": "deno check mod.ts",
-    "ralph": "deno run -A mod.ts --iterations 15 --agent claude"
+    "ralph": "deno run -A mod.ts --iterations 15 --agent claude --plugin plugin.ralph.ts"
   }
 }
