@@ -23,6 +23,7 @@ import {
   findActionableScenarios,
   findReworkScenarios,
   isAllVerified,
+  parseProgressRows,
   validateProgressStatuses,
 } from "./model.ts";
 import type { Plugin } from "./plugin.ts";
@@ -276,6 +277,14 @@ export const runParallelLoop = async (
       );
 
       if (uniqueActionable.length === 0) {
+        const progressRowCount = parseProgressRows(content).length;
+        if (progressRowCount < expectedScenarioCount) {
+          log({
+            tags: ["error", "orchestrator"],
+            message:
+              `progress.md has ${progressRowCount} rows but spec expects ${expectedScenarioCount} — scenarios are missing from progress.md`,
+          });
+        }
         log({
           tags: ["info", "orchestrator"],
           message: green(

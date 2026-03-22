@@ -137,11 +137,17 @@ export const findActionableScenarios = (content: string): number[] => {
 /** Check whether every scenario row present in the content is VERIFIED or OBSOLETE. */
 export const isAllVerified = (
   content: string,
-  _expectedCount?: number,
+  expectedCount?: number,
 ): boolean => {
   const rows = parseProgressRows(content);
-  return rows.length > 0 &&
-    rows.every((r) => r.status === "VERIFIED" || r.status === "OBSOLETE");
+  const doneStatuses = new Set(["VERIFIED", "OBSOLETE"]);
+  const allDone = rows.length > 0 &&
+    rows.every((r) => doneStatuses.has(r.status));
+  if (!allDone) return false;
+  if (expectedCount !== undefined && rows.length !== expectedCount) {
+    return false;
+  }
+  return true;
 };
 
 /** Read persisted escalation state, defaulting to `{}` if missing. */
