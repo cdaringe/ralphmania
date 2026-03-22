@@ -6,7 +6,7 @@ set -euo pipefail
 # Fill in your validation logic below.
 # Exit 0 on success, non-zero on failure.
 # stdout/stderr will be captured and provided to the agent on failure.
-deno fmt
+deno fmt --check
 deno lint
 deno run check
 deno run -A test

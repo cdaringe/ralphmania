@@ -29,7 +29,7 @@
 `deno lint` is called before type-check and tests:
 
 ```bash
-deno fmt
+deno fmt --check
 deno lint        # ← enforces lint rules on every CI run
 deno run check
 deno run -A test
