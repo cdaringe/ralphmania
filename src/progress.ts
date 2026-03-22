@@ -1,12 +1,13 @@
 // coverage:ignore — Defensive .catch branches for file I/O unreachable in test environment
 import type { Logger } from "./types.ts";
+import { parseProgressRows } from "./parsers/progress-rows.ts";
 
 const PROGRESS_FILE = "progress.md";
 export const SPEC_FILE = "specification.md";
 
 /** Parse scenario count by counting data rows in the scenario table. */
 export const parseScenarioCount = (specContent: string): number =>
-  specContent.split("\n").filter((line) => /^\|\s*\d+\s*\|/.test(line)).length;
+  parseProgressRows(specContent).length;
 
 const generateProgressTemplate = (scenarioCount: number): string => {
   const rows = Array.from(

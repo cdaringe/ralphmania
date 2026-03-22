@@ -8,7 +8,7 @@ import type {
   ModelSelection,
   Result,
 } from "./types.ts";
-import { err, ok } from "./types.ts";
+import { ok } from "./types.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -17,6 +17,9 @@ import {
   REWORK_THRESHOLD,
   VALID_STATUSES,
 } from "./constants.ts";
+export { parseProgressRows } from "./parsers/progress-rows.ts";
+export type { ProgressRow } from "./parsers/progress-rows.ts";
+import { parseProgressRows } from "./parsers/progress-rows.ts";
 
 export const getModel = (
   { agent, mode }: { agent: Agent; mode: "fast" | "general" | "strong" },
@@ -36,21 +39,17 @@ export const getModel = (
 export const detectScenarioFromProgress = (
   content: string,
 ): Result<number | undefined, string> => {
-  const reworkLine = content.split("\n")
-    .find((line) => /^\|\s*\d+\s*\|\s*NEEDS_REWORK\s*\|/.test(line));
-  if (!reworkLine) return ok(undefined);
-  const scenario = parseInt(reworkLine.match(/^\|\s*(\d+)/)?.[1] ?? "", 10);
-  if (isNaN(scenario)) {
-    return err(`Failed to parse scenario number from line: ${reworkLine}`);
-  }
-  return ok(scenario);
+  const rework = parseProgressRows(content).find((r) =>
+    r.status === "NEEDS_REWORK"
+  );
+  return ok(rework?.scenario);
 };
 
 /** Find ALL scenario numbers with NEEDS_REWORK status. */
-export const findReworkScenarios = (content: string): number[] => {
-  const matches = content.matchAll(/^\|\s*(\d+)\s*\|\s*NEEDS_REWORK\s*\|/gm);
-  return [...matches].map((m) => parseInt(m[1], 10)).filter((n) => !isNaN(n));
-};
+export const findReworkScenarios = (content: string): number[] =>
+  parseProgressRows(content)
+    .filter((r) => r.status === "NEEDS_REWORK")
+    .map((r) => r.scenario);
 
 /**
  * Pure escalation-state transition.
@@ -100,7 +99,9 @@ export const computeModelSelection = (
     });
   }
 
-  const reworkCount = (content.match(/NEEDS_REWORK/g) ?? []).length;
+  const reworkCount =
+    parseProgressRows(content).filter((r) => r.status === "NEEDS_REWORK")
+      .length;
   const mode = reworkCount > REWORK_THRESHOLD
     ? "strong" as const
     : reworkCount > 0
@@ -117,30 +118,20 @@ export const computeModelSelection = (
 
 /** Count rows with WORK_COMPLETE or VERIFIED status in progress.md content. */
 export const parseImplementedCount = (content: string): number =>
-  (content.match(/^\|\s*\d+\s*\|\s*(WORK_COMPLETE|VERIFIED)\s*\|/gm) ?? [])
-    .length;
+  parseProgressRows(content).filter((r) =>
+    r.status === "WORK_COMPLETE" || r.status === "VERIFIED"
+  ).length;
 
 /** Count total non-OBSOLETE scenario rows in progress.md content. */
-export const parseTotalCount = (content: string): number => {
-  const total = (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length;
-  const obsolete = (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? [])
-    .length;
-  return total - obsolete;
-};
+export const parseTotalCount = (content: string): number =>
+  parseProgressRows(content).filter((r) => r.status !== "OBSOLETE").length;
 
 /** Find scenario numbers that are not WORK_COMPLETE, VERIFIED, or OBSOLETE (i.e. actionable). */
 export const findActionableScenarios = (content: string): number[] => {
-  const total = [...content.matchAll(/^\|\s*(\d+)\s*\|/gm)].map((m) =>
-    parseInt(m[1], 10)
-  );
-  const done = new Set(
-    [
-      ...content.matchAll(
-        /^\|\s*(\d+)\s*\|\s*(WORK_COMPLETE|VERIFIED|OBSOLETE)\s*\|/gm,
-      ),
-    ].map((m) => parseInt(m[1], 10)),
-  );
-  return total.filter((n) => !done.has(n));
+  const done = new Set(["WORK_COMPLETE", "VERIFIED", "OBSOLETE"]);
+  return parseProgressRows(content)
+    .filter((r) => !done.has(r.status))
+    .map((r) => r.scenario);
 };
 
 /** Check whether every scenario row present in the content is VERIFIED or OBSOLETE. */
@@ -148,11 +139,9 @@ export const isAllVerified = (
   content: string,
   _expectedCount?: number,
 ): boolean => {
-  const totalRows = (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length;
-  const verifiedPlusObsolete =
-    (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length +
-    (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length;
-  return totalRows > 0 && verifiedPlusObsolete === totalRows;
+  const rows = parseProgressRows(content);
+  return rows.length > 0 &&
+    rows.every((r) => r.status === "VERIFIED" || r.status === "OBSOLETE");
 };
 
 /** Read persisted escalation state, defaulting to `{}` if missing. */
@@ -194,10 +183,9 @@ export const validateProgressStatuses = (
   content: string,
 ): { scenario: number; status: string }[] => {
   const validSet = new Set<string>(VALID_STATUSES);
-  const rows = [...content.matchAll(/^\|\s*(\d+)\s*\|\s*([^\s|]+)\s*\|/gm)];
-  return rows
-    .map((m) => ({ scenario: parseInt(m[1], 10), status: m[2] }))
-    .filter((r) => !validSet.has(r.status));
+  return parseProgressRows(content)
+    .filter((r) => r.status !== "" && !validSet.has(r.status))
+    .map((r) => ({ scenario: r.scenario, status: r.status }));
 };
 
 const formatStatusMessage = (
@@ -314,7 +302,9 @@ const resolveCodexSelection = (
     return defaults;
   }
 
-  const reworkCount = (content.match(/NEEDS_REWORK/g) ?? []).length;
+  const reworkCount =
+    parseProgressRows(content).filter((r) => r.status === "NEEDS_REWORK")
+      .length;
   log({
     tags: ["info", "model"],
     message: formatStatusMessage({
