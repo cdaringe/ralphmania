@@ -126,9 +126,10 @@ export const parseImplementedCount = (content: string): number =>
 export const parseTotalCount = (content: string): number =>
   parseProgressRows(content).filter((r) => r.status !== "OBSOLETE").length;
 
-/** Find scenario numbers that are not WORK_COMPLETE, VERIFIED, or OBSOLETE (i.e. actionable). */
+/** Find scenario numbers that are not VERIFIED or OBSOLETE (i.e. actionable).
+ * WORK_COMPLETE is actionable — it means "ready for verification", not "done". */
 export const findActionableScenarios = (content: string): number[] => {
-  const done = new Set(["WORK_COMPLETE", "VERIFIED", "OBSOLETE"]);
+  const done = new Set(["VERIFIED", "OBSOLETE"]);
   return parseProgressRows(content)
     .filter((r) => !done.has(r.status))
     .map((r) => r.scenario);

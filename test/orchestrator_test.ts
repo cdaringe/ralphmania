@@ -8,7 +8,7 @@ import type { WorktreeInfo } from "../src/worktree.ts";
 
 // --- Model function tests (used by parallel orchestration) ---
 
-Deno.test("findActionableScenarios finds scenarios without WORK_COMPLETE or VERIFIED", () => {
+Deno.test("findActionableScenarios finds scenarios that are not VERIFIED or OBSOLETE", () => {
   const content = [
     "| 1 | WORK_COMPLETE | done |",
     "| 2 |          |      |",
@@ -16,12 +16,12 @@ Deno.test("findActionableScenarios finds scenarios without WORK_COMPLETE or VERI
     "| 4 | NEEDS_REWORK | fix |",
     "| 5 |          |      |",
   ].join("\n");
-  assertEquals(findActionableScenarios(content), [2, 4, 5]);
+  assertEquals(findActionableScenarios(content), [1, 2, 4, 5]);
 });
 
-Deno.test("findActionableScenarios returns empty when all done", () => {
+Deno.test("findActionableScenarios returns empty when all VERIFIED", () => {
   const content = [
-    "| 1 | WORK_COMPLETE | done |",
+    "| 1 | VERIFIED | done |",
     "| 2 | VERIFIED | yep  |",
   ].join("\n");
   assertEquals(findActionableScenarios(content), []);
@@ -905,3 +905,4 @@ Deno.test("runParallelLoop does not assign workers to VERIFIED scenarios with im
   // Only scenario 2 (empty status) should get a worker — not 1 or 18
   assertEquals(overrides, [2]);
 });
+
