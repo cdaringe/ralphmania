@@ -1,4 +1,3 @@
-// coverage:ignore — Subprocess orchestration requiring real agent binaries (claude/codex)
 import type {
   Agent,
   EscalationLevel,
@@ -176,6 +175,7 @@ export const pipeStream = async ({ stream, output, marker }: {
 // Re-export from worker-machine for backward compatibility.
 export { resolveWorkerModelSelection } from "./worker-machine.ts";
 
+/* c8 ignore start — real subprocess execution, tested via integration */
 /**
  * Execute an agent subprocess — the I/O boundary of the worker pipeline.
  * This is the default {@link AgentRunDeps.execute} implementation.
@@ -268,6 +268,7 @@ export const executeAgent: AgentRunDeps["execute"] = async (
 
 /** Default agent deps using real subprocess execution. */
 const defaultAgentDeps: AgentRunDeps = { execute: executeAgent };
+/* c8 ignore stop */
 
 /**
  * Run a single agent iteration. Drives the worker state machine through
@@ -341,6 +342,7 @@ Requirements:
 1. Markdown SHALL be rendered
 2. Videos SHALL be embedded and playable from the receipt.`;
 
+/* c8 ignore start — real subprocess execution */
 export const updateReceipts = async (
   { agent, plugin, log }: { agent: Agent; plugin: Plugin; log: Logger },
 ): Promise<Result<undefined, string>> => {
@@ -394,3 +396,4 @@ export const updateReceipts = async (
     return err(`Failed to generate receipts: ${error} [${cmdString}]`);
   }
 };
+/* c8 ignore stop */

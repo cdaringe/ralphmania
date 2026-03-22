@@ -1,4 +1,3 @@
-// coverage:ignore — Private helpers require real git worktrees and subprocess execution
 import type { EscalationLevel, Logger } from "./types.ts";
 import { runIteration as runIterationImpl } from "./runner.ts";
 import { runValidation as runValidationImpl } from "./validation.ts";
@@ -28,6 +27,7 @@ export type { WorkerResult } from "./state-machine.ts";
 /** Dependencies injectable for testing. Alias for {@link MachineDeps}. */
 export type ParallelDeps = MachineDeps;
 
+/* c8 ignore start — default I/O wiring for real subprocess deps */
 const readProgressContent = async (
   progressFile = "./progress.md",
 ): Promise<string> => {
@@ -51,6 +51,7 @@ const defaultDeps: ParallelDeps = {
   readEscalationState: readEscalationStateImpl,
   writeEscalationState: writeEscalationStateImpl,
 };
+/* c8 ignore stop */
 
 export const runParallelLoop = async (
   {

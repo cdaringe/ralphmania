@@ -1,4 +1,3 @@
-// coverage:ignore — V8 coverage tool misattributes multi-line expressions; defensive catch branches unreachable
 import type {
   Agent,
   EffortLevel,
@@ -21,6 +20,21 @@ import {
 export { parseProgressRows } from "./parsers/progress-rows.ts";
 export type { ProgressRow } from "./parsers/progress-rows.ts";
 import { parseProgressRows } from "./parsers/progress-rows.ts";
+
+/** Injectable I/O deps for model resolution functions. */
+export type ModelIODeps = {
+  readTextFile: (path: string) => Promise<string>;
+  writeTextFile: (path: string, content: string) => Promise<void>;
+  mkdir: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
+};
+
+/* c8 ignore start — thin Deno I/O wiring */
+const defaultModelIO: ModelIODeps = {
+  readTextFile: (p) => Deno.readTextFile(p),
+  writeTextFile: (p, c) => Deno.writeTextFile(p, c),
+  mkdir: (p, o) => Deno.mkdir(p, o),
+};
+/* c8 ignore stop */
 
 export const getModel = (
   { agent, mode }: { agent: Agent; mode: "fast" | "general" | "strong" },
@@ -158,9 +172,10 @@ export const isAllVerified = (
 /** Read persisted escalation state, defaulting to `{}` if missing. */
 export const readEscalationState = async (
   log: Logger,
+  io: ModelIODeps = defaultModelIO,
 ): Promise<EscalationState> => {
   try {
-    return JSON.parse(await Deno.readTextFile(ESCALATION_FILE));
+    return JSON.parse(await io.readTextFile(ESCALATION_FILE));
   } catch {
     log({
       tags: ["debug", "escalation"],
@@ -174,10 +189,11 @@ export const readEscalationState = async (
 export const writeEscalationState = async (
   state: EscalationState,
   log: Logger,
+  io: ModelIODeps = defaultModelIO,
 ): Promise<void> => {
   try {
-    await Deno.mkdir(".ralph", { recursive: true });
-    await Deno.writeTextFile(ESCALATION_FILE, JSON.stringify(state));
+    await io.mkdir(".ralph", { recursive: true });
+    await io.writeTextFile(ESCALATION_FILE, JSON.stringify(state));
   } catch (e) {
     log({
       tags: ["error", "escalation"],
@@ -231,20 +247,21 @@ const logStrongScope = (
 };
 
 const resolveClaudeSelection = async (
-  { content, log, minLevel, defaults }: {
+  { content, log, minLevel, defaults, io }: {
     content: string;
     log: Logger;
     minLevel?: EscalationLevel;
     defaults: ModelSelection;
+    io: ModelIODeps;
   },
 ): Promise<ModelSelection> => {
-  const currentState = await readEscalationState(log);
+  const currentState = await readEscalationState(log, io);
   const reworkScenarios = findReworkScenarios(content);
   const newState = updateEscalationState({
     current: currentState,
     reworkScenarios,
   });
-  await writeEscalationState(newState, log);
+  await writeEscalationState(newState, log, io);
 
   const scenarioResult = detectScenarioFromProgress(content);
   if (!scenarioResult.ok) {
@@ -330,12 +347,14 @@ const resolveCodexSelection = (
 };
 
 export const resolveModelSelection = async (
-  { agent, log, minLevel, progressFile = "./progress.md" }: {
-    agent: Agent;
-    log: Logger;
-    minLevel?: EscalationLevel;
-    progressFile?: string;
-  },
+  { agent, log, minLevel, progressFile = "./progress.md", io = defaultModelIO }:
+    {
+      agent: Agent;
+      log: Logger;
+      minLevel?: EscalationLevel;
+      progressFile?: string;
+      io?: ModelIODeps;
+    },
 ): Promise<ModelSelection> => {
   const defaultMode = "fast" as const;
   const defaults: ModelSelection = {
@@ -346,7 +365,7 @@ export const resolveModelSelection = async (
     actionableScenarios: [],
   };
 
-  const rawContent = await Deno.readTextFile(progressFile).catch(() => "");
+  const rawContent = await io.readTextFile(progressFile).catch(() => "");
   const content = rawContent.split("END_DEMO")[1];
 
   if (!content) {
@@ -358,6 +377,6 @@ export const resolveModelSelection = async (
   }
 
   return agent === "claude"
-    ? await resolveClaudeSelection({ content, log, minLevel, defaults })
+    ? await resolveClaudeSelection({ content, log, minLevel, defaults, io })
     : resolveCodexSelection({ content, agent, log, defaults });
 };

@@ -1,4 +1,3 @@
-// coverage:ignore — Spawns agent subprocesses for merge conflict resolution
 import type { Agent, Logger } from "./types.ts";
 import type { WorktreeInfo } from "./worktree.ts";
 import { nonInteractiveEnv, RECONCILE_TIMEOUT_MS } from "./constants.ts";
@@ -81,6 +80,7 @@ export type ReconcileDeps = {
   }) => Promise<{ code: number }>;
 };
 
+/* c8 ignore start — real git/agent subprocess wiring */
 const defaultRun: ReconcileDeps["run"] = async (args, opts) => {
   const output = await new Deno.Command("git", {
     args,
@@ -130,6 +130,7 @@ const defaultSpawnAgent: ReconcileDeps["spawnAgent"] = async (
 
   return { code: status.code };
 };
+/* c8 ignore stop */
 
 /**
  * Reconcile a merge conflict by looping an agent until resolution.

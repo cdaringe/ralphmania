@@ -1,4 +1,3 @@
-// coverage:ignore — Spawns bash subprocesses for validation script execution
 import type { Logger, Result, ValidationResult } from "./types.ts";
 import { err, ok } from "./types.ts";
 import {
@@ -9,18 +8,30 @@ import {
   VALIDATE_TEMPLATE,
 } from "./constants.ts";
 
+/** Injectable filesystem deps for ensureValidationHook. */
+export type ValidationHookDeps = {
+  exists: (path: string) => Promise<boolean>;
+  writeTextFile: (path: string, content: string) => Promise<void>;
+  chmod: (path: string, mode: number) => Promise<void>;
+};
+
+/* c8 ignore start — thin Deno I/O wiring */
+const defaultHookDeps: ValidationHookDeps = {
+  exists: (p) => Deno.stat(p).then(() => true, () => false),
+  writeTextFile: (p, c) => Deno.writeTextFile(p, c),
+  chmod: (p, m) => Deno.chmod(p, m),
+};
+/* c8 ignore stop */
+
 export const ensureValidationHook = async (
   log: Logger,
+  deps: ValidationHookDeps = defaultHookDeps,
 ): Promise<Result<void, string>> => {
   try {
-    const exists = await Deno.stat(VALIDATE_SCRIPT).then(
-      () => true,
-      () => false,
-    );
-    if (exists) return ok(undefined);
+    if (await deps.exists(VALIDATE_SCRIPT)) return ok(undefined);
 
-    await Deno.writeTextFile(VALIDATE_SCRIPT, VALIDATE_TEMPLATE);
-    await Deno.chmod(VALIDATE_SCRIPT, 0o755);
+    await deps.writeTextFile(VALIDATE_SCRIPT, VALIDATE_TEMPLATE);
+    await deps.chmod(VALIDATE_SCRIPT, 0o755);
     log({
       tags: ["info", "hook"],
       message:
@@ -105,6 +116,7 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
       }),
         { status: "failed", outputPath });
   } catch (error) {
+    /* c8 ignore start — defensive crash handler */
     file.close();
     await Deno.remove(tmpOutputPath).catch(() => {});
     log({
@@ -112,5 +124,5 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
       message: `Validation crashed (iteration ${iterationNum}): ${error}`,
     });
     return { status: "failed", outputPath };
-  }
+  } /* c8 ignore stop */
 };

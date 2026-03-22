@@ -15,25 +15,25 @@ const EXCLUDED_FILES: ReadonlyMap<string, string> = new Map([
     "src/cli.ts",
     "CLI entry point with process-level orchestration and interactive prompts",
   ],
-  // Runner contains subprocess-spawning code that requires real agent binaries
+  // Runner: executeAgent/updateReceipts spawn real agent subprocesses (c8 ignore sections)
   [
     "src/runner.ts",
-    "Subprocess orchestration requiring real agent binaries (claude/codex)",
+    "Thin Deno.Command wrappers for agent subprocess execution",
   ],
-  // Reconcile spawns agent subprocesses for merge conflict resolution
+  // Reconcile: defaultRun/defaultSpawnAgent spawn real git/agent subprocesses (c8 ignore sections)
   [
     "src/reconcile.ts",
-    "Spawns agent subprocesses for merge conflict resolution",
+    "Thin Deno.Command wrappers for git and agent subprocess execution",
   ],
   // Worktree uses git commands requiring a real git repository
   [
     "src/worktree.ts",
     "Git subprocess operations requiring real repository state",
   ],
-  // Validation spawns bash subprocesses for script execution
+  // Validation: defensive crash handler + Deno.Command subprocess execution
   [
     "src/validation.ts",
-    "Spawns bash subprocesses for validation script execution",
+    "Deno.Command subprocess execution and defensive crash handler",
   ],
   // Serve uses Deno.serve and opens browser — requires network and OS interaction
   [
@@ -45,17 +45,10 @@ const EXCLUDED_FILES: ReadonlyMap<string, string> = new Map([
     "src/colors.ts",
     "Module-level Deno.stdout.isTerminal() prevents branch coverage in CI",
   ],
-  // Logger writes to stdout/stderr with TTY-dependent colors
-  ["src/logger.ts", "Depends on colors.ts TTY detection and direct fd writes"],
-  // Model has V8 multi-line expression coverage attribution gaps + unreachable defensive error branches
-  [
-    "src/model.ts",
-    "V8 coverage tool misattributes multi-line expressions; defensive catch branches unreachable",
-  ],
-  // Orchestrator private helpers (prefixLog, readProgressContent, runWorker) only run with real worktrees
+  // Orchestrator: readProgressContent/defaultDeps wire real subprocess impls (c8 ignore sections)
   [
     "src/orchestrator.ts",
-    "Private helpers require real git worktrees and subprocess execution",
+    "Default dep wiring for real subprocess and filesystem operations",
   ],
   // Progress has defensive .catch branches for file I/O that cannot be triggered in tests
   [

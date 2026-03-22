@@ -1,4 +1,3 @@
-// coverage:ignore — Depends on colors.ts TTY detection and direct fd writes
 import type { Logger } from "./types.ts";
 import {
   blue,
@@ -10,6 +9,19 @@ import {
   red,
   yellow,
 } from "./colors.ts";
+
+/** Injectable output deps for the logger. */
+export type LoggerOutput = {
+  writeSync: (data: Uint8Array) => number;
+  writeErrSync: (data: Uint8Array) => number;
+};
+
+/* c8 ignore start — thin Deno I/O wiring */
+const defaultOutput: LoggerOutput = {
+  writeSync: (d) => Deno.stdout.writeSync(d),
+  writeErrSync: (d) => Deno.stderr.writeSync(d),
+};
+/* c8 ignore stop */
 
 const tagColor: Record<string, (s: string) => string> = {
   error: red,
@@ -26,7 +38,9 @@ const tagColor: Record<string, (s: string) => string> = {
 
 const colorizeTag = (tag: string): string => (tagColor[tag] ?? dim)(tag);
 
-export const createLogger = (): Logger => {
+export const createLogger = (
+  output: LoggerOutput = defaultOutput,
+): Logger => {
   const encoder = new TextEncoder();
   return ({ tags, message }) => {
     const level = tags[0];
@@ -38,7 +52,7 @@ export const createLogger = (): Logger => {
       } ${coloredMessage}\n`,
     );
     level === "error"
-      ? Deno.stderr.writeSync(encoded)
-      : Deno.stdout.writeSync(encoded);
+      ? output.writeErrSync(encoded)
+      : output.writeSync(encoded);
   };
 };
