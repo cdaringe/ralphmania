@@ -905,4 +905,3 @@ Deno.test("runParallelLoop does not assign workers to VERIFIED scenarios with im
   // Only scenario 2 (empty status) should get a worker — not 1 or 18
   assertEquals(overrides, [2]);
 });
-
