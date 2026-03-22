@@ -15,26 +15,6 @@ const EXCLUDED_FILES: ReadonlyMap<string, string> = new Map([
     "src/cli.ts",
     "CLI entry point with process-level orchestration and interactive prompts",
   ],
-  // Runner: executeAgent/updateReceipts spawn real agent subprocesses (c8 ignore sections)
-  [
-    "src/runner.ts",
-    "Thin Deno.Command wrappers for agent subprocess execution",
-  ],
-  // Reconcile: defaultRun/defaultSpawnAgent spawn real git/agent subprocesses (c8 ignore sections)
-  [
-    "src/reconcile.ts",
-    "Thin Deno.Command wrappers for git and agent subprocess execution",
-  ],
-  // Worktree uses git commands requiring a real git repository
-  [
-    "src/worktree.ts",
-    "Git subprocess operations requiring real repository state",
-  ],
-  // Validation: defensive crash handler + Deno.Command subprocess execution
-  [
-    "src/validation.ts",
-    "Deno.Command subprocess execution and defensive crash handler",
-  ],
   // Serve uses Deno.serve and opens browser — requires network and OS interaction
   [
     "src/serve.ts",
@@ -44,16 +24,6 @@ const EXCLUDED_FILES: ReadonlyMap<string, string> = new Map([
   [
     "src/colors.ts",
     "Module-level Deno.stdout.isTerminal() prevents branch coverage in CI",
-  ],
-  // Orchestrator: readProgressContent/defaultDeps wire real subprocess impls (c8 ignore sections)
-  [
-    "src/orchestrator.ts",
-    "Default dep wiring for real subprocess and filesystem operations",
-  ],
-  // Progress has defensive .catch branches for file I/O that cannot be triggered in tests
-  [
-    "src/progress.ts",
-    "Defensive .catch branches for file I/O unreachable in test environment",
   ],
   // set-fns is a vendored utility library — user has explicitly marked it DO NOT CHANGE
   [
