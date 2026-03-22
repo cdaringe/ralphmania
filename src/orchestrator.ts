@@ -270,10 +270,17 @@ export const runParallelLoop = async (
         ...allActionable.filter((s) => !reworkSet.has(s)),
       ];
 
-      const workerCount = Math.min(
-        parallelism,
-        actionableScenarios.length || 1,
-      );
+      if (actionableScenarios.length === 0) {
+        log({
+          tags: ["info", "orchestrator"],
+          message: green(
+            "No actionable scenarios remain — exiting loop",
+          ),
+        });
+        break;
+      }
+
+      const workerCount = Math.min(parallelism, actionableScenarios.length);
 
       log({
         tags: ["info", "orchestrator"],
