@@ -168,6 +168,23 @@ Deno.test("preserves row order", () => {
   assertEquals(rows.map((r) => r.scenario), [3, 1, 2]);
 });
 
+Deno.test("regression: last row without trailing pipe is parsed correctly", () => {
+  // Old regex-based code used \s* which matched \n, borrowing the pipe from
+  // the next line. The LAST row had no next line to borrow from, so it was
+  // falsely treated as having no status — causing the orchestrator to assign
+  // workers to already-VERIFIED scenarios.
+  const content = [
+    "| 1  | VERIFIED",
+    "| 2  |         ",
+    "| 18 | VERIFIED",
+  ].join("\n");
+  const rows = parseProgressRows(content);
+  assertEquals(rows.length, 3);
+  assertEquals(rows[0].status, "VERIFIED");
+  assertEquals(rows[1].status, "");
+  assertEquals(rows[2].status, "VERIFIED");
+});
+
 Deno.test("handles real-world progress.md content after END_DEMO split", () => {
   const content = ` -->
 

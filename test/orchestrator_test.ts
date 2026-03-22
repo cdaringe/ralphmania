@@ -860,3 +860,40 @@ Deno.test("runParallelLoop logs resolved/still-actionable after merge", async ()
     true,
   );
 });
+
+Deno.test("runParallelLoop does not assign workers to VERIFIED scenarios with imperfect formatting", async () => {
+  // Regression: old regex-based code treated the last VERIFIED row without a
+  // trailing pipe as actionable because \s* matched \n and borrowed the next
+  // line's pipe — the last row had no next line to borrow from.
+  const content = [
+    "| 1  | VERIFIED",
+    "| 2  |         ",
+    "| 18 | VERIFIED",
+  ].join("\n");
+  const overrides: number[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 2,
+    expectedScenarioCount: 3,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      createWorktree: ({ workerIndex }) =>
+        Promise.resolve(ok(stubWorktree(workerIndex))),
+      runIteration: (opts) => {
+        if (opts.targetScenarioOverride !== undefined) {
+          overrides.push(opts.targetScenarioOverride);
+        }
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  // Only scenario 2 (empty status) should get a worker — not 1 or 18
+  assertEquals(overrides, [2]);
+});

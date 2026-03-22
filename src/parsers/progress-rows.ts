@@ -23,7 +23,6 @@ export const parseProgressRows = (content: string): ProgressRow[] => {
 
     const cells = trimmed
       .replace(/^\|/, "")
-      .replace(/\|$/, "")
       .split("|")
       .map((c) => c.trim());
 
