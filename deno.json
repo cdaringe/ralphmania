@@ -36,6 +36,7 @@
     "test:coverage:enforce": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --clean --coverage=coverage/ && bash -c 'deno coverage coverage/ 2>&1 | deno run --allow-read scripts/check-coverage.ts'",
     "fmt": "deno fmt",
     "check": "deno check mod.ts",
-    "ralph": "deno run -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts"
+    "ralph": "deno run -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
+    "yeet": "deno fmt || true && deno task test && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
   }
 }
