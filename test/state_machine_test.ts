@@ -306,6 +306,28 @@ Deno.test("transitionRunningWorkers passes correct escalation levels to workers"
   assertEquals(levels.sort(), [0, 1]);
 });
 
+Deno.test("transitionRunningWorkers passes workerIndex to runIteration for stdio prefixing", async () => {
+  const workerIndices: (number | undefined)[] = [];
+  const ctx = makeCtx({
+    parallelism: 2,
+    deps: stubDeps({
+      runIteration: (opts) => {
+        workerIndices.push(opts.workerIndex);
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+  const state: RunningWorkersState = {
+    tag: "running_workers",
+    iterationsUsed: 0,
+    validationFailurePath: undefined,
+    uniqueActionable: [5, 9],
+    escalation: {},
+  };
+  await transitionRunningWorkers(state, ctx);
+  assertEquals(workerIndices.sort(), [0, 1]);
+});
+
 Deno.test("transitionRunningWorkers writes agent checkpoint", async () => {
   const checkpoints: { step: string }[] = [];
   const ctx = makeCtx({

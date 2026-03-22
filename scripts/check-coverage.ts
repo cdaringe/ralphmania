@@ -62,6 +62,11 @@ const EXCLUDED_FILES: ReadonlyMap<string, string> = new Map([
     "src/progress.ts",
     "Defensive .catch branches for file I/O unreachable in test environment",
   ],
+  // set-fns is a vendored utility library — user has explicitly marked it DO NOT CHANGE
+  [
+    "src/set-fns.ts",
+    "Vendored set-theory utility; user marked DO NOT CHANGE; unused exports have no coverage",
+  ],
 ]);
 
 const input = await new Response(Deno.stdin.readable).text();

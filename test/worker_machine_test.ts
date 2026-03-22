@@ -372,6 +372,41 @@ Deno.test("transitionRunningAgent with successful agent → done/continue", asyn
   assertEquals(next.result.status, "continue");
 });
 
+Deno.test("transitionRunningAgent forwards workerIndex to execute for stdio prefixing", async () => {
+  const state: RunningAgentState = {
+    tag: "running_agent",
+    iterationNum: 0,
+    agent: "claude",
+    selection: {
+      model: "sonnet",
+      mode: "general",
+      targetScenario: 33,
+      effort: "high",
+      actionableScenarios: [33],
+    },
+    spec: { command: "echo", args: ["hello"] },
+  };
+
+  let capturedWorkerIndex: number | undefined = -1;
+  const deps = {
+    execute: (opts: { workerIndex?: number }) => {
+      capturedWorkerIndex = opts.workerIndex;
+      return Promise.resolve({ status: "continue" as const });
+    },
+  };
+
+  await transitionRunningAgent(
+    state,
+    deps,
+    {},
+    noopLog,
+    AbortSignal.timeout(10_000),
+    undefined,
+    2,
+  );
+  assertEquals(capturedWorkerIndex, 2);
+});
+
 Deno.test("transitionRunningAgent fires onIterationEnd plugin hook", async () => {
   const state: RunningAgentState = {
     tag: "running_agent",

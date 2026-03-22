@@ -4,6 +4,7 @@
   "license": "MIT",
   "exports": "./mod.ts",
   "lint": {
+    "exclude": ["src/set-fns.ts"],
     "rules": {
       "tags": ["recommended"],
       "include": [
