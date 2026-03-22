@@ -53,6 +53,7 @@ import {
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 import { runParallelLoop } from "./src/orchestrator.ts";
+import { computeExitCode } from "./src/exit.ts";
 
 const printBanner = (
   { agent, iterations, level, parallel }: {
@@ -210,7 +211,7 @@ const main = async (): Promise<number> => {
         `${iterationsUsed} iterations completed without completion marker.`,
     });
 
-  return 0;
+  return computeExitCode(allDone);
 };
 
 if (import.meta.main) {
