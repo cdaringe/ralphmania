@@ -42,7 +42,7 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel, isAllVerified } from "./src/model.ts";
-import { DEFAULT_FILE_PATHS, parseScenarioCount } from "./src/progress.ts";
+import { DEFAULT_FILE_PATHS, parseScenarioIds } from "./src/progress.ts";
 import type { FilePaths } from "./src/progress.ts";
 export type { FilePaths } from "./src/progress.ts";
 import {
@@ -164,13 +164,13 @@ const main = async (): Promise<number> => {
   const specContent = await Deno.readTextFile(filePaths.specFile).catch(
     () => "",
   );
-  const expectedScenarioCount = parseScenarioCount(specContent);
+  const expectedScenarioIds = parseScenarioIds(specContent);
 
   const iterationsUsed = await runParallelLoop({
     agent,
     iterations,
     parallelism: parallel,
-    expectedScenarioCount,
+    expectedScenarioIds,
     signal: shutdownController.signal,
     log,
     plugin,
@@ -185,7 +185,7 @@ const main = async (): Promise<number> => {
     () => "",
   );
   const finalSection = finalContent.split("END_DEMO")[1] ?? "";
-  const allDone = isAllVerified(finalSection, expectedScenarioCount);
+  const allDone = isAllVerified(finalSection, expectedScenarioIds.length);
 
   await plugin.onLoopEnd?.({
     finalState: {

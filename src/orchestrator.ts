@@ -57,7 +57,7 @@ export const runParallelLoop = async (
     agent,
     iterations,
     parallelism,
-    expectedScenarioCount,
+    expectedScenarioIds,
     signal,
     log,
     plugin,
@@ -69,7 +69,7 @@ export const runParallelLoop = async (
     agent: string;
     iterations: number;
     parallelism: number;
-    expectedScenarioCount: number;
+    expectedScenarioIds: readonly number[];
     signal: AbortSignal;
     log: Logger;
     plugin: Plugin;
@@ -89,7 +89,7 @@ export const runParallelLoop = async (
     agent: agent as MachineContext["agent"],
     iterations,
     parallelism,
-    expectedScenarioCount,
+    expectedScenarioIds,
     signal,
     log,
     plugin,

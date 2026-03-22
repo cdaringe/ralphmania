@@ -168,7 +168,7 @@ Deno.test("transitionReadingProgress with actionable scenarios → finding_actio
 Deno.test("transitionReadingProgress invalid status clears validationFailurePath", async () => {
   const content = "| 1 | COMPLETE | done |";
   const ctx = makeCtx({
-    expectedScenarioCount: 1,
+    expectedScenarioIds: [1],
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
   const state: ReadingProgressState = {
@@ -189,7 +189,7 @@ Deno.test("transitionReadingProgress invalid status clears validationFailurePath
 
 Deno.test("transitionFindingActionable with no actionable → done", async () => {
   const content = "| 1 | VERIFIED | done |\n| 2 | OBSOLETE | skip |";
-  const ctx = makeCtx({ expectedScenarioCount: 2 });
+  const ctx = makeCtx({ expectedScenarioIds: [1, 2] });
   const state: FindingActionableState = {
     tag: "finding_actionable",
     iterationsUsed: 0,
@@ -488,7 +488,7 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
   let round = 0;
   const ctx = makeCtx({
     iterations: 1,
-    expectedScenarioCount: 1,
+    expectedScenarioIds: [1],
     deps: stubDeps({
       readProgress: () => {
         round++;
@@ -520,7 +520,7 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
 Deno.test("transition sequence: checkpoint resume skips to validating", async () => {
   const ctx = makeCtx({
     iterations: 5,
-    expectedScenarioCount: 1,
+    expectedScenarioIds: [1],
     deps: stubDeps({
       readCheckpoint: () =>
         Promise.resolve({

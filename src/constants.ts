@@ -26,13 +26,15 @@ export const CLAUDE_ESCALATED = {
  * The only statuses allowed in the progress.md Status column.
  * Any other value is treated as invalid and must be corrected.
  */
-export const VALID_STATUSES = [
-  "WIP",
-  "WORK_COMPLETE",
-  "VERIFIED",
-  "NEEDS_REWORK",
-  "OBSOLETE",
-] as const;
+export const Status = {
+  WIP: "WIP",
+  WORK_COMPLETE: "WORK_COMPLETE",
+  VERIFIED: "VERIFIED",
+  NEEDS_REWORK: "NEEDS_REWORK",
+  OBSOLETE: "OBSOLETE",
+} as const;
+
+export const VALID_STATUSES = Object.values(Status);
 
 export type ScenarioStatus = (typeof VALID_STATUSES)[number];
 

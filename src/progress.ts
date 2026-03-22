@@ -9,6 +9,10 @@ export const SPEC_FILE = "specification.md";
 export const parseScenarioCount = (specContent: string): number =>
   parseProgressRows(specContent).length;
 
+/** Parse scenario IDs from the scenario table. */
+export const parseScenarioIds = (specContent: string): number[] =>
+  parseProgressRows(specContent).map((r) => r.scenario);
+
 const generateProgressTemplate = (scenarioCount: number): string => {
   const rows = Array.from(
     { length: scenarioCount },

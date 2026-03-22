@@ -20,13 +20,14 @@ import type { WorktreeInfo } from "./worktree.ts";
 import type { Plugin } from "./plugin.ts";
 import {
   findActionableScenarios,
-  findReworkScenarios,
   isAllVerified,
   parseProgressRows,
   updateEscalationState,
   validateProgressStatuses,
 } from "./model.ts";
 import { dim, green, yellow } from "./colors.ts";
+import { difference, xor } from "./set-fns.ts";
+import { Status } from "./constants.ts";
 
 // ---------------------------------------------------------------------------
 // Dependencies (same as ParallelDeps, re-exported for convenience)
@@ -94,7 +95,7 @@ export type MachineContext = {
   readonly agent: Agent;
   readonly iterations: number;
   readonly parallelism: number;
-  readonly expectedScenarioCount: number;
+  readonly expectedScenarioIds: readonly number[];
   readonly signal: AbortSignal;
   readonly log: Logger;
   readonly plugin: Plugin;
@@ -230,7 +231,7 @@ export const transitionReadingProgress = async (
     validationFailurePath = undefined;
   }
 
-  if (isAllVerified(content, ctx.expectedScenarioCount)) {
+  if (isAllVerified(content, ctx.expectedScenarioIds.length)) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("All scenarios VERIFIED"),
@@ -251,33 +252,44 @@ export const transitionFindingActionable = async (
   ctx: MachineContext,
 ): Promise<RunningWorkersState | DoneState> => {
   const content = state.progressContent;
-  const reworkScenarios = [...new Set(findReworkScenarios(content))];
-  const allActionable = findActionableScenarios(content);
-  const reworkSet = new Set(reworkScenarios);
-  const merged = [
-    ...reworkScenarios,
-    ...allActionable.filter((s) => !reworkSet.has(s)),
-  ];
-  const seen = new Set<number>();
-  const uniqueActionable = merged.filter((s) =>
-    seen.has(s) ? false : (seen.add(s), true)
+  const rows = parseProgressRows(content);
+  const specIds = ctx.expectedScenarioIds;
+  const progressIds = rows.map((r) => r.scenario);
+  const mismatch = xor(specIds, progressIds);
+  if (mismatch.size > 0) {
+    const parts: string[] = [];
+    const inSpecNotProgress = difference(specIds, progressIds);
+    const inProgressNotSpec = difference(progressIds, specIds);
+    if (inSpecNotProgress.size > 0) {
+      parts.push(
+        `in spec but not progress: [${[...inSpecNotProgress].join(", ")}]`,
+      );
+    }
+    if (inProgressNotSpec.size > 0) {
+      parts.push(
+        `in progress but not spec: [${[...inProgressNotSpec].join(", ")}]`,
+      );
+    }
+    ctx.log({
+      tags: ["error", "orchestrator"],
+      message: `scenario id mismatch — ${parts.join("; ")}`,
+    });
+  }
+
+  const doneIds = rows
+    .filter((r) => r.status === Status.VERIFIED || r.status === Status.OBSOLETE)
+    .map((r) => r.scenario);
+  const reworkIds = new Set(
+    rows.filter((r) => r.status === Status.NEEDS_REWORK).map((r) => r.scenario),
   );
+  const actionable = [...difference(specIds, doneIds)];
+  // Rework scenarios first, then the rest
+  const uniqueActionable = [
+    ...actionable.filter((s) => reworkIds.has(s)),
+    ...actionable.filter((s) => !reworkIds.has(s)),
+  ];
 
   if (uniqueActionable.length === 0) {
-    const presentIds = new Set(
-      parseProgressRows(content).map((r) => r.scenario),
-    );
-    const missingIds: number[] = [];
-    for (let i = 1; i <= ctx.expectedScenarioCount; i++) {
-      if (!presentIds.has(i)) missingIds.push(i);
-    }
-    if (missingIds.length > 0) {
-      ctx.log({
-        tags: ["error", "orchestrator"],
-        message:
-          `progress.md is missing scenario(s) [${missingIds.join(", ")}] that the spec expects — scenarios are missing from progress.md`,
-      });
-    }
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("No actionable scenarios remain — exiting loop"),
@@ -288,7 +300,7 @@ export const transitionFindingActionable = async (
   const currentEscalation = await ctx.deps.readEscalationState(ctx.log);
   const newEscalation = updateEscalationState({
     current: currentEscalation,
-    reworkScenarios,
+    reworkScenarios: [...reworkIds],
   });
   await ctx.deps.writeEscalationState(newEscalation, ctx.log);
 
@@ -513,7 +525,7 @@ export const transitionCheckingDoneness = async (
   ctx: MachineContext,
 ): Promise<ReadingProgressState | DoneState> => {
   const content = await ctx.deps.readProgress();
-  if (isAllVerified(content, ctx.expectedScenarioCount)) {
+  if (isAllVerified(content, ctx.expectedScenarioIds.length)) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("All scenarios VERIFIED"),

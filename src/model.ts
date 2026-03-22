@@ -15,6 +15,7 @@ import {
   CLAUDE_VERIFIER,
   ESCALATION_FILE,
   REWORK_THRESHOLD,
+  Status,
   VALID_STATUSES,
 } from "./constants.ts";
 export { parseProgressRows } from "./parsers/progress-rows.ts";
@@ -40,7 +41,7 @@ export const detectScenarioFromProgress = (
   content: string,
 ): Result<number | undefined, string> => {
   const rework = parseProgressRows(content).find((r) =>
-    r.status === "NEEDS_REWORK"
+    r.status === Status.NEEDS_REWORK
   );
   return ok(rework?.scenario);
 };
@@ -48,7 +49,7 @@ export const detectScenarioFromProgress = (
 /** Find ALL scenario numbers with NEEDS_REWORK status. */
 export const findReworkScenarios = (content: string): number[] =>
   parseProgressRows(content)
-    .filter((r) => r.status === "NEEDS_REWORK")
+    .filter((r) => r.status === Status.NEEDS_REWORK)
     .map((r) => r.scenario);
 
 /**
@@ -100,7 +101,7 @@ export const computeModelSelection = (
   }
 
   const reworkCount =
-    parseProgressRows(content).filter((r) => r.status === "NEEDS_REWORK")
+    parseProgressRows(content).filter((r) => r.status === Status.NEEDS_REWORK)
       .length;
   const mode = reworkCount > REWORK_THRESHOLD
     ? "strong" as const
@@ -119,17 +120,17 @@ export const computeModelSelection = (
 /** Count rows with WORK_COMPLETE or VERIFIED status in progress.md content. */
 export const parseImplementedCount = (content: string): number =>
   parseProgressRows(content).filter((r) =>
-    r.status === "WORK_COMPLETE" || r.status === "VERIFIED"
+    r.status === Status.WORK_COMPLETE || r.status === Status.VERIFIED
   ).length;
 
 /** Count total non-OBSOLETE scenario rows in progress.md content. */
 export const parseTotalCount = (content: string): number =>
-  parseProgressRows(content).filter((r) => r.status !== "OBSOLETE").length;
+  parseProgressRows(content).filter((r) => r.status !== Status.OBSOLETE).length;
 
 /** Find scenario numbers that are not VERIFIED or OBSOLETE (i.e. actionable).
  * WORK_COMPLETE is actionable — it means "ready for verification", not "done". */
 export const findActionableScenarios = (content: string): number[] => {
-  const done = new Set(["VERIFIED", "OBSOLETE"]);
+  const done: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
   return parseProgressRows(content)
     .filter((r) => !done.has(r.status))
     .map((r) => r.scenario);
@@ -141,7 +142,7 @@ export const isAllVerified = (
   expectedCount?: number,
 ): boolean => {
   const rows = parseProgressRows(content);
-  const doneStatuses = new Set(["VERIFIED", "OBSOLETE"]);
+  const doneStatuses: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
   const allDone = rows.length > 0 &&
     rows.every((r) => doneStatuses.has(r.status));
   if (!allDone) return false;
@@ -313,7 +314,7 @@ const resolveCodexSelection = (
   }
 
   const reworkCount =
-    parseProgressRows(content).filter((r) => r.status === "NEEDS_REWORK")
+    parseProgressRows(content).filter((r) => r.status === Status.NEEDS_REWORK)
       .length;
   log({
     tags: ["info", "model"],
