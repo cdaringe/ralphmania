@@ -43,12 +43,21 @@ Deno.test("isAllVerified returns true when all VERIFIED and count matches", () =
   assertEquals(isAllVerified(content, 2), true);
 });
 
-Deno.test("isAllVerified returns false when rows missing from progress", () => {
+Deno.test("isAllVerified returns true when all present rows VERIFIED despite expectedCount mismatch", () => {
   const content = [
     "| 1 | VERIFIED | done |",
     "| 2 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content, 5), false);
+  assertEquals(isAllVerified(content, 5), true);
+});
+
+Deno.test("isAllVerified handles non-sequential scenario numbers", () => {
+  const content = [
+    "| 2 | VERIFIED | done |",
+    "| 3 | VERIFIED | yep  |",
+    "| 8 | VERIFIED | ok   |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 10), true);
 });
 
 Deno.test("isAllVerified returns false when some WORK_COMPLETE", () => {

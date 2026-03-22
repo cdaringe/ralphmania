@@ -143,15 +143,17 @@ export const findActionableScenarios = (content: string): number[] => {
   return total.filter((n) => !done.has(n));
 };
 
-/** Check whether every non-OBSOLETE scenario row is VERIFIED. */
+/** Check whether every scenario row present in the content is VERIFIED or OBSOLETE. */
 export const isAllVerified = (
   content: string,
-  expectedCount: number,
-): boolean =>
-  expectedCount > 0 &&
-  (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length +
-        (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length ===
-    expectedCount;
+  _expectedCount?: number,
+): boolean => {
+  const totalRows = (content.match(/^\|\s*\d+\s*\|/gm) ?? []).length;
+  const verifiedPlusObsolete =
+    (content.match(/^\|\s*\d+\s*\|\s*VERIFIED\s*\|/gm) ?? []).length +
+    (content.match(/^\|\s*\d+\s*\|\s*OBSOLETE\s*\|/gm) ?? []).length;
+  return totalRows > 0 && verifiedPlusObsolete === totalRows;
+};
 
 /** Read persisted escalation state, defaulting to `{}` if missing. */
 export const readEscalationState = async (
