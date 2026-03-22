@@ -34,3 +34,4 @@
 | 28 | VERIFIED | [Valid progress statuses with enforcement](docs/scenarios/28-valid-progress-statuses.md)                                      |              |
 | 29 | VERIFIED | [100% test coverage enforcement](docs/scenarios/29-test-coverage-enforcement.md)                                              |              |
 | 30 | VERIFIED | [Strict Deno lint enforcement as quality gate](docs/scenarios/30-lint-enforcement.md)                                         |              |
+| 31 | WORK_COMPLETE | [deno fmt --check as formatting quality gate](docs/scenarios/31-fmt-check.md)                                |              |
