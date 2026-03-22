@@ -1,5 +1,5 @@
 import type { Agent, CommandSpec } from "./types.ts";
-import { BASE_PROMPT } from "./constants.ts";
+import { AUTONOMOUS_PROMPT, buildTargetedPrompt } from "./constants.ts";
 
 export const buildPrompt = (
   {
@@ -16,25 +16,23 @@ export const buildPrompt = (
     progressFile?: string;
   },
 ): string => {
+  const raw = targetScenario === undefined
+    ? AUTONOMOUS_PROMPT
+    : buildTargetedPrompt(targetScenario);
   const prompt = (specFile || progressFile)
-    ? BASE_PROMPT
+    ? raw
       .replaceAll("@specification.md", `@${specFile ?? "specification.md"}`)
       .replaceAll("@progress.md", `@${progressFile ?? "progress.md"}`)
-    : BASE_PROMPT;
+    : raw;
 
-  const actionableInfo = actionableScenarios.length > 0
+  const actionableInfo = targetScenario === undefined &&
+      actionableScenarios.length > 0
     ? `\n\nActionable scenarios (not yet WORK_COMPLETE, VERIFIED, or OBSOLETE): ${
       actionableScenarios.join(", ")
     }`
     : "";
 
-  const base = targetScenario === undefined
-    ? `${prompt}${actionableInfo}`
-    : `${prompt}${actionableInfo}
-
-ACTUALLY:
-- You must work ONLY on scenario ${targetScenario}.
-- Do not work on any other scenario in this iteration.`;
+  const base = `${prompt}${actionableInfo}`;
 
   return validationFailurePath === undefined ? base : `${base}
 

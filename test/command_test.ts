@@ -1,6 +1,6 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1.0.11";
 import { buildCommandSpec, buildPrompt } from "../src/command.ts";
-import { BASE_PROMPT } from "../src/constants.ts";
+import { AUTONOMOUS_PROMPT, buildTargetedPrompt } from "../src/constants.ts";
 
 Deno.test("buildPrompt without scenario or actionable", () => {
   const prompt = buildPrompt({
@@ -8,17 +8,21 @@ Deno.test("buildPrompt without scenario or actionable", () => {
     validationFailurePath: undefined,
     actionableScenarios: [],
   });
-  assertEquals(prompt, BASE_PROMPT);
+  assertEquals(prompt, AUTONOMOUS_PROMPT);
 });
 
-Deno.test("buildPrompt with scenario scopes to it", () => {
+Deno.test("buildPrompt with target scenario is prescriptive", () => {
   const prompt = buildPrompt({
     targetScenario: 3,
     validationFailurePath: undefined,
     actionableScenarios: [3, 7],
   });
-  assertStringIncludes(prompt, "scenario 3");
-  assertStringIncludes(prompt, "ACTUALLY");
+  assertStringIncludes(prompt, "Implement scenario 3");
+  assertStringIncludes(prompt, "Do NOT work on any other scenario");
+  // Should not contain autonomous "find" language
+  assertEquals(prompt.includes("Find the next"), false);
+  // Actionable list is omitted when target is assigned
+  assertEquals(prompt.includes("Actionable scenarios"), false);
 });
 
 Deno.test("buildPrompt general mode scopes to targetScenario", () => {
@@ -27,22 +31,21 @@ Deno.test("buildPrompt general mode scopes to targetScenario", () => {
     validationFailurePath: undefined,
     actionableScenarios: [3],
   });
-  assertStringIncludes(prompt, "scenario 3");
-  assertStringIncludes(prompt, "ACTUALLY");
+  assertStringIncludes(prompt, "Implement scenario 3");
+  assertEquals(prompt.includes("Find the next"), false);
 });
 
-Deno.test("buildPrompt includes actionable scenarios in prompt", () => {
+Deno.test("buildPrompt targeted omits actionable list", () => {
   const prompt = buildPrompt({
     targetScenario: 5,
     validationFailurePath: undefined,
     actionableScenarios: [5, 12, 20],
   });
-  assertStringIncludes(prompt, "Actionable scenarios");
-  assertStringIncludes(prompt, "5, 12, 20");
+  assertEquals(prompt.includes("Actionable scenarios"), false);
   assertStringIncludes(prompt, "scenario 5");
 });
 
-Deno.test("buildPrompt actionable without target does not scope", () => {
+Deno.test("buildPrompt autonomous includes actionable list", () => {
   const prompt = buildPrompt({
     targetScenario: undefined,
     validationFailurePath: undefined,
@@ -50,7 +53,7 @@ Deno.test("buildPrompt actionable without target does not scope", () => {
   });
   assertStringIncludes(prompt, "Actionable scenarios");
   assertStringIncludes(prompt, "5, 12");
-  assertEquals(prompt.includes("ACTUALLY"), false);
+  assertStringIncludes(prompt, "Find the next");
 });
 
 Deno.test("buildPrompt with validation failure", () => {
@@ -142,4 +145,14 @@ Deno.test("buildCommandSpec codex", () => {
   assertStringIncludes(spec.args.join(" "), "exec");
   assertStringIncludes(spec.args.join(" "), "gpt-5.1-codex");
   assertStringIncludes(spec.args.join(" "), "test prompt");
+});
+
+Deno.test("buildTargetedPrompt includes critique for same scenario", () => {
+  const prompt = buildTargetedPrompt(7);
+  assertStringIncludes(prompt, "CRITIQUE scenario 7");
+});
+
+Deno.test("AUTONOMOUS_PROMPT includes completion marker check", () => {
+  assertStringIncludes(AUTONOMOUS_PROMPT, "VERIFIED output");
+  assertStringIncludes(AUTONOMOUS_PROMPT, "find the first complete");
 });
