@@ -260,6 +260,8 @@ export type AgentRunDeps = {
     signal: AbortSignal;
     log: Logger;
     cwd: string | undefined;
+    /** Worker index used to build a colored per-line stdio prefix. */
+    workerIndex?: number;
   }) => Promise<IterationResult>;
 };
 
@@ -280,6 +282,7 @@ export const transitionRunningAgent = async (
   log: Logger,
   signal: AbortSignal,
   cwd: string | undefined,
+  workerIndex?: number,
 ): Promise<DoneState> => {
   const ctx: HookContext = {
     agent: state.agent,
@@ -302,6 +305,7 @@ export const transitionRunningAgent = async (
     signal,
     log,
     cwd,
+    workerIndex,
   });
 
   await plugin.onIterationEnd?.({ result, ctx });
@@ -322,6 +326,8 @@ export const workerTransition = async (
     signal: AbortSignal;
     cwd: string | undefined;
     agentDeps: AgentRunDeps;
+    /** Passed to execute so it can build a colored per-line stdio prefix. */
+    workerIndex?: number;
   },
 ): Promise<WorkerState> => {
   const from = state.tag;
@@ -347,6 +353,7 @@ export const workerTransition = async (
         opts.log,
         opts.signal,
         opts.cwd,
+        opts.workerIndex,
       );
       break;
     case "done":

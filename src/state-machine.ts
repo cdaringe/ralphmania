@@ -52,6 +52,8 @@ export type MachineDeps = {
       targetScenarioOverride?: number;
       specFile?: string;
       progressFile?: string;
+      /** Worker index forwarded to the agent executor for stdio prefixing. */
+      workerIndex?: number;
     },
   ) => Promise<IterationResult>;
   readonly runValidation: (
@@ -392,6 +394,7 @@ export const transitionRunningWorkers = async (
           cwd: wt.path,
           specFile: ctx.specFile,
           progressFile: ctx.progressFile,
+          workerIndex: i,
           ...(scenario !== undefined
             ? { targetScenarioOverride: scenario }
             : {}),

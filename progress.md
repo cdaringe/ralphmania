@@ -35,3 +35,4 @@
 | 29 | VERIFIED | [100% test coverage enforcement](docs/scenarios/29-test-coverage-enforcement.md)                                              |              |
 | 30 | VERIFIED | [Strict Deno lint enforcement as quality gate](docs/scenarios/30-lint-enforcement.md)                                         |              |
 | 32 | VERIFIED | [Non-zero exit code when iterations exhausted without completion](docs/scenarios/32-non-zero-exit-on-incomplete.md)           |              |
+| 33 | WIP      | [Worker stdio per-line colored prefix for terminal output](docs/scenarios/33-worker-stdio-prefix.md)                          |              |

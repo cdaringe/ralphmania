@@ -14,6 +14,7 @@ import {
   RALPH_RECEIPTS_DIRNAME,
   TIMEOUT_MS,
 } from "./constants.ts";
+import { blue, cyan, green, magenta, yellow } from "./colors.ts";
 import { getModel } from "./model.ts";
 import { buildCommandSpec } from "./command.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
@@ -74,6 +75,66 @@ export const ndjsonResultTransform = (): TransformStream<
   });
 };
 
+const WORKER_COLORS: ReadonlyArray<(s: string) => string> = [
+  green,
+  yellow,
+  cyan,
+  magenta,
+  blue,
+];
+
+/**
+ * Build a fixed-width colored prefix string for a worker's stdio output.
+ * Format: `[wN/sNN] ` — worker index + zero-padded scenario number.
+ * Colors cycle through {@link WORKER_COLORS} so each worker is visually
+ * distinct. Only colored when writing to a TTY (controlled by colors.ts).
+ */
+export const workerPrefix = (
+  workerIndex: number,
+  scenario: number | undefined,
+): string => {
+  const color = WORKER_COLORS[workerIndex % WORKER_COLORS.length];
+  const sPart = scenario !== undefined
+    ? String(scenario).padStart(2, "0")
+    : "--";
+  return color(`[w${workerIndex}/s${sPart}]`) + " ";
+};
+
+/**
+ * TransformStream that prepends `prefix` to the start of every line in the
+ * byte stream. Applies ONLY when writing to the terminal — disk writes bypass
+ * this transform to keep logs clean (scenario 33).
+ */
+export const linePrefixTransform = (
+  prefix: string,
+): TransformStream<Uint8Array, Uint8Array> => {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let lineStart = true;
+  return new TransformStream({
+    transform(
+      chunk: Uint8Array,
+      controller: TransformStreamDefaultController<Uint8Array>,
+    ): void {
+      const text = decoder.decode(chunk, { stream: true });
+      let result = "";
+      for (const char of text) {
+        if (lineStart) {
+          result += prefix;
+          lineStart = false;
+        }
+        result += char;
+        if (char === "\n") {
+          lineStart = true;
+        }
+      }
+      if (result) {
+        controller.enqueue(encoder.encode(result));
+      }
+    },
+  });
+};
+
 /**
  * Read a byte stream, decode it, and forward each chunk to `output`.
  *
@@ -120,9 +181,10 @@ export { resolveWorkerModelSelection } from "./worker-machine.ts";
  * This is the default {@link AgentRunDeps.execute} implementation.
  */
 export const executeAgent: AgentRunDeps["execute"] = async (
-  { spec, agent, selection, iterationNum, signal, log, cwd }: Parameters<
-    AgentRunDeps["execute"]
-  >[0],
+  { spec, agent, selection, iterationNum, signal, log, cwd, workerIndex }:
+    Parameters<
+      AgentRunDeps["execute"]
+    >[0],
 ): Promise<IterationResult> => {
   const combinedSignal = AbortSignal.any([
     signal,
@@ -145,9 +207,22 @@ export const executeAgent: AgentRunDeps["execute"] = async (
       signal: combinedSignal,
     }).spawn();
 
-    const stdoutStream = agent === "claude"
+    const prefix = workerIndex !== undefined
+      ? workerPrefix(workerIndex, selection.targetScenario)
+      : undefined;
+
+    const rawStdout = agent === "claude"
       ? child.stdout.pipeThrough(ndjsonResultTransform())
       : child.stdout;
+
+    // Apply per-line prefix for terminal output only; disk writes (validation
+    // logs) bypass this transform so on-disk content stays prefix-free.
+    const stdoutStream = prefix
+      ? rawStdout.pipeThrough(linePrefixTransform(prefix))
+      : rawStdout;
+    const stderrStream = prefix
+      ? child.stderr.pipeThrough(linePrefixTransform(prefix))
+      : child.stderr;
 
     const [status, foundAllCompleteSigil] = await Promise.all([
       child.status,
@@ -156,7 +231,7 @@ export const executeAgent: AgentRunDeps["execute"] = async (
         output: Deno.stdout,
         marker: COMPLETION_MARKER,
       }),
-      pipeStream({ stream: child.stderr, output: Deno.stderr }),
+      pipeStream({ stream: stderrStream, output: Deno.stderr }),
     ]);
 
     if (status.code !== 0) {
@@ -211,6 +286,7 @@ export const runIteration = async (
     targetScenarioOverride,
     specFile,
     progressFile,
+    workerIndex,
   }: {
     iterationNum: number;
     agent: Agent;
@@ -223,6 +299,7 @@ export const runIteration = async (
     targetScenarioOverride?: number;
     specFile?: string;
     progressFile?: string;
+    workerIndex?: number;
   },
 ): Promise<IterationResult> => {
   let current: import("./worker-machine.ts").WorkerState = initialWorkerState({
@@ -241,6 +318,7 @@ export const runIteration = async (
       log,
       signal,
       cwd,
+      workerIndex,
       agentDeps: defaultAgentDeps,
     });
   }
