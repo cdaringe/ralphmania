@@ -12,8 +12,8 @@ prompt workers to correct it.
   `["WIP", "WORK_COMPLETE", "VERIFIED", "NEEDS_REWORK", "OBSOLETE"]` with a
   `ScenarioStatus` type.
 - **`validateProgressStatuses()`** (`src/model.ts`): Uses `parseProgressRows` to
-  extract status values, compares each non-empty status against `VALID_STATUSES`,
-  returns invalid entries as `{ scenario, status }` objects.
+  extract status values, compares each non-empty status against
+  `VALID_STATUSES`, returns invalid entries as `{ scenario, status }` objects.
 - **Orchestrator integration** (`src/orchestrator.ts`): Called at the top of
   each loop iteration. Invalid statuses are logged as errors with the full list
   of valid values. The scenario with the invalid status remains actionable, so
