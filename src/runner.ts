@@ -4,10 +4,8 @@ import type {
   EscalationLevel,
   IterationResult,
   Logger,
-  LoopState,
   ModelSelection,
   Result,
-  ValidationResult,
 } from "./types.ts";
 import { err, extractSDKText, ok } from "./types.ts";
 import {
@@ -16,11 +14,15 @@ import {
   RALPH_RECEIPTS_DIRNAME,
   TIMEOUT_MS,
 } from "./constants.ts";
-import { getModel, resolveModelSelection } from "./model.ts";
-import { buildCommandSpec, buildPrompt } from "./command.ts";
-import { runValidation } from "./validation.ts";
+import { getModel } from "./model.ts";
+import { buildCommandSpec } from "./command.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
-import { cyan, dim, green, magenta, yellow } from "./colors.ts";
+import {
+  initialWorkerState,
+  isWorkerTerminal,
+  workerTransition,
+} from "./worker-machine.ts";
+import type { AgentRunDeps } from "./worker-machine.ts";
 
 /**
  * Parse an NDJSON line from `claude --output-format=stream-json` and extract
@@ -110,76 +112,18 @@ export const pipeStream = async ({ stream, output, marker }: {
   return found;
 };
 
-export const runIteration = async (
-  {
-    iterationNum,
-    agent,
-    signal,
-    log,
-    validationFailurePath,
-    plugin,
-    level,
-    cwd,
-    targetScenarioOverride,
-    specFile,
-    progressFile,
-  }: {
-    iterationNum: number;
-    agent: Agent;
-    signal: AbortSignal;
-    log: Logger;
-    validationFailurePath: string | undefined;
-    plugin: Plugin;
-    level: EscalationLevel | undefined;
-    cwd?: string;
-    targetScenarioOverride?: number;
-    specFile?: string;
-    progressFile?: string;
-  },
+// Re-export from worker-machine for backward compatibility.
+export { resolveWorkerModelSelection } from "./worker-machine.ts";
+
+/**
+ * Execute an agent subprocess — the I/O boundary of the worker pipeline.
+ * This is the default {@link AgentRunDeps.execute} implementation.
+ */
+export const executeAgent: AgentRunDeps["execute"] = async (
+  { spec, agent, selection, iterationNum, signal, log, cwd }: Parameters<
+    AgentRunDeps["execute"]
+  >[0],
 ): Promise<IterationResult> => {
-  const ctx: HookContext = { agent, log, iterationNum };
-
-  const rawSelection: ModelSelection = targetScenarioOverride !== undefined
-    ? {
-      model: getModel({ agent, mode: "general" }),
-      mode: "general",
-      targetScenario: targetScenarioOverride,
-      effort: "high",
-      actionableScenarios: [targetScenarioOverride],
-    }
-    : await resolveModelSelection({
-      agent,
-      log,
-      minLevel: level,
-      progressFile,
-    });
-  const selection = plugin.onModelSelected
-    ? await plugin.onModelSelected({ selection: rawSelection, ctx })
-    : rawSelection;
-
-  const rawPrompt = buildPrompt({
-    targetScenario: selection.targetScenario,
-    validationFailurePath,
-    actionableScenarios: selection.actionableScenarios,
-    specFile,
-    progressFile,
-  });
-  const prompt = plugin.onPromptBuilt
-    ? await plugin.onPromptBuilt({ prompt: rawPrompt, selection, ctx })
-    : rawPrompt;
-
-  const rawSpec = buildCommandSpec({ agent, model: selection.model, prompt });
-  const spec = plugin.onCommandBuilt
-    ? await plugin.onCommandBuilt({ spec: rawSpec, selection, ctx })
-    : rawSpec;
-
-  log({
-    tags: ["info", "iteration"],
-    message: `Starting ${iterationNum} (${selection.model}${
-      selection.effort ? `, effort: ${selection.effort}` : ""
-    })...`,
-  });
-
   const combinedSignal = AbortSignal.any([
     signal,
     AbortSignal.timeout(TIMEOUT_MS),
@@ -215,40 +159,93 @@ export const runIteration = async (
       pipeStream({ stream: child.stderr, output: Deno.stderr }),
     ]);
 
-    const result: IterationResult = status.code !== 0
-      ? (log({
+    if (status.code !== 0) {
+      log({
         tags: ["error"],
         message:
           `iteration ${iterationNum} failed with exit code ${status.code}`,
-      }),
-        { status: "failed", code: status.code })
-      : foundAllCompleteSigil
-      ? (log({
+      });
+      return { status: "failed", code: status.code };
+    }
+    if (foundAllCompleteSigil) {
+      log({
         tags: ["info"],
         message: `specification complete after ${iterationNum} iterations.`,
-      }),
-        { status: "complete" })
-      : (log({
-        tags: ["info"],
-        message: `Iteration ${iterationNum} complete.`,
-      }),
-        { status: "continue" });
-
-    await plugin.onIterationEnd?.({ result, ctx });
-    return result;
+      });
+      return { status: "complete" };
+    }
+    log({
+      tags: ["info"],
+      message: `Iteration ${iterationNum} complete.`,
+    });
+    return { status: "continue" };
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       log({
         tags: ["error"],
         message: `TIMEOUT: iteration ${iterationNum} exceeded 60 minutes`,
       });
-      const result: IterationResult = { status: "timeout" };
-      await plugin.onIterationEnd?.({ result, ctx });
-      return result;
+      return { status: "timeout" };
     }
-
     throw error;
   }
+};
+
+/** Default agent deps using real subprocess execution. */
+const defaultAgentDeps: AgentRunDeps = { execute: executeAgent };
+
+/**
+ * Run a single agent iteration. Drives the worker state machine through
+ * model resolution → prompt building → command building → agent execution.
+ */
+export const runIteration = async (
+  {
+    iterationNum,
+    agent,
+    signal,
+    log,
+    validationFailurePath,
+    plugin,
+    level,
+    cwd,
+    targetScenarioOverride,
+    specFile,
+    progressFile,
+  }: {
+    iterationNum: number;
+    agent: Agent;
+    signal: AbortSignal;
+    log: Logger;
+    validationFailurePath: string | undefined;
+    plugin: Plugin;
+    level: EscalationLevel | undefined;
+    cwd?: string;
+    targetScenarioOverride?: number;
+    specFile?: string;
+    progressFile?: string;
+  },
+): Promise<IterationResult> => {
+  let current: import("./worker-machine.ts").WorkerState = initialWorkerState({
+    iterationNum,
+    agent,
+    level,
+    targetScenarioOverride,
+    validationFailurePath,
+    specFile,
+    progressFile,
+  });
+
+  while (!isWorkerTerminal(current)) {
+    current = await workerTransition(current, {
+      plugin,
+      log,
+      signal,
+      cwd,
+      agentDeps: defaultAgentDeps,
+    });
+  }
+
+  return current.result;
 };
 
 export const RECEIPTS_PROMPT =
@@ -318,80 +315,4 @@ export const updateReceipts = async (
   } catch (error) {
     return err(`Failed to generate receipts: ${error} [${cmdString}]`);
   }
-};
-
-/**
- * Execute one full cycle of the agentic loop: run the agent, validate
- * the output, and advance the {@link LoopState}.
- */
-export const runLoopIteration = async (
-  {
-    agent,
-    iterationNum,
-    level,
-    log,
-    plugin,
-    signal,
-    state,
-    cwd,
-  }: {
-    agent: Agent;
-    iterationNum: number;
-    level: EscalationLevel | undefined;
-    log: Logger;
-    plugin: Plugin;
-    signal: AbortSignal;
-    state: LoopState;
-    cwd?: string;
-  },
-): Promise<LoopState> => {
-  log({
-    tags: ["info", "phase"],
-    message: `${magenta("PHASE 1")} ${cyan("AGENT EXECUTION")} ${
-      dim(`(iteration ${iterationNum})`)
-    }`,
-  });
-  const result: IterationResult = await runIteration({
-    iterationNum,
-    agent,
-    signal,
-    log,
-    validationFailurePath: state.validationFailurePath,
-    plugin,
-    level,
-    cwd,
-  });
-
-  log({
-    tags: ["info", "phase"],
-    message: `${magenta("PHASE 2")} ${yellow("VALIDATION")} ${
-      dim(`(iteration ${iterationNum})`)
-    }`,
-  });
-  const rawValidation: ValidationResult = await runValidation({
-    iterationNum,
-    log,
-    cwd,
-  });
-
-  const ctx: HookContext = { agent, log, iterationNum };
-  const validation = plugin.onValidationComplete
-    ? await plugin.onValidationComplete({ result: rawValidation, ctx })
-    : rawValidation;
-
-  const validationFailurePath = validation.status === "failed"
-    ? validation.outputPath
-    : undefined;
-
-  const isPriorWorkOk = validation.status === "passed" &&
-    result.status === "complete";
-
-  const task = isPriorWorkOk ? "complete" : "build";
-  log({
-    tags: ["info", "phase"],
-    message: `${yellow("ITERATION " + iterationNum)} ${dim("COMPLETE")} ${
-      isPriorWorkOk ? green("(done)") : cyan("(continuing)")
-    }`,
-  });
-  return { validationFailurePath, task };
 };

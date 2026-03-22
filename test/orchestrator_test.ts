@@ -1,10 +1,8 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { findActionableScenarios, isAllVerified } from "../src/model.ts";
 import { runParallelLoop } from "../src/orchestrator.ts";
-import type { ParallelDeps } from "../src/orchestrator.ts";
-import type { Logger } from "../src/types.ts";
+import { noopLog, stubDeps, stubWorktree } from "./fixtures.ts";
 import { ok } from "../src/types.ts";
-import type { WorktreeInfo } from "../src/worktree.ts";
 
 // --- Model function tests (used by parallel orchestration) ---
 
@@ -43,7 +41,7 @@ Deno.test("isAllVerified returns true when all VERIFIED and count matches", () =
   assertEquals(isAllVerified(content, 2), true);
 });
 
-Deno.test("isAllVerified returns false when row count does not match expectedCount", () => {
+Deno.test("isAllVerified returns false when expected scenario IDs are missing", () => {
   const content = [
     "| 1 | VERIFIED | done |",
     "| 2 | VERIFIED | yep  |",
@@ -51,7 +49,15 @@ Deno.test("isAllVerified returns false when row count does not match expectedCou
   assertEquals(isAllVerified(content, 5), false);
 });
 
-Deno.test("isAllVerified returns false when non-sequential rows fewer than expectedCount", () => {
+Deno.test("isAllVerified returns false when count matches but IDs do not", () => {
+  const content = [
+    "| 1 | VERIFIED | done |",
+    "| 3 | VERIFIED | yep  |",
+  ].join("\n");
+  assertEquals(isAllVerified(content, 2), false);
+});
+
+Deno.test("isAllVerified returns false when non-sequential IDs miss expected range", () => {
   const content = [
     "| 2 | VERIFIED | done |",
     "| 3 | VERIFIED | yep  |",
@@ -124,33 +130,6 @@ Deno.test("isAllVerified returns true when all rows are OBSOLETE matching expect
 });
 
 // --- runParallelLoop tests ---
-
-const noopLog: Logger = () => {};
-
-const stubWorktree = (workerIndex: number): WorktreeInfo => ({
-  scenario: workerIndex,
-  path: `/tmp/ralph-wt-${workerIndex}`,
-  branch: `ralph/worker-${workerIndex}-${Date.now()}`,
-});
-
-const stubDeps = (
-  overrides: Partial<ParallelDeps> = {},
-): ParallelDeps => ({
-  readProgress: () => Promise.resolve(""),
-  createWorktree: ({ workerIndex }) =>
-    Promise.resolve(ok(stubWorktree(workerIndex))),
-  runIteration: () => Promise.resolve({ status: "continue" }),
-  runValidation: () => Promise.resolve({ status: "passed" as const }),
-  hasNewCommits: () => Promise.resolve(false),
-  mergeWorktree: () => Promise.resolve("merged"),
-  cleanupWorktree: () => Promise.resolve(ok(undefined)),
-  resetWorkingTree: () => Promise.resolve(ok(undefined)),
-  reconcileMerge: () => Promise.resolve(),
-  readCheckpoint: () => Promise.resolve(undefined),
-  writeCheckpoint: () => Promise.resolve(),
-  clearCheckpoint: () => Promise.resolve(),
-  ...overrides,
-});
 
 Deno.test("runParallelLoop exits immediately when all scenarios verified", async () => {
   const content = "| 1 | VERIFIED | done |\n| 2 | VERIFIED | done |";

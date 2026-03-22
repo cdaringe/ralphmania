@@ -309,8 +309,7 @@ import {
 } from "../src/model.ts";
 import type { Logger } from "../src/types.ts";
 import { ESCALATION_FILE } from "../src/constants.ts";
-
-const noopLog: Logger = () => {};
+import { noopLog } from "./fixtures.ts";
 
 const writeTempProgress = async (content: string): Promise<string> => {
   const dir = await Deno.makeTempDir();

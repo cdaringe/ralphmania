@@ -6,10 +6,8 @@ import {
   reconcileMerge,
 } from "../src/reconcile.ts";
 import type { ReconcileDeps } from "../src/reconcile.ts";
-import type { Logger } from "../src/types.ts";
 import type { WorktreeInfo } from "../src/worktree.ts";
-
-const noopLog: Logger = () => {};
+import { noopLog } from "./fixtures.ts";
 
 const stubWorktree: WorktreeInfo = {
   path: "/tmp/ralph-wt-0",

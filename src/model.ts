@@ -135,7 +135,7 @@ export const findActionableScenarios = (content: string): number[] => {
     .map((r) => r.scenario);
 };
 
-/** Check whether every scenario row present in the content is VERIFIED or OBSOLETE. */
+/** Check whether every expected scenario is present and VERIFIED or OBSOLETE. */
 export const isAllVerified = (
   content: string,
   expectedCount?: number,
@@ -145,8 +145,11 @@ export const isAllVerified = (
   const allDone = rows.length > 0 &&
     rows.every((r) => doneStatuses.has(r.status));
   if (!allDone) return false;
-  if (expectedCount !== undefined && rows.length !== expectedCount) {
-    return false;
+  if (expectedCount !== undefined) {
+    const presentIds = new Set(rows.map((r) => r.scenario));
+    for (let i = 1; i <= expectedCount; i++) {
+      if (!presentIds.has(i)) return false;
+    }
   }
   return true;
 };

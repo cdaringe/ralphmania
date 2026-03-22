@@ -4,9 +4,7 @@ import {
   createWorktree,
   hasNewCommits,
 } from "../src/worktree.ts";
-import type { Logger } from "../src/types.ts";
-
-const noopLog: Logger = () => {};
+import { noopLog } from "./fixtures.ts";
 
 Deno.test("createWorktree creates and cleanupWorktree removes", async () => {
   // This test requires being in a git repo — skip if not

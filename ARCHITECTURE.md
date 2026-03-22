@@ -25,7 +25,7 @@ graph TD
         SelectModels --> SpawnWorkers
     end
 
-    subgraph SpawnWorkers ["Parallel Workers (parallel.ts)"]
+    subgraph SpawnWorkers ["Parallel Workers (orchestrator.ts)"]
         direction TB
         CreateWT[Create Git Worktrees] --> W1[Worker 0]
         CreateWT --> W2[Worker 1]
@@ -131,16 +131,16 @@ graph TD
     subgraph Sources ["src/"]
         mod.ts --> cli.ts
         mod.ts --> runner.ts
-        mod.ts --> parallel.ts
+        mod.ts --> orchestrator.ts
         mod.ts --> progress.ts
         mod.ts --> validation.ts
         mod.ts --> plugin.ts
         mod.ts --> logger.ts
 
-        parallel.ts --> worktree.ts
-        parallel.ts --> reconcile.ts
-        parallel.ts --> runner.ts
-        parallel.ts --> model.ts
+        orchestrator.ts --> worktree.ts
+        orchestrator.ts --> reconcile.ts
+        orchestrator.ts --> runner.ts
+        orchestrator.ts --> model.ts
 
         runner.ts --> command.ts
         runner.ts --> validation.ts

@@ -1,212 +1,178 @@
-# Ralphmania State Machine
+# Ralphmania State Machines
+
+Three state machines govern the system. Each is implemented as a TypeScript
+discriminated union with per-state transition functions that enforce valid edges
+at the type level.
 
 ## Orchestrator Machine
 
-```rust
-enum OrchestratorState {
-    Booting,
-    ReadingProgress { path: PathBuf },
-    FindingActionable { scenarios: Vec<Scenario> },
-    SelectingModels { actionable: Vec<Scenario> },
-    SpawningWorkers {
-        tasks: Vec<WorkerTask>,   // scenario + model + worktree path
-    },
-    WorkersRunning {
-        handles: Vec<WorkerHandle>,  // wait for ANY to complete
-    },
-    MergeQueued {
-        pending: Vec<WorktreePath>,  // on-disk queue of worktrees ready to merge
-    },
-    Merging { branch: BranchName },
-    Reconciling { conflict: MergeConflict },
-    Validating { iteration: usize, log_path: PathBuf },
-    FeedingBack { failure_log: PathBuf },
-    GeneratingReceipts,
-    Done,
-}
+**File:** `src/state-machine.ts`
+
+Drives the main loop: read progress → find actionable scenarios → dispatch
+workers → validate → check doneness → loop.
+
+```typescript
+type OrchestratorState =
+  | { tag: "init" }
+  | { tag: "reading_progress"; iterationsUsed; validationFailurePath }
+  | {
+    tag: "finding_actionable";
+    iterationsUsed;
+    validationFailurePath;
+    progressContent;
+  }
+  | {
+    tag: "running_workers";
+    iterationsUsed;
+    validationFailurePath;
+    uniqueActionable;
+    escalation;
+  }
+  | { tag: "validating"; iterationsUsed; validationFailurePath }
+  | { tag: "checking_doneness"; iterationsUsed; validationFailurePath }
+  | { tag: "done"; iterationsUsed }
+  | { tag: "aborted" };
 ```
 
 ### Edges
 
-```rust
-/// Each edge names an event, its source state, and the set of valid
-/// target states it may transition to.
-enum OrchestratorEdge {
-    Initialized {
-        from: OrchestratorState::Booting,
-        to: OrchestratorState::ReadingProgress,
-        config: ResolvedConfig,
-    },
-    ProgressParsed {
-        from: OrchestratorState::ReadingProgress,
-        to: OrchestratorState::FindingActionable,
-        scenarios: Vec<Scenario>,
-    },
-    ActionableResolved {
-        from: OrchestratorState::FindingActionable,
-        to: OrchestratorState::SelectingModels
-            | OrchestratorState::GeneratingReceipts,
-        actionable: Vec<Scenario>,  // empty ⇒ GeneratingReceipts
-    },
-    ModelsAssigned {
-        from: OrchestratorState::SelectingModels,
-        to: OrchestratorState::SpawningWorkers,
-        tasks: Vec<WorkerTask>,
-    },
-    WorkersSpawned {
-        from: OrchestratorState::SpawningWorkers,
-        to: OrchestratorState::WorkersRunning,
-        handles: Vec<WorkerHandle>,
-    },
-    WorkerFinished {
-        from: OrchestratorState::WorkersRunning,
-        to: OrchestratorState::MergeQueued,
-        worktree: WorktreePath,
-    },
-    DequeuedNext {
-        from: OrchestratorState::MergeQueued,
-        to: OrchestratorState::Merging
-            | OrchestratorState::WorkersRunning,  // queue empty + workers still running
-        branch: Option<BranchName>,               // None ⇒ back to WorkersRunning
-    },
-    MergeResolved {
-        from: OrchestratorState::Merging,
-        to: OrchestratorState::Validating
-            | OrchestratorState::Reconciling,
-        conflict: Option<MergeConflict>,  // Some ⇒ Reconciling
-    },
-    ConflictResolved {
-        from: OrchestratorState::Reconciling,
-        to: OrchestratorState::Validating,
-    },
-    ValidationComplete {
-        from: OrchestratorState::Validating,
-        to: OrchestratorState::MergeQueued
-            | OrchestratorState::FeedingBack
-            | OrchestratorState::FindingActionable,
-        iteration: usize,
-        log_path: PathBuf,
-        passed: bool,
-        // passed + queue non-empty  ⇒ MergeQueued
-        // passed + queue empty      ⇒ FindingActionable
-        // !passed                   ⇒ FeedingBack
-    },
-    FailureAttached {
-        from: OrchestratorState::FeedingBack,
-        to: OrchestratorState::FindingActionable,
-        failure_log: PathBuf,
-    },
-    ReceiptsWritten {
-        from: OrchestratorState::GeneratingReceipts,
-        to: OrchestratorState::Done,
-    },
-}
+Each transition function has a narrow return type enforcing valid targets:
+
+```
+transitionInit              → reading_progress | validating
+transitionReadingProgress   → finding_actionable | done | aborted
+transitionFindingActionable → running_workers | done
+transitionRunningWorkers    → validating | reading_progress
+transitionValidating        → checking_doneness
+transitionCheckingDoneness  → reading_progress | done
+```
+
+### Diagram
+
+```
+init
+  │
+  ▼
+reading_progress  ◄───────────────────────┐
+  │                                       │
+  ├──► done (all verified / limit)        │
+  ├──► aborted (signal)                   │
+  ▼                                       │
+finding_actionable                        │
+  │                                       │
+  ├──► done (no actionable remain)        │
+  ▼                                       │
+running_workers                           │
+  │                                       │
+  ├──► reading_progress (no worktrees)    │
+  ▼                                       │
+validating                                │
+  │                                       │
+  ▼                                       │
+checking_doneness ────────────────────────┘
+  │
+  └──► done (all verified)
 ```
 
 ## Worker Machine
 
-Per-scenario, runs inside an isolated git worktree.
+**File:** `src/worker-machine.ts`
 
-```rust
-enum WorkerState {
-    ResolvingModel { scenario: ScenarioId },
-    BuildingPrompt {
-        scenario: ScenarioId,
-        model: ModelConfig,
-        prior_failures: Vec<PathBuf>,
-    },
-    BuildingCommand { prompt: String },
-    RunningAgent {
-        child: Process,
-        output_stream: NdjsonStream,
-    },
-    IterationComplete { scenario: ScenarioId },
-    IterationContinue { scenario: ScenarioId },
-}
+Models a single agent iteration as a linear pipeline. Separates pure logic
+(model selection, prompt/command building) from subprocess I/O (agent
+execution), making the pipeline testable without real agent binaries.
+
+```typescript
+type WorkerState =
+  | { tag: "resolving_model";  iterationNum; agent; level; targetScenarioOverride; ... }
+  | { tag: "model_resolved";   iterationNum; agent; selection; validationFailurePath; ... }
+  | { tag: "prompt_built";     iterationNum; agent; selection; prompt }
+  | { tag: "command_built";    iterationNum; agent; selection; spec }
+  | { tag: "running_agent";    iterationNum; agent; selection; spec }
+  | { tag: "done";             result: IterationResult }
 ```
 
 ### Edges
 
-```rust
-enum WorkerEdge {
-    ModelResolved {
-        from: WorkerState::ResolvingModel,
-        to: WorkerState::BuildingPrompt,
-        model: ModelConfig,
-    },
-    PromptBuilt {
-        from: WorkerState::BuildingPrompt,
-        to: WorkerState::BuildingCommand,
-        prompt: String,
-    },
-    CommandBuilt {
-        from: WorkerState::BuildingCommand,
-        to: WorkerState::RunningAgent,
-        cmd: Command,
-    },
-    AgentExited {
-        from: WorkerState::RunningAgent,
-        to: WorkerState::IterationComplete
-            | WorkerState::IterationContinue,
-        completed: bool,  // true ⇒ IterationComplete
-    },
-}
 ```
+transitionResolvingModel  → model_resolved       (pure: model selection + onModelSelected hook)
+transitionModelResolved   → prompt_built          (pure: buildPrompt + onPromptBuilt hook)
+transitionPromptBuilt     → command_built         (pure: buildCommandSpec + onCommandBuilt hook)
+transitionCommandBuilt    → running_agent         (pure: pass-through)
+transitionRunningAgent    → done                  (I/O: subprocess via AgentRunDeps + onIterationEnd hook)
+```
+
+### Diagram
+
+```
+resolving_model → model_resolved → prompt_built → command_built → running_agent → done
+```
+
+Plugin hooks fire at each transition boundary:
+
+- `onModelSelected` between resolving_model → model_resolved
+- `onPromptBuilt` between model_resolved → prompt_built
+- `onCommandBuilt` between prompt_built → command_built
+- `onIterationEnd` between running_agent → done
 
 ## Scenario Lifecycle
 
-Tracks each scenario's status in `progress.md`.
+**File:** `src/scenario-machine.ts`
 
-```rust
-enum ScenarioStatus {
-    Unimplemented,
-    Complete,
-    Verified,
-    NeedsRework,  // user-initiated
-    Obsolete,     // user-initiated, terminal
-}
+Tracks each scenario's status in `progress.md`. Defines valid transitions and
+provides `validateTransition()` to detect illegal status changes.
+
+```typescript
+type ScenarioState =
+  | { tag: "unimplemented"; scenario } // status: "" or missing
+  | { tag: "wip"; scenario } // status: WIP
+  | { tag: "work_complete"; scenario } // status: WORK_COMPLETE
+  | { tag: "verified"; scenario } // status: VERIFIED
+  | { tag: "needs_rework"; scenario; reworkNotes } // status: NEEDS_REWORK
+  | { tag: "obsolete"; scenario }; // status: OBSOLETE (terminal)
 ```
 
-### Edges
+### Valid Transitions
 
-```rust
-enum ScenarioEdge {
-    AgentMarkedComplete {
-        from: ScenarioStatus::Unimplemented,
-        to: ScenarioStatus::Complete,
-    },
-    ValidationPassed {
-        from: ScenarioStatus::Complete,
-        to: ScenarioStatus::Verified,
-    },
-    UserRejected {
-        from: ScenarioStatus::Complete,
-        to: ScenarioStatus::NeedsRework,
-    },
-    RequeuedForRework {
-        from: ScenarioStatus::NeedsRework,
-        to: ScenarioStatus::Unimplemented,
-    },
-    // Obsolete is set directly by the user in progress.md.
-    // It is not a machine-driven transition.
-}
+```
+unimplemented  → wip, work_complete, obsolete
+wip            → work_complete, needs_rework, obsolete
+work_complete  → verified, needs_rework, obsolete
+verified       → needs_rework, obsolete
+needs_rework   → wip, work_complete, obsolete
+obsolete       → (terminal — no transitions out)
+```
+
+Self-transitions (same status) are always valid.
+
+### Diagram
+
+```
+""  ──→  WIP  ──→  WORK_COMPLETE  ──→  VERIFIED
+ │        │              │                  │
+ │        │              ▼                  │
+ │        │        NEEDS_REWORK ◄───────────┘
+ │        │              │
+ │        ▼              ▼
+ └──────────────→  OBSOLETE (terminal)
 ```
 
 ## Model Escalation Ladder
 
-Scenario status determines which model is assigned:
+Scenario status determines which model config is assigned per-worker:
 
-```rust
-enum ModelRole {
-    Coder,      // Sonnet · high effort — for Unimplemented
-    Escalated,  // Opus  · high effort — for NeedsRework
-    Verifier,   // Opus  · low effort  — when all Complete
-}
-```
+| Role      | Config                         | Trigger                   |
+| --------- | ------------------------------ | ------------------------- |
+| Coder     | Sonnet · general · high effort | Unimplemented scenario    |
+| Escalated | Opus · strong · high effort    | NEEDS_REWORK (level ≥ 1)  |
+| Verifier  | Opus · general · low effort    | All scenarios implemented |
+
+Implemented in `resolveWorkerModelSelection()` (`src/worker-machine.ts`).
 
 ## Plugin Hooks
 
-Fired at each phase transition in the orchestrator/worker:
+Fired at state transition boundaries across the orchestrator and worker
+machines:
 
 ```
 onConfigResolved → onModelSelected → onPromptBuilt → onCommandBuilt
