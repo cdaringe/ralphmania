@@ -748,6 +748,75 @@ Deno.test("runParallelLoop triggers reconcileMerge on conflict", async () => {
   assertEquals(reconciled, true);
 });
 
+Deno.test("runParallelLoop deduplicates scenarios so no two workers get the same one", async () => {
+  // Simulate progress.md with duplicate rows for scenario 18 (both NEEDS_REWORK)
+  const content = [
+    "| 18 | NEEDS_REWORK | fix |",
+    "| 18 | NEEDS_REWORK | fix |",
+  ].join("\n");
+  const overrides: number[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 2,
+    expectedScenarioCount: 1,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      createWorktree: ({ workerIndex }) =>
+        Promise.resolve(ok(stubWorktree(workerIndex))),
+      runIteration: (opts) => {
+        if (opts.targetScenarioOverride !== undefined) {
+          overrides.push(opts.targetScenarioOverride);
+        }
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  // Only one worker should be launched — scenario 18 must not be duplicated
+  assertEquals(overrides, [18]);
+});
+
+Deno.test("runParallelLoop deduplicates across rework and actionable lists", async () => {
+  // Scenario 5 appears as both actionable (no status) and in a duplicate row
+  const content = [
+    "| 5 |          |      |",
+    "| 5 |          |      |",
+    "| 6 |          |      |",
+  ].join("\n");
+  const overrides: number[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 3,
+    expectedScenarioCount: 3,
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      createWorktree: ({ workerIndex }) =>
+        Promise.resolve(ok(stubWorktree(workerIndex))),
+      runIteration: (opts) => {
+        if (opts.targetScenarioOverride !== undefined) {
+          overrides.push(opts.targetScenarioOverride);
+        }
+        return Promise.resolve({ status: "continue" });
+      },
+    }),
+  });
+
+  // Should only get [5, 6], not [5, 5, 6]
+  assertEquals(overrides.sort((a, b) => a - b), [5, 6]);
+});
+
 Deno.test("runParallelLoop logs resolved/still-actionable after merge", async () => {
   let readCount = 0;
   const messages: string[] = [];

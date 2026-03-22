@@ -261,16 +261,21 @@ export const runParallelLoop = async (
         validationFailurePath,
       });
 
-      // Compute actionable scenarios: NEEDS_REWORK first, then remaining
-      const reworkScenarios = findReworkScenarios(content);
+      // Compute actionable scenarios: NEEDS_REWORK first, then remaining.
+      // Deduplicate to guarantee each worker targets a distinct scenario.
+      const reworkScenarios = [...new Set(findReworkScenarios(content))];
       const allActionable = findActionableScenarios(content);
       const reworkSet = new Set(reworkScenarios);
       const actionableScenarios = [
         ...reworkScenarios,
         ...allActionable.filter((s) => !reworkSet.has(s)),
       ];
+      const seen = new Set<number>();
+      const uniqueActionable = actionableScenarios.filter((s) =>
+        seen.has(s) ? false : (seen.add(s), true)
+      );
 
-      if (actionableScenarios.length === 0) {
+      if (uniqueActionable.length === 0) {
         log({
           tags: ["info", "orchestrator"],
           message: green(
@@ -280,13 +285,13 @@ export const runParallelLoop = async (
         break;
       }
 
-      const workerCount = Math.min(parallelism, actionableScenarios.length);
+      const workerCount = Math.min(parallelism, uniqueActionable.length);
 
       log({
         tags: ["info", "orchestrator"],
         message:
           `Round ${iterationsUsed}: launching ${workerCount} worker(s) for scenarios [${
-            actionableScenarios.slice(0, workerCount).join(", ")
+            uniqueActionable.slice(0, workerCount).join(", ")
           }]`,
       });
 
@@ -296,7 +301,7 @@ export const runParallelLoop = async (
           { length: workerCount },
           (_, i) =>
             deps.createWorktree({
-              scenario: actionableScenarios[i] ?? i,
+              scenario: uniqueActionable[i] ?? i,
               workerIndex: i,
               log,
             }),
@@ -337,7 +342,7 @@ export const runParallelLoop = async (
               iterate: deps.runIteration,
               specFile,
               progressFile,
-              targetScenarioOverride: actionableScenarios[i],
+              targetScenarioOverride: uniqueActionable[i],
             }).then((iterationResult): WorkerResult => ({
               workerIndex: i,
               iterationResult,
@@ -359,7 +364,7 @@ export const runParallelLoop = async (
               tags: ["info", "orchestrator"],
               message: yellow(
                 `Worker ${wr.workerIndex} scenario ${
-                  actionableScenarios[wr.workerIndex]
+                  uniqueActionable[wr.workerIndex]
                 }: entering agent reconciliation`,
               ),
             }),
@@ -375,7 +380,7 @@ export const runParallelLoop = async (
         const postMerge = await deps.readProgress();
         const stillActionable = new Set(findActionableScenarios(postMerge));
         results.forEach((wr) => {
-          const scenario = actionableScenarios[wr.workerIndex];
+          const scenario = uniqueActionable[wr.workerIndex];
           scenario !== undefined &&
             (stillActionable.has(scenario)
               ? log({
