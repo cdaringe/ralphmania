@@ -572,3 +572,68 @@ Deno.test("transition sequence: checkpoint resume skips to validating", async ()
     "done",
   ]);
 });
+
+// ---------------------------------------------------------------------------
+// Validation failure prevents premature exit
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionReadingProgress all verified but validation failure → finding_actionable", async () => {
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
+  const ctx = makeCtx({
+    deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
+  });
+  const state: ReadingProgressState = {
+    tag: "reading_progress",
+    iterationsUsed: 0,
+    validationFailurePath: "/tmp/fail.log",
+  };
+  const next = await transitionReadingProgress(state, ctx);
+  assertEquals(next.tag, "finding_actionable");
+});
+
+Deno.test("transitionCheckingDoneness all verified but validation failure → reading_progress", async () => {
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
+  const ctx = makeCtx({
+    deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
+  });
+  const state: CheckingDonenessState = {
+    tag: "checking_doneness",
+    iterationsUsed: 1,
+    validationFailurePath: "/tmp/fail.log",
+  };
+  const next = await transitionCheckingDoneness(state, ctx);
+  assertEquals(next.tag, "reading_progress");
+  if (next.tag === "reading_progress") {
+    assertEquals(next.validationFailurePath, "/tmp/fail.log");
+  }
+});
+
+Deno.test("transitionFindingActionable no actionable but validation failure → forces scenarios to running_workers", async () => {
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
+  const ctx = makeCtx({ expectedScenarioIds: [1.1, 1.2] });
+  const state: FindingActionableState = {
+    tag: "finding_actionable",
+    iterationsUsed: 0,
+    validationFailurePath: "/tmp/fail.log",
+    progressContent: content,
+  };
+  const next = await transitionFindingActionable(state, ctx);
+  assertEquals(next.tag, "running_workers");
+  if (next.tag === "running_workers") {
+    assertEquals(next.uniqueActionable, [1.1, 1.2]);
+    assertEquals(next.validationFailurePath, "/tmp/fail.log");
+  }
+});
+
+Deno.test("transitionFindingActionable validation failure but all OBSOLETE → done (cannot recover)", async () => {
+  const content = "| 1.1 | OBSOLETE | skip |\n| 1.2 | OBSOLETE | skip |";
+  const ctx = makeCtx({ expectedScenarioIds: [1.1, 1.2] });
+  const state: FindingActionableState = {
+    tag: "finding_actionable",
+    iterationsUsed: 0,
+    validationFailurePath: "/tmp/fail.log",
+    progressContent: content,
+  };
+  const next = await transitionFindingActionable(state, ctx);
+  assertEquals(next.tag, "done");
+});

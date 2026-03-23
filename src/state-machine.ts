@@ -233,7 +233,9 @@ export const transitionReadingProgress = async (
     validationFailurePath = undefined;
   }
 
-  if (isAllVerified(content, ctx.expectedScenarioIds)) {
+  if (
+    isAllVerified(content, ctx.expectedScenarioIds) && !validationFailurePath
+  ) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("All scenarios VERIFIED"),
@@ -291,12 +293,41 @@ export const transitionFindingActionable = async (
     ...actionable.filter((s) => !reworkIds.has(s)),
   ];
 
-  if (uniqueActionable.length === 0) {
+  if (uniqueActionable.length === 0 && !state.validationFailurePath) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("No actionable scenarios remain — exiting loop"),
     });
     return { tag: "done", iterationsUsed: state.iterationsUsed };
+  }
+
+  // Validation failed but all scenarios appear done — force the first
+  // non-OBSOLETE spec scenario back into the actionable set so a worker
+  // can address the validation failure.
+  if (uniqueActionable.length === 0 && state.validationFailurePath) {
+    const obsoleteIds = new Set(
+      rows
+        .filter((r) => r.status === Status.OBSOLETE)
+        .map((r) => r.scenario),
+    );
+    const forced = specIds.filter((id) => !obsoleteIds.has(id));
+    if (forced.length === 0) {
+      ctx.log({
+        tags: ["error", "orchestrator"],
+        message:
+          "Validation failed but all spec scenarios are OBSOLETE — cannot recover",
+      });
+      return { tag: "done", iterationsUsed: state.iterationsUsed };
+    }
+    ctx.log({
+      tags: ["info", "orchestrator"],
+      message: yellow(
+        `Validation failed but no actionable scenarios — forcing scenarios [${
+          forced.join(", ")
+        }] back to actionable`,
+      ),
+    });
+    uniqueActionable.push(...forced);
   }
 
   const currentEscalation = await ctx.deps.readEscalationState(ctx.log);
@@ -528,7 +559,10 @@ export const transitionCheckingDoneness = async (
   ctx: MachineContext,
 ): Promise<ReadingProgressState | DoneState> => {
   const content = await ctx.deps.readProgress();
-  if (isAllVerified(content, ctx.expectedScenarioIds)) {
+  if (
+    isAllVerified(content, ctx.expectedScenarioIds) &&
+    !state.validationFailurePath
+  ) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("All scenarios VERIFIED"),
