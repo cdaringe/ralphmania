@@ -135,7 +135,7 @@ Deno.test("transitionReadingProgress at iteration limit → done", async () => {
 });
 
 Deno.test("transitionReadingProgress all verified → done", async () => {
-  const content = "| 1 | VERIFIED | done |\n| 2 | VERIFIED | done |";
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
   const ctx = makeCtx({
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
@@ -149,7 +149,7 @@ Deno.test("transitionReadingProgress all verified → done", async () => {
 });
 
 Deno.test("transitionReadingProgress with actionable scenarios → finding_actionable", async () => {
-  const content = "| 1 |          |      |\n| 2 | VERIFIED | done |";
+  const content = "| 1.1 |          |      |\n| 1.2 | VERIFIED | done |";
   const ctx = makeCtx({
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
@@ -166,9 +166,9 @@ Deno.test("transitionReadingProgress with actionable scenarios → finding_actio
 });
 
 Deno.test("transitionReadingProgress invalid status clears validationFailurePath", async () => {
-  const content = "| 1 | COMPLETE | done |";
+  const content = "| 1.1 | COMPLETE | done |";
   const ctx = makeCtx({
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
   const state: ReadingProgressState = {
@@ -188,8 +188,8 @@ Deno.test("transitionReadingProgress invalid status clears validationFailurePath
 // ---------------------------------------------------------------------------
 
 Deno.test("transitionFindingActionable with no actionable → done", async () => {
-  const content = "| 1 | VERIFIED | done |\n| 2 | OBSOLETE | skip |";
-  const ctx = makeCtx({ expectedScenarioIds: [1, 2] });
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 | OBSOLETE | skip |";
+  const ctx = makeCtx({ expectedScenarioIds: [1.1, 1.2] });
   const state: FindingActionableState = {
     tag: "finding_actionable",
     iterationsUsed: 0,
@@ -201,7 +201,7 @@ Deno.test("transitionFindingActionable with no actionable → done", async () =>
 });
 
 Deno.test("transitionFindingActionable with actionable scenarios → running_workers", async () => {
-  const content = "| 1 |          |      |\n| 2 | NEEDS_REWORK | fix |";
+  const content = "| 1.1 |          |      |\n| 1.2 | NEEDS_REWORK | fix |";
   const ctx = makeCtx();
   const state: FindingActionableState = {
     tag: "finding_actionable",
@@ -213,13 +213,13 @@ Deno.test("transitionFindingActionable with actionable scenarios → running_wor
   assertEquals(next.tag, "running_workers");
   if (next.tag === "running_workers") {
     // NEEDS_REWORK should come first in ordering
-    assertEquals(next.uniqueActionable[0], 2);
-    assertEquals(next.uniqueActionable[1], 1);
+    assertEquals(next.uniqueActionable[0], 1.2);
+    assertEquals(next.uniqueActionable[1], 1.1);
   }
 });
 
 Deno.test("transitionFindingActionable updates escalation state", async () => {
-  const content = "| 1 | NEEDS_REWORK | fix |";
+  const content = "| 1.1 | NEEDS_REWORK | fix |";
   let writtenState: EscalationState = {};
   const ctx = makeCtx({
     deps: stubDeps({
@@ -237,9 +237,9 @@ Deno.test("transitionFindingActionable updates escalation state", async () => {
   };
   const next = await transitionFindingActionable(state, ctx);
   assertEquals(next.tag, "running_workers");
-  assertEquals(writtenState["1"], 1);
+  assertEquals(writtenState["1.1"], 1);
   if (next.tag === "running_workers") {
-    assertEquals(next.escalation["1"], 1);
+    assertEquals(next.escalation["1.1"], 1);
   }
 });
 
@@ -253,7 +253,7 @@ Deno.test("transitionRunningWorkers with worktrees → validating", async () => 
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [1],
+    uniqueActionable: [1.1],
     escalation: {},
   };
   const next = await transitionRunningWorkers(state, ctx);
@@ -274,7 +274,7 @@ Deno.test("transitionRunningWorkers no worktrees → reading_progress (skip roun
     tag: "running_workers",
     iterationsUsed: 2,
     validationFailurePath: undefined,
-    uniqueActionable: [1],
+    uniqueActionable: [1.1],
     escalation: {},
   };
   const next = await transitionRunningWorkers(state, ctx);
@@ -299,8 +299,8 @@ Deno.test("transitionRunningWorkers passes correct escalation levels to workers"
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [1, 2],
-    escalation: { "1": 1 },
+    uniqueActionable: [1.1, 1.2],
+    escalation: { "1.1": 1 },
   };
   await transitionRunningWorkers(state, ctx);
   assertEquals(levels.sort(), [0, 1]);
@@ -321,7 +321,7 @@ Deno.test("transitionRunningWorkers passes workerIndex to runIteration for stdio
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [5, 9],
+    uniqueActionable: [5.1, 9.1],
     escalation: {},
   };
   await transitionRunningWorkers(state, ctx);
@@ -342,7 +342,7 @@ Deno.test("transitionRunningWorkers writes agent checkpoint", async () => {
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [1],
+    uniqueActionable: [1.1],
     escalation: {},
   };
   await transitionRunningWorkers(state, ctx);
@@ -444,7 +444,7 @@ Deno.test("transitionValidating writes validate then done checkpoints", async ()
 // ---------------------------------------------------------------------------
 
 Deno.test("transitionCheckingDoneness all verified → done", async () => {
-  const content = "| 1 | VERIFIED | done |\n| 2 | VERIFIED | done |";
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
   const ctx = makeCtx({
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
@@ -461,7 +461,7 @@ Deno.test("transitionCheckingDoneness all verified → done", async () => {
 });
 
 Deno.test("transitionCheckingDoneness not all verified → reading_progress", async () => {
-  const content = "| 1 | VERIFIED | done |\n| 2 |          |      |";
+  const content = "| 1.1 | VERIFIED | done |\n| 1.2 |          |      |";
   const ctx = makeCtx({
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
@@ -510,12 +510,14 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
   let round = 0;
   const ctx = makeCtx({
     iterations: 1,
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     deps: stubDeps({
       readProgress: () => {
         round++;
         return Promise.resolve(
-          round <= 2 ? "| 1 |          |      |" : "| 1 | VERIFIED | done |",
+          round <= 2
+            ? "| 1.1 |          |      |"
+            : "| 1.1 | VERIFIED | done |",
         );
       },
     }),
@@ -542,7 +544,7 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
 Deno.test("transition sequence: checkpoint resume skips to validating", async () => {
   const ctx = makeCtx({
     iterations: 5,
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     deps: stubDeps({
       readCheckpoint: () =>
         Promise.resolve({
@@ -550,7 +552,7 @@ Deno.test("transition sequence: checkpoint resume skips to validating", async ()
           step: "validate" as const,
           validationFailurePath: undefined,
         }),
-      readProgress: () => Promise.resolve("| 1 | VERIFIED | done |"),
+      readProgress: () => Promise.resolve("| 1.1 | VERIFIED | done |"),
     }),
   });
 

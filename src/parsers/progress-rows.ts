@@ -28,7 +28,7 @@ export const parseProgressRows = (content: string): ProgressRow[] => {
 
     if (cells.length < 2) continue;
 
-    const scenario = parseInt(cells[0], 10);
+    const scenario = parseFloat(cells[0]);
     if (isNaN(scenario)) continue;
 
     // Separator rows: e.g. "| -- | -------- |"

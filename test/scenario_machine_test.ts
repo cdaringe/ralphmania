@@ -13,25 +13,25 @@ import type { ScenarioState } from "../src/scenario-machine.ts";
 // ---------------------------------------------------------------------------
 
 Deno.test("statusToState maps empty string to unimplemented", () => {
-  const s = statusToState(1, "");
+  const s = statusToState(1.1, "");
   assertEquals(s?.tag, "unimplemented");
-  assertEquals(s?.scenario, 1);
+  assertEquals(s?.scenario, 1.1);
 });
 
 Deno.test("statusToState maps WIP", () => {
-  assertEquals(statusToState(2, "WIP")?.tag, "wip");
+  assertEquals(statusToState(2.1, "WIP")?.tag, "wip");
 });
 
 Deno.test("statusToState maps WORK_COMPLETE", () => {
-  assertEquals(statusToState(3, "WORK_COMPLETE")?.tag, "work_complete");
+  assertEquals(statusToState(3.1, "WORK_COMPLETE")?.tag, "work_complete");
 });
 
 Deno.test("statusToState maps VERIFIED", () => {
-  assertEquals(statusToState(4, "VERIFIED")?.tag, "verified");
+  assertEquals(statusToState(4.1, "VERIFIED")?.tag, "verified");
 });
 
 Deno.test("statusToState maps NEEDS_REWORK with notes", () => {
-  const s = statusToState(5, "NEEDS_REWORK", "fix the bug");
+  const s = statusToState(5.1, "NEEDS_REWORK", "fix the bug");
   assertEquals(s?.tag, "needs_rework");
   if (s?.tag === "needs_rework") {
     assertEquals(s.reworkNotes, "fix the bug");
@@ -39,7 +39,7 @@ Deno.test("statusToState maps NEEDS_REWORK with notes", () => {
 });
 
 Deno.test("statusToState maps OBSOLETE", () => {
-  assertEquals(statusToState(6, "OBSOLETE")?.tag, "obsolete");
+  assertEquals(statusToState(6.1, "OBSOLETE")?.tag, "obsolete");
 });
 
 Deno.test("statusToState returns undefined for unknown status", () => {
@@ -249,12 +249,12 @@ Deno.test("invalid: wip → verified (must go through work_complete)", () => {
 
 Deno.test("invalid transition includes reason with scenario number", () => {
   const r = validateTransition(
-    s("unimplemented", 7),
-    s("verified", 7),
+    s("unimplemented", 7.2),
+    s("verified", 7.2),
   );
   assertEquals(r.ok, false);
   if (!r.ok) {
-    assertEquals(r.reason.includes("scenario 7"), true);
+    assertEquals(r.reason.includes("scenario 7.2"), true);
     assertEquals(r.reason.includes("unimplemented"), true);
     assertEquals(r.reason.includes("verified"), true);
   }
@@ -265,28 +265,28 @@ Deno.test("invalid transition includes reason with scenario number", () => {
 // ---------------------------------------------------------------------------
 
 Deno.test("validateProgressTransitions detects invalid transition", () => {
-  const old = [{ scenario: 1, status: "" }];
-  const next = [{ scenario: 1, status: "VERIFIED" }];
+  const old = [{ scenario: 1.1, status: "" }];
+  const next = [{ scenario: 1.1, status: "VERIFIED" }];
   const violations = validateProgressTransitions(old, next);
   assertEquals(violations.length, 1);
   assertEquals(violations[0].ok, false);
 });
 
 Deno.test("validateProgressTransitions allows valid transition", () => {
-  const old = [{ scenario: 1, status: "" }];
-  const next = [{ scenario: 1, status: "WORK_COMPLETE" }];
+  const old = [{ scenario: 1.1, status: "" }];
+  const next = [{ scenario: 1.1, status: "WORK_COMPLETE" }];
   const violations = validateProgressTransitions(old, next);
   assertEquals(violations.length, 0);
 });
 
 Deno.test("validateProgressTransitions handles multiple scenarios", () => {
   const old = [
-    { scenario: 1, status: "WORK_COMPLETE" },
-    { scenario: 2, status: "" },
+    { scenario: 1.1, status: "WORK_COMPLETE" },
+    { scenario: 2.1, status: "" },
   ];
   const next = [
-    { scenario: 1, status: "VERIFIED" }, // valid
-    { scenario: 2, status: "VERIFIED" }, // invalid: skips work_complete
+    { scenario: 1.1, status: "VERIFIED" }, // valid
+    { scenario: 2.1, status: "VERIFIED" }, // invalid: skips work_complete
   ];
   const violations = validateProgressTransitions(old, next);
   assertEquals(violations.length, 1);
@@ -297,14 +297,14 @@ Deno.test("validateProgressTransitions handles multiple scenarios", () => {
 });
 
 Deno.test("validateProgressTransitions ignores unchanged scenarios", () => {
-  const old = [{ scenario: 1, status: "WIP" }];
-  const next = [{ scenario: 1, status: "WIP" }];
+  const old = [{ scenario: 1.1, status: "WIP" }];
+  const next = [{ scenario: 1.1, status: "WIP" }];
   assertEquals(validateProgressTransitions(old, next).length, 0);
 });
 
 Deno.test("validateProgressTransitions handles new scenarios not in old", () => {
   const old: { scenario: number; status: string }[] = [];
-  const next = [{ scenario: 5, status: "WORK_COMPLETE" }];
+  const next = [{ scenario: 5.1, status: "WORK_COMPLETE" }];
   // Old status defaults to "" (unimplemented), transition to WORK_COMPLETE is valid
   assertEquals(validateProgressTransitions(old, next).length, 0);
 });

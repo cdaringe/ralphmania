@@ -67,7 +67,7 @@ export const makeCtx = (
   agent: "claude",
   iterations: 10,
   parallelism: 1,
-  expectedScenarioIds: [1, 2],
+  expectedScenarioIds: [1.1, 1.2],
   signal: AbortSignal.timeout(10_000),
   log: noopLog,
   plugin: {},

@@ -153,17 +153,17 @@ export const findActionableScenarios = (content: string): number[] => {
 /** Check whether every expected scenario is present and VERIFIED or OBSOLETE. */
 export const isAllVerified = (
   content: string,
-  expectedCount?: number,
+  expectedScenarioIds?: readonly number[],
 ): boolean => {
   const rows = parseProgressRows(content);
   const doneStatuses: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
   const allDone = rows.length > 0 &&
     rows.every((r) => doneStatuses.has(r.status));
   if (!allDone) return false;
-  if (expectedCount !== undefined) {
+  if (expectedScenarioIds !== undefined) {
     const presentIds = new Set(rows.map((r) => r.scenario));
-    for (let i = 1; i <= expectedCount; i++) {
-      if (!presentIds.has(i)) return false;
+    for (const id of expectedScenarioIds) {
+      if (!presentIds.has(id)) return false;
     }
   }
   return true;

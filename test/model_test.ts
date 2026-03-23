@@ -14,34 +14,34 @@ import {
 
 Deno.test("parseImplementedCount counts WORK_COMPLETE rows", () => {
   const content = [
-    "| 1  | WORK_COMPLETE | done |",
-    "| 2  |          |      |",
-    "| 3  | VERIFIED | yep  |",
+    "| 1.1 | WORK_COMPLETE | done |",
+    "| 1.2 |          |      |",
+    "| 1.3 | VERIFIED | yep  |",
   ].join("\n");
   assertEquals(parseImplementedCount(content), 2);
 });
 
 Deno.test("parseImplementedCount returns 0 when none implemented", () => {
-  assertEquals(parseImplementedCount("| 1  |          |      |"), 0);
+  assertEquals(parseImplementedCount("| 1.1 |          |      |"), 0);
 });
 
 // parseTotalCount tests
 
 Deno.test("parseTotalCount counts all scenario rows", () => {
   const content = [
-    "| #  | Status |",
-    "| -- | ------ |",
-    "| 1  | WORK_COMPLETE |",
-    "| 2  |          |",
+    "| #    | Status |",
+    "| ---- | ------ |",
+    "| 1.1  | WORK_COMPLETE |",
+    "| 1.2  |          |",
   ].join("\n");
   assertEquals(parseTotalCount(content), 2);
 });
 
 Deno.test("parseTotalCount excludes OBSOLETE rows", () => {
   const content = [
-    "| 1  | VERIFIED |",
-    "| 2  | OBSOLETE |",
-    "| 3  |          |",
+    "| 1.1 | VERIFIED |",
+    "| 1.2 | OBSOLETE |",
+    "| 1.3 |          |",
   ].join("\n");
   assertEquals(parseTotalCount(content), 2);
 });
@@ -78,25 +78,25 @@ Deno.test("getModel codex strong", () => {
 // detectScenarioFromProgress tests
 
 Deno.test("detectScenarioFromProgress without NEEDS_REWORK", () => {
-  const result = detectScenarioFromProgress("| 1 | COMPLETED |");
+  const result = detectScenarioFromProgress("| 1.1 | COMPLETED |");
   assertEquals(result, { ok: true, value: undefined });
 });
 
 Deno.test("detectScenarioFromProgress with NEEDS_REWORK", () => {
   const result = detectScenarioFromProgress(
-    "| 3 | NEEDS_REWORK | some notes",
+    "| 3.1 | NEEDS_REWORK | some notes",
   );
-  assertEquals(result, { ok: true, value: 3 });
+  assertEquals(result, { ok: true, value: 3.1 });
 });
 
 Deno.test("detectScenarioFromProgress finds first NEEDS_REWORK", () => {
   const content = [
-    "| 1 | COMPLETED |",
-    "| 2 | NEEDS_REWORK | fix it",
-    "| 3 | NEEDS_REWORK | also fix",
+    "| 1.1 | COMPLETED |",
+    "| 2.1 | NEEDS_REWORK | fix it",
+    "| 3.1 | NEEDS_REWORK | also fix",
   ].join("\n");
   const result = detectScenarioFromProgress(content);
-  assertEquals(result, { ok: true, value: 2 });
+  assertEquals(result, { ok: true, value: 2.1 });
 });
 
 Deno.test("detectScenarioFromProgress empty content", () => {
@@ -107,16 +107,16 @@ Deno.test("detectScenarioFromProgress empty content", () => {
 
 Deno.test("findReworkScenarios finds all rework scenario numbers", () => {
   const content = [
-    "| 1 | WORK_COMPLETE |",
-    "| 2 | NEEDS_REWORK | fix it |",
-    "| 3 | VERIFIED |",
-    "| 5 | NEEDS_REWORK | broken |",
+    "| 1.1 | WORK_COMPLETE |",
+    "| 2.1 | NEEDS_REWORK | fix it |",
+    "| 3.1 | VERIFIED |",
+    "| 5.1 | NEEDS_REWORK | broken |",
   ].join("\n");
-  assertEquals(findReworkScenarios(content), [2, 5]);
+  assertEquals(findReworkScenarios(content), [2.1, 5.1]);
 });
 
 Deno.test("findReworkScenarios returns empty for no rework", () => {
-  assertEquals(findReworkScenarios("| 1 | WORK_COMPLETE |"), []);
+  assertEquals(findReworkScenarios("| 1.1 | WORK_COMPLETE |"), []);
 });
 
 Deno.test("findReworkScenarios returns empty for empty content", () => {
@@ -128,47 +128,47 @@ Deno.test("findReworkScenarios returns empty for empty content", () => {
 Deno.test("updateEscalationState adds new rework scenarios at level 1", () => {
   const result = updateEscalationState({
     current: {},
-    reworkScenarios: [3, 7],
+    reworkScenarios: [3.1, 7.2],
   });
-  assertEquals(result, { "3": 1, "7": 1 });
+  assertEquals(result, { "3.1": 1, "7.2": 1 });
 });
 
 Deno.test("updateEscalationState bumps existing scenarios capped at 1", () => {
   const result = updateEscalationState({
-    current: { "3": 1, "7": 1 },
-    reworkScenarios: [3, 7],
+    current: { "3.1": 1, "7.2": 1 },
+    reworkScenarios: [3.1, 7.2],
   });
-  assertEquals(result, { "3": 1, "7": 1 });
+  assertEquals(result, { "3.1": 1, "7.2": 1 });
 });
 
 Deno.test("updateEscalationState caps at level 1", () => {
   const result = updateEscalationState({
-    current: { "3": 1 },
-    reworkScenarios: [3],
+    current: { "3.1": 1 },
+    reworkScenarios: [3.1],
   });
-  assertEquals(result, { "3": 1 });
+  assertEquals(result, { "3.1": 1 });
 });
 
 Deno.test("updateEscalationState removes cleared scenarios", () => {
   const result = updateEscalationState({
-    current: { "3": 1, "7": 1 },
-    reworkScenarios: [3],
+    current: { "3.1": 1, "7.2": 1 },
+    reworkScenarios: [3.1],
   });
-  assertEquals(result, { "3": 1 });
+  assertEquals(result, { "3.1": 1 });
 });
 
 Deno.test("updateEscalationState handles mix of new, bump, and clear", () => {
   const result = updateEscalationState({
-    current: { "1": 1, "5": 1 },
-    reworkScenarios: [1, 9],
+    current: { "1.1": 1, "5.1": 1 },
+    reworkScenarios: [1.1, 9.1],
   });
-  assertEquals(result, { "1": 1, "9": 1 });
+  assertEquals(result, { "1.1": 1, "9.1": 1 });
 });
 
 // computeModelSelection tests
 
 Deno.test("computeModelSelection claude level 0 coder mode", () => {
-  const content = "| 1 | NEEDS_REWORK |";
+  const content = "| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({
     content,
     agent: "claude",
@@ -183,7 +183,7 @@ Deno.test("computeModelSelection claude level 0 coder mode", () => {
 });
 
 Deno.test("computeModelSelection claude level 0 verifier mode", () => {
-  const content = "| 1 | WORK_COMPLETE |";
+  const content = "| 1.1 | WORK_COMPLETE |";
   const result = computeModelSelection({
     content,
     agent: "claude",
@@ -199,7 +199,7 @@ Deno.test("computeModelSelection claude level 0 verifier mode", () => {
 });
 
 Deno.test("computeModelSelection claude level 1 escalated", () => {
-  const content = "| 1 | NEEDS_REWORK |";
+  const content = "| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({
     content,
     agent: "claude",
@@ -214,7 +214,7 @@ Deno.test("computeModelSelection claude level 1 escalated", () => {
 });
 
 Deno.test("computeModelSelection codex below threshold uses general", () => {
-  const content = "| 1 | NEEDS_REWORK |";
+  const content = "| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
@@ -225,7 +225,7 @@ Deno.test("computeModelSelection codex below threshold uses general", () => {
 });
 
 Deno.test("computeModelSelection codex above threshold uses strong", () => {
-  const content = "| 1 | NEEDS_REWORK |\n| 2 | NEEDS_REWORK |";
+  const content = "| 1.1 | NEEDS_REWORK |\n| 1.2 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
@@ -236,7 +236,7 @@ Deno.test("computeModelSelection codex above threshold uses strong", () => {
 });
 
 Deno.test("computeModelSelection no rework uses fast", () => {
-  const content = "| 1 | COMPLETED |";
+  const content = "| 1.1 | COMPLETED |";
   const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
@@ -248,13 +248,13 @@ Deno.test("computeModelSelection no rework uses fast", () => {
 });
 
 Deno.test("computeModelSelection codex above threshold", () => {
-  const content = "| 5 | NEEDS_REWORK |\n| 6 | NEEDS_REWORK |";
+  const content = "| 5.1 | NEEDS_REWORK |\n| 5.2 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "codex" });
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.mode, "strong");
     assertEquals(result.value.model, "gpt-5.3-codex");
-    assertEquals(result.value.targetScenario, 5);
+    assertEquals(result.value.targetScenario, 5.1);
     assertEquals(result.value.effort, undefined);
   }
 });
@@ -263,34 +263,34 @@ Deno.test("computeModelSelection codex above threshold", () => {
 
 Deno.test("validateProgressStatuses returns empty for all valid statuses", () => {
   const content = [
-    "| 1 | WIP |",
-    "| 2 | WORK_COMPLETE |",
-    "| 3 | VERIFIED |",
-    "| 4 | NEEDS_REWORK |",
-    "| 5 | OBSOLETE |",
+    "| 1.1 | WIP |",
+    "| 1.2 | WORK_COMPLETE |",
+    "| 1.3 | VERIFIED |",
+    "| 1.4 | NEEDS_REWORK |",
+    "| 1.5 | OBSOLETE |",
   ].join("\n");
   assertEquals(validateProgressStatuses(content), []);
 });
 
 Deno.test("validateProgressStatuses detects invalid statuses", () => {
   const content = [
-    "| 1 | VERIFIED |",
-    "| 2 | COMPLETE |",
-    "| 3 | DONE |",
+    "| 1.1 | VERIFIED |",
+    "| 1.2 | COMPLETE |",
+    "| 1.3 | DONE |",
   ].join("\n");
   assertEquals(validateProgressStatuses(content), [
-    { scenario: 2, status: "COMPLETE" },
-    { scenario: 3, status: "DONE" },
+    { scenario: 1.2, status: "COMPLETE" },
+    { scenario: 1.3, status: "DONE" },
   ]);
 });
 
 Deno.test("validateProgressStatuses ignores rows without status", () => {
-  const content = "| 1 |          |";
+  const content = "| 1.1 |          |";
   assertEquals(validateProgressStatuses(content), []);
 });
 
 Deno.test("computeModelSelection claude without escalation level falls through to codex path", () => {
-  const content = "| 1 | NEEDS_REWORK |";
+  const content = "| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "claude" });
   assertEquals(result.ok, true);
   if (result.ok) {
@@ -391,7 +391,7 @@ Deno.test("resolveModelSelection returns defaults for file without END_DEMO", as
 
 Deno.test("resolveModelSelection claude resolves with rework scenarios", async () => {
   const path = await writeTempProgress(
-    "| 1 | NEEDS_REWORK | fix |\n| 2 | VERIFIED | done |",
+    "| 1.1 | NEEDS_REWORK | fix |\n| 1.2 | VERIFIED | done |",
   );
   const result = await resolveModelSelection({
     agent: "claude",
@@ -399,12 +399,12 @@ Deno.test("resolveModelSelection claude resolves with rework scenarios", async (
     progressFile: path,
     minLevel: 0,
   });
-  assertEquals(result.targetScenario, 1);
+  assertEquals(result.targetScenario, 1.1);
 });
 
 Deno.test("resolveModelSelection claude verifier mode", async () => {
   const path = await writeTempProgress(
-    "| 1 | WORK_COMPLETE | done |\n| 2 | VERIFIED | done |",
+    "| 1.1 | WORK_COMPLETE | done |\n| 1.2 | VERIFIED | done |",
   );
   const result = await resolveModelSelection({
     agent: "claude",
@@ -417,7 +417,7 @@ Deno.test("resolveModelSelection claude verifier mode", async () => {
 
 Deno.test("resolveModelSelection claude scopes to actionable scenario", async () => {
   const path = await writeTempProgress(
-    "| 1 | VERIFIED | done |\n| 2 |          |      |",
+    "| 1.1 | VERIFIED | done |\n| 1.2 |          |      |",
   );
   const result = await resolveModelSelection({
     agent: "claude",
@@ -425,11 +425,11 @@ Deno.test("resolveModelSelection claude scopes to actionable scenario", async ()
     progressFile: path,
     minLevel: 0,
   });
-  assertEquals(result.targetScenario, 2);
+  assertEquals(result.targetScenario, 1.2);
 });
 
 Deno.test("resolveModelSelection codex resolves with rework", async () => {
-  const path = await writeTempProgress("| 1 | NEEDS_REWORK | fix |");
+  const path = await writeTempProgress("| 1.1 | NEEDS_REWORK | fix |");
   const result = await resolveModelSelection({
     agent: "codex",
     log: noopLog,
@@ -439,7 +439,7 @@ Deno.test("resolveModelSelection codex resolves with rework", async () => {
 });
 
 Deno.test("resolveModelSelection codex no rework uses fast", async () => {
-  const path = await writeTempProgress("| 1 | VERIFIED | done |");
+  const path = await writeTempProgress("| 1.1 | VERIFIED | done |");
   const result = await resolveModelSelection({
     agent: "codex",
     log: noopLog,
@@ -450,7 +450,7 @@ Deno.test("resolveModelSelection codex no rework uses fast", async () => {
 
 Deno.test("resolveModelSelection codex above threshold uses strong", async () => {
   const path = await writeTempProgress(
-    "| 1 | NEEDS_REWORK | fix |\n| 2 | NEEDS_REWORK | fix |",
+    "| 1.1 | NEEDS_REWORK | fix |\n| 1.2 | NEEDS_REWORK | fix |",
   );
   const result = await resolveModelSelection({
     agent: "codex",
@@ -462,7 +462,7 @@ Deno.test("resolveModelSelection codex above threshold uses strong", async () =>
 
 Deno.test("resolveModelSelection claude with minLevel 1 escalates", async () => {
   const path = await writeTempProgress(
-    "| 1 | NEEDS_REWORK | fix |\n| 2 | VERIFIED | done |",
+    "| 1.1 | NEEDS_REWORK | fix |\n| 1.2 | VERIFIED | done |",
   );
   const result = await resolveModelSelection({
     agent: "claude",
@@ -475,7 +475,7 @@ Deno.test("resolveModelSelection claude with minLevel 1 escalates", async () => 
 });
 
 Deno.test("resolveModelSelection claude logs status message for rework", async () => {
-  const path = await writeTempProgress("| 1 | NEEDS_REWORK | fix |");
+  const path = await writeTempProgress("| 1.1 | NEEDS_REWORK | fix |");
   const messages: string[] = [];
   const log: Logger = (opts) => {
     messages.push(opts.message);
@@ -493,7 +493,7 @@ Deno.test("resolveModelSelection claude logs status message for rework", async (
 });
 
 Deno.test("resolveModelSelection claude logs status for no rework", async () => {
-  const path = await writeTempProgress("| 1 |          |      |");
+  const path = await writeTempProgress("| 1.1 |          |      |");
   const messages: string[] = [];
   const log: Logger = (opts) => {
     messages.push(opts.message);
@@ -511,7 +511,7 @@ Deno.test("resolveModelSelection claude logs status for no rework", async () => 
 });
 
 Deno.test("resolveModelSelection codex logs status for rework", async () => {
-  const path = await writeTempProgress("| 1 | NEEDS_REWORK | fix |");
+  const path = await writeTempProgress("| 1.1 | NEEDS_REWORK | fix |");
   const messages: string[] = [];
   const log: Logger = (opts) => {
     messages.push(opts.message);
@@ -528,7 +528,7 @@ Deno.test("resolveModelSelection codex logs status for rework", async () => {
 });
 
 Deno.test("resolveModelSelection codex logs status for no rework", async () => {
-  const path = await writeTempProgress("| 1 | VERIFIED | done |");
+  const path = await writeTempProgress("| 1.1 | VERIFIED | done |");
   const messages: string[] = [];
   const log: Logger = (opts) => {
     messages.push(opts.message);

@@ -19,7 +19,7 @@ import {
 
 Deno.test("integration: worker transitions progress from WIP to WORK_COMPLETE to VERIFIED across rounds", async () => {
   const progress = createProgressStore(
-    "| 1 |          |      |\n| 2 |          |      |",
+    "| 1.1 |          |      |\n| 1.2 |          |      |",
   );
   let round = 0;
 
@@ -27,7 +27,7 @@ Deno.test("integration: worker transitions progress from WIP to WORK_COMPLETE to
     agent: "claude",
     iterations: 5,
     parallelism: 1,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -39,14 +39,14 @@ Deno.test("integration: worker transitions progress from WIP to WORK_COMPLETE to
         round++;
         if (round === 1) {
           p.set(
-            "| 1 | WORK_COMPLETE | done |\n| 2 |          |      |",
+            "| 1.1 | WORK_COMPLETE | done |\n| 1.2 |          |      |",
           );
         } else if (round === 2) {
           p.set(
-            "| 1 | VERIFIED | done |\n| 2 | WORK_COMPLETE | done |",
+            "| 1.1 | VERIFIED | done |\n| 1.2 | WORK_COMPLETE | done |",
           );
         } else if (round === 3) {
-          p.set("| 1 | VERIFIED | done |\n| 2 | VERIFIED | done |");
+          p.set("| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |");
         }
       },
     }),
@@ -59,7 +59,7 @@ Deno.test("integration: worker transitions progress from WIP to WORK_COMPLETE to
 
 Deno.test("integration: rework scenarios get escalated level from orchestrator", async () => {
   const progress = createProgressStore(
-    "| 1 | NEEDS_REWORK | fix this |\n| 2 | VERIFIED | done |",
+    "| 1.1 | NEEDS_REWORK | fix this |\n| 1.2 | VERIFIED | done |",
   );
   const escalation = createEscalationStore();
   const levels: (EscalationLevel | undefined)[] = [];
@@ -68,7 +68,7 @@ Deno.test("integration: rework scenarios get escalated level from orchestrator",
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -80,14 +80,14 @@ Deno.test("integration: rework scenarios get escalated level from orchestrator",
         levels.push(level);
         // Simulate agent fixing the rework
         progress.set(
-          "| 1 | WORK_COMPLETE | fixed |\n| 2 | VERIFIED | done |",
+          "| 1.1 | WORK_COMPLETE | fixed |\n| 1.2 | VERIFIED | done |",
         );
       },
     }),
   });
 
-  // Escalation state should have been updated for scenario 1
-  assertEquals(escalation.state["1"], 1, "scenario 1 should be escalated");
+  // Escalation state should have been updated for scenario 1.1
+  assertEquals(escalation.state["1.1"], 1, "scenario 1.1 should be escalated");
 
   // Worker should have received escalated level (1), not default (0)
   assertEquals(levels[0], 1, "worker should receive escalation level 1");
@@ -95,7 +95,7 @@ Deno.test("integration: rework scenarios get escalated level from orchestrator",
 
 Deno.test("integration: non-rework scenarios get base level 0", async () => {
   const progress = createProgressStore(
-    "| 1 |          |      |\n| 2 | VERIFIED | done |",
+    "| 1.1 |          |      |\n| 1.2 | VERIFIED | done |",
   );
   const levels: (EscalationLevel | undefined)[] = [];
 
@@ -103,7 +103,7 @@ Deno.test("integration: non-rework scenarios get base level 0", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -122,7 +122,7 @@ Deno.test("integration: non-rework scenarios get base level 0", async () => {
 
 Deno.test("integration: CLI --level overrides base level for non-rework", async () => {
   const progress = createProgressStore(
-    "| 1 |          |      |\n| 2 | VERIFIED | done |",
+    "| 1.1 |          |      |\n| 1.2 | VERIFIED | done |",
   );
   const levels: (EscalationLevel | undefined)[] = [];
 
@@ -130,7 +130,7 @@ Deno.test("integration: CLI --level overrides base level for non-rework", async 
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -148,7 +148,7 @@ Deno.test("integration: CLI --level overrides base level for non-rework", async 
 });
 
 Deno.test("integration: onValidationComplete plugin hook fires in parallel loop", async () => {
-  const progress = createProgressStore("| 1 |          |      |");
+  const progress = createProgressStore("| 1.1 |          |      |");
   let hookFired = false;
   let hookResult: ValidationResult | undefined;
 
@@ -165,7 +165,7 @@ Deno.test("integration: onValidationComplete plugin hook fires in parallel loop"
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin,
@@ -188,7 +188,7 @@ Deno.test("integration: onValidationComplete plugin hook fires in parallel loop"
 });
 
 Deno.test("integration: onValidationComplete override prevents failure propagation", async () => {
-  const progress = createProgressStore("| 1 |          |      |");
+  const progress = createProgressStore("| 1.1 |          |      |");
   const failurePaths: (string | undefined)[] = [];
 
   const plugin: Plugin = {
@@ -202,7 +202,7 @@ Deno.test("integration: onValidationComplete override prevents failure propagati
     agent: "claude",
     iterations: 2,
     parallelism: 1,
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin,
@@ -224,14 +224,14 @@ Deno.test("integration: onValidationComplete override prevents failure propagati
 });
 
 Deno.test("integration: validation failure feeds back to next round", async () => {
-  const progress = createProgressStore("| 1 |          |      |");
+  const progress = createProgressStore("| 1.1 |          |      |");
   const failurePaths: (string | undefined)[] = [];
 
   await runParallelLoop({
     agent: "claude",
     iterations: 3,
     parallelism: 1,
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -267,9 +267,9 @@ Deno.test("integration: validation failure feeds back to next round", async () =
 Deno.test("integration: parallel workers get distinct scenarios with correct escalation", async () => {
   const progress = createProgressStore(
     [
-      "| 1 | NEEDS_REWORK | broken |",
-      "| 2 |              |        |",
-      "| 3 | VERIFIED     | done   |",
+      "| 1.1 | NEEDS_REWORK | broken |",
+      "| 1.2 |              |        |",
+      "| 1.3 | VERIFIED     | done   |",
     ].join("\n"),
   );
   const escalation = createEscalationStore();
@@ -282,7 +282,7 @@ Deno.test("integration: parallel workers get distinct scenarios with correct esc
     agent: "claude",
     iterations: 1,
     parallelism: 2,
-    expectedScenarioIds: [1, 2, 3],
+    expectedScenarioIds: [1.1, 1.2, 1.3],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -299,12 +299,12 @@ Deno.test("integration: parallel workers get distinct scenarios with correct esc
     }),
   });
 
-  // Worker 0: scenario 1 (NEEDS_REWORK) → escalated level 1
-  // Worker 1: scenario 2 (unimplemented) → level 0
+  // Worker 0: scenario 1.1 (NEEDS_REWORK) → escalated level 1
+  // Worker 1: scenario 1.2 (unimplemented) → level 0
   assertEquals(workerAssignments.length, 2, "should launch 2 workers");
 
-  const reworkWorker = workerAssignments.find((w) => w.scenario === 1);
-  const newWorker = workerAssignments.find((w) => w.scenario === 2);
+  const reworkWorker = workerAssignments.find((w) => w.scenario === 1.1);
+  const newWorker = workerAssignments.find((w) => w.scenario === 1.2);
 
   assertEquals(
     reworkWorker?.level,
@@ -320,7 +320,7 @@ Deno.test("integration: parallel workers get distinct scenarios with correct esc
 
 Deno.test("integration: escalation persists across rounds for repeated rework", async () => {
   const progress = createProgressStore(
-    "| 1 | NEEDS_REWORK | still broken |",
+    "| 1.1 | NEEDS_REWORK | still broken |",
   );
   const escalation = createEscalationStore();
   const levelsPerRound: (EscalationLevel | undefined)[] = [];
@@ -329,7 +329,7 @@ Deno.test("integration: escalation persists across rounds for repeated rework", 
     agent: "claude",
     iterations: 2,
     parallelism: 1,
-    expectedScenarioIds: [1],
+    expectedScenarioIds: [1.1],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -350,15 +350,15 @@ Deno.test("integration: escalation persists across rounds for repeated rework", 
 
   // Escalation state should reflect the scenario
   assertEquals(
-    escalation.state["1"],
+    escalation.state["1.1"],
     1,
-    "escalation state persists for scenario 1",
+    "escalation state persists for scenario 1.1",
   );
 });
 
 Deno.test("integration: progress changes between rounds affect scenario selection", async () => {
   const progress = createProgressStore(
-    "| 1 |          |      |\n| 2 |          |      |",
+    "| 1.1 |          |      |\n| 1.2 |          |      |",
   );
   const scenariosPerRound: (number | undefined)[] = [];
 
@@ -366,7 +366,7 @@ Deno.test("integration: progress changes between rounds affect scenario selectio
     agent: "claude",
     iterations: 3,
     parallelism: 1,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -376,25 +376,25 @@ Deno.test("integration: progress changes between rounds affect scenario selectio
       onIteration: ({ targetScenarioOverride }) => {
         scenariosPerRound.push(targetScenarioOverride);
 
-        // Round 1: mark scenario 1 as VERIFIED
+        // Round 1: mark scenario 1.1 as VERIFIED
         if (scenariosPerRound.length === 1) {
           progress.set(
-            "| 1 | VERIFIED | done |\n| 2 |          |      |",
+            "| 1.1 | VERIFIED | done |\n| 1.2 |          |      |",
           );
-        } // Round 2: mark scenario 2 as VERIFIED
+        } // Round 2: mark scenario 1.2 as VERIFIED
         else if (scenariosPerRound.length === 2) {
           progress.set(
-            "| 1 | VERIFIED | done |\n| 2 | VERIFIED | done |",
+            "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |",
           );
         }
       },
     }),
   });
 
-  // Round 1 should work on scenario 1 (first actionable)
-  assertEquals(scenariosPerRound[0], 1);
-  // Round 2 should work on scenario 2 (scenario 1 is now VERIFIED)
-  assertEquals(scenariosPerRound[1], 2);
+  // Round 1 should work on scenario 1.1 (first actionable)
+  assertEquals(scenariosPerRound[0], 1.1);
+  // Round 2 should work on scenario 1.2 (scenario 1.1 is now VERIFIED)
+  assertEquals(scenariosPerRound[1], 1.2);
   // Round 3 should not happen — all verified
   assertEquals(
     scenariosPerRound.length,
@@ -405,7 +405,7 @@ Deno.test("integration: progress changes between rounds affect scenario selectio
 
 Deno.test("integration: conflict triggers reconciliation then continues", async () => {
   const progress = createProgressStore(
-    "| 1 |          |      |\n| 2 |          |      |",
+    "| 1.1 |          |      |\n| 1.2 |          |      |",
   );
   let reconcileCount = 0;
   const mergeResults = ["conflict", "merged"] as const;
@@ -415,7 +415,7 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
     agent: "claude",
     iterations: 1,
     parallelism: 2,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -437,7 +437,7 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
     agent: "claude",
     iterations: 1,
     parallelism: 2,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -479,9 +479,9 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
 Deno.test("integration: OBSOLETE scenarios are skipped, not assigned to workers", async () => {
   const progress = createProgressStore(
     [
-      "| 1 | OBSOLETE | removed |",
-      "| 2 |          |         |",
-      "| 3 | VERIFIED | done    |",
+      "| 1.1 | OBSOLETE | removed |",
+      "| 1.2 |          |         |",
+      "| 1.3 | VERIFIED | done    |",
     ].join("\n"),
   );
   const scenarios: (number | undefined)[] = [];
@@ -490,7 +490,7 @@ Deno.test("integration: OBSOLETE scenarios are skipped, not assigned to workers"
     agent: "claude",
     iterations: 1,
     parallelism: 3,
-    expectedScenarioIds: [1, 2, 3],
+    expectedScenarioIds: [1.1, 1.2, 1.3],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -503,41 +503,41 @@ Deno.test("integration: OBSOLETE scenarios are skipped, not assigned to workers"
     }),
   });
 
-  assertEquals(scenarios, [2], "only scenario 2 should be actionable");
+  assertEquals(scenarios, [1.2], "only scenario 1.2 should be actionable");
 });
 
 Deno.test("integration: resolveWorkerModelSelection maps escalated level to CLAUDE_ESCALATED", () => {
   const selection = resolveWorkerModelSelection({
     agent: "claude",
     level: 1,
-    targetScenario: 5,
+    targetScenario: 5.1,
   });
   // CLAUDE_ESCALATED: opus/strong/high
   assertEquals(selection.model, "opus");
   assertEquals(selection.mode, "strong");
   assertEquals(selection.effort, "high");
-  assertEquals(selection.targetScenario, 5);
-  assertEquals(selection.actionableScenarios, [5]);
+  assertEquals(selection.targetScenario, 5.1);
+  assertEquals(selection.actionableScenarios, [5.1]);
 });
 
 Deno.test("integration: resolveWorkerModelSelection maps base level to CLAUDE_CODER", () => {
   const selection = resolveWorkerModelSelection({
     agent: "claude",
     level: 0,
-    targetScenario: 3,
+    targetScenario: 3.1,
   });
   // CLAUDE_CODER: sonnet/general/high
   assertEquals(selection.model, "sonnet");
   assertEquals(selection.mode, "general");
   assertEquals(selection.effort, "high");
-  assertEquals(selection.targetScenario, 3);
+  assertEquals(selection.targetScenario, 3.1);
 });
 
 Deno.test("integration: resolveWorkerModelSelection codex level 0 uses general", () => {
   const selection = resolveWorkerModelSelection({
     agent: "codex",
     level: 0,
-    targetScenario: 1,
+    targetScenario: 1.1,
   });
   assertEquals(selection.model, "gpt-5.1-codex-max");
   assertEquals(selection.mode, "general");
@@ -548,7 +548,7 @@ Deno.test("integration: resolveWorkerModelSelection codex level 1 uses strong", 
   const selection = resolveWorkerModelSelection({
     agent: "codex",
     level: 1,
-    targetScenario: 1,
+    targetScenario: 1.1,
   });
   assertEquals(selection.model, "gpt-5.3-codex");
   assertEquals(selection.mode, "strong");
@@ -557,12 +557,12 @@ Deno.test("integration: resolveWorkerModelSelection codex level 1 uses strong", 
 
 Deno.test("integration: full lifecycle — implement, rework, fix, verify", async () => {
   // Simulates a complete lifecycle:
-  // Round 1: Agent implements scenario 1
-  // Round 2: Agent implements scenario 2
+  // Round 1: Agent implements scenario 1.1
+  // Round 2: Agent implements scenario 1.2
   // Validation fails after round 2
   // Round 3: Agent receives failure feedback, marks both VERIFIED
   const progress = createProgressStore(
-    "| 1 |          |      |\n| 2 |          |      |",
+    "| 1.1 |          |      |\n| 1.2 |          |      |",
   );
   const escalation = createEscalationStore();
   let round = 0;
@@ -572,7 +572,7 @@ Deno.test("integration: full lifecycle — implement, rework, fix, verify", asyn
     agent: "claude",
     iterations: 10,
     parallelism: 1,
-    expectedScenarioIds: [1, 2],
+    expectedScenarioIds: [1.1, 1.2],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -586,16 +586,16 @@ Deno.test("integration: full lifecycle — implement, rework, fix, verify", asyn
 
         if (round === 1) {
           progress.set(
-            "| 1 | WORK_COMPLETE | done |\n| 2 |          |      |",
+            "| 1.1 | WORK_COMPLETE | done |\n| 1.2 |          |      |",
           );
         } else if (round === 2) {
           progress.set(
-            "| 1 | WORK_COMPLETE | done |\n| 2 | WORK_COMPLETE | done |",
+            "| 1.1 | WORK_COMPLETE | done |\n| 1.2 | WORK_COMPLETE | done |",
           );
         } else if (round === 3) {
           // After validation failure, fix issues and verify
           progress.set(
-            "| 1 | VERIFIED | done |\n| 2 | VERIFIED | done |",
+            "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |",
           );
         }
       },

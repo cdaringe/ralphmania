@@ -185,6 +185,29 @@ Deno.test("regression: last row without trailing pipe is parsed correctly", () =
   assertEquals(rows[2].status, "VERIFIED");
 });
 
+Deno.test("parses float scenario IDs like 18.1, 18.2", () => {
+  const content = [
+    "| 18.1 | VERIFIED | done |",
+    "| 18.2 | WIP | wip |",
+    "| 18.3 |          |      |",
+  ].join("\n");
+  const rows = parseProgressRows(content);
+  assertEquals(rows.length, 3);
+  assertEquals(rows[0].scenario, 18.1);
+  assertEquals(rows[1].scenario, 18.2);
+  assertEquals(rows[2].scenario, 18.3);
+});
+
+Deno.test("parses mixed integer and float scenario IDs", () => {
+  const content = [
+    "| 1   | VERIFIED | done |",
+    "| 1.1 | WIP | sub |",
+    "| 2   | WORK_COMPLETE | done |",
+  ].join("\n");
+  const rows = parseProgressRows(content);
+  assertEquals(rows.map((r) => r.scenario), [1, 1.1, 2]);
+});
+
 Deno.test("handles real-world progress.md content after END_DEMO split", () => {
   const content = ` -->
 

@@ -233,7 +233,7 @@ export const transitionReadingProgress = async (
     validationFailurePath = undefined;
   }
 
-  if (isAllVerified(content, ctx.expectedScenarioIds.length)) {
+  if (isAllVerified(content, ctx.expectedScenarioIds)) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("All scenarios VERIFIED"),
@@ -528,7 +528,7 @@ export const transitionCheckingDoneness = async (
   ctx: MachineContext,
 ): Promise<ReadingProgressState | DoneState> => {
   const content = await ctx.deps.readProgress();
-  if (isAllVerified(content, ctx.expectedScenarioIds.length)) {
+  if (isAllVerified(content, ctx.expectedScenarioIds)) {
     ctx.log({
       tags: ["info", "orchestrator"],
       message: green("All scenarios VERIFIED"),
