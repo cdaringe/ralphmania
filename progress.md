@@ -4,6 +4,7 @@
 
 | #       | Status   | Summary                                                                                                                       | Rework Notes |
 | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| ARCH.1  | VERIFIED | [Hexagonal architecture via ports/adapters; pure domain, injectable deps](docs/scenarios/ARCH.1-hexagonal-architecture.md) |              |
 | ARCH.3  | VERIFIED | [Three FSMs govern orchestrator, worker, and scenario lifecycle via tagged states](docs/scenarios/ARCH.3-state-machines.md)   |              |
 | ARCH.2  | VERIFIED | [Pipeline architecture with domain-module offloading](docs/scenarios/ARCH.2-pipeline-architecture.md)                         |              |
 | ARCH.2a | VERIFIED | [Domain-specific folder organization reduces src/ noise](docs/scenarios/ARCH.2a-domain-folders.md)                            |              |
