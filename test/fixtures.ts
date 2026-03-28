@@ -23,7 +23,7 @@ export const noopLog: Logger = (): void => {};
 
 /** Build a deterministic WorktreeInfo for a given worker index. */
 export const stubWorktree = (workerIndex: number): WorktreeInfo => ({
-  scenario: workerIndex,
+  scenario: String(workerIndex),
   path: `/tmp/ralph-wt-${workerIndex}`,
   branch: `ralph/worker-${workerIndex}-test`,
 });
@@ -67,7 +67,7 @@ export const makeCtx = (
   agent: "claude",
   iterations: 10,
   parallelism: 1,
-  expectedScenarioIds: [1.1, 1.2],
+  expectedScenarioIds: ["1.1", "1.2"],
   signal: AbortSignal.timeout(10_000),
   log: noopLog,
   plugin: {},
@@ -151,7 +151,7 @@ export const integrationDeps = (
     escalation?: EscalationStore;
     onIteration?: (opts: {
       iterationNum: number;
-      targetScenarioOverride?: number;
+      targetScenarioOverride?: string;
       level: EscalationLevel | undefined;
       validationFailurePath: string | undefined;
       progress: ProgressStore;

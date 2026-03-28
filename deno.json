@@ -1,6 +1,6 @@
 {
   "name": "@cdaringe/ralphmania",
-  "version": "0.40.0",
+  "version": "0.41.0",
   "license": "MIT",
   "exports": "./mod.ts",
   "lint": {
@@ -38,10 +38,12 @@
     "fmt": "deno fmt",
     "check": "deno check mod.ts",
     "ralph": "deno run -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
+    "ralph:debug": "deno run --inspect-brk -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
     "yeet": "deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
   },
   "imports": {
     "@cliffy/ansi": "jsr:@cliffy/ansi@^1.0.0",
-    "@cliffy/command": "jsr:@cliffy/command@^1.0.0"
+    "@cliffy/command": "jsr:@cliffy/command@^1.0.0",
+    "neverthrow": "npm:neverthrow@^8.2.0"
   }
 }

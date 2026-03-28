@@ -45,7 +45,7 @@ export const resolveWorkerModelSelection = (
   { agent, level, targetScenario }: {
     agent: Agent;
     level: EscalationLevel | undefined;
-    targetScenario: number;
+    targetScenario: string;
   },
 ): ModelSelection => {
   if (agent === "claude") {
@@ -76,7 +76,7 @@ export type ResolvingModelState = Readonly<{
   iterationNum: number;
   agent: Agent;
   level: EscalationLevel | undefined;
-  targetScenarioOverride: number | undefined;
+  targetScenarioOverride: string | undefined;
   validationFailurePath: string | undefined;
   specFile: string | undefined;
   progressFile: string | undefined;
@@ -375,7 +375,7 @@ export const initialWorkerState = (
     iterationNum: number;
     agent: Agent;
     level: EscalationLevel | undefined;
-    targetScenarioOverride: number | undefined;
+    targetScenarioOverride: string | undefined;
     validationFailurePath: string | undefined;
     specFile: string | undefined;
     progressFile: string | undefined;

@@ -17,7 +17,7 @@ Deno.test("createWorktree creates and cleanupWorktree removes", async () => {
   if (gitCheck.code !== 0) return;
 
   const result = await createWorktree({
-    scenario: 99,
+    scenario: "99",
     workerIndex: 0,
     log: noopLog,
   });
@@ -26,7 +26,7 @@ Deno.test("createWorktree creates and cleanupWorktree removes", async () => {
   if (!result.ok) return;
 
   const wt = result.value;
-  assertEquals(wt.scenario, 99);
+  assertEquals(wt.scenario, "99");
   assertEquals(typeof wt.path, "string");
   assertEquals(typeof wt.branch, "string");
 

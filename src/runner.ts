@@ -90,12 +90,10 @@ const WORKER_COLORS: ReadonlyArray<(s: string) => string> = [
  */
 export const workerPrefix = (
   workerIndex: number,
-  scenario: number | undefined,
+  scenario: string | undefined,
 ): string => {
   const color = WORKER_COLORS[workerIndex % WORKER_COLORS.length];
-  const sPart = scenario !== undefined
-    ? String(scenario).padStart(2, "0")
-    : "--";
+  const sPart = scenario ?? "--";
   return color(`[w${workerIndex}/s${sPart}]`) + " ";
 };
 
@@ -297,7 +295,7 @@ export const runIteration = async (
     plugin: Plugin;
     level: EscalationLevel | undefined;
     cwd?: string;
-    targetScenarioOverride?: number;
+    targetScenarioOverride?: string;
     specFile?: string;
     progressFile?: string;
     workerIndex?: number;

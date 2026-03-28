@@ -7,20 +7,24 @@ Deno.test("parseProgressRows parses float scenario IDs", () => {
     "| 18.2 | VERIFIED | second scenario |",
     "| 18.3 |          | not started |",
   ].join("\n");
-  const rows = parseProgressRows(content);
-  assertEquals(rows.length, 3);
-  assertEquals(rows[0].scenario, 18.1);
-  assertEquals(rows[0].status, "WIP");
-  assertEquals(rows[1].scenario, 18.2);
-  assertEquals(rows[1].status, "VERIFIED");
-  assertEquals(rows[2].scenario, 18.3);
-  assertEquals(rows[2].status, "");
+  const result = parseProgressRows(content);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.length, 3);
+  assertEquals(result.value[0].scenario, "18.1");
+  assertEquals(result.value[0].status, "WIP");
+  assertEquals(result.value[1].scenario, "18.2");
+  assertEquals(result.value[1].status, "VERIFIED");
+  assertEquals(result.value[2].scenario, "18.3");
+  assertEquals(result.value[2].status, "");
 });
 
 Deno.test("parseProgressRows parses integer scenario IDs", () => {
-  const rows = parseProgressRows("| 1 | WIP | desc |");
-  assertEquals(rows.length, 1);
-  assertEquals(rows[0].scenario, 1);
+  const result = parseProgressRows("| 1 | WIP | desc |");
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.length, 1);
+  assertEquals(result.value[0].scenario, "1");
 });
 
 Deno.test("parseProgressRows parses mixed int and float IDs", () => {
@@ -30,9 +34,11 @@ Deno.test("parseProgressRows parses mixed int and float IDs", () => {
     "| 2   | WORK_COMPLETE | done |",
     "| 2.1 | NEEDS_REWORK | fix it | rework notes |",
   ].join("\n");
-  const rows = parseProgressRows(content);
-  assertEquals(rows.map((r) => r.scenario), [1, 1.1, 2, 2.1]);
-  assertEquals(rows[3].reworkNotes, "rework notes");
+  const result = parseProgressRows(content);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.map((r) => r.scenario), ["1", "1.1", "2", "2.1"]);
+  assertEquals(result.value[3].reworkNotes, "rework notes");
 });
 
 Deno.test("parseProgressRows skips header and separator rows", () => {
@@ -41,12 +47,46 @@ Deno.test("parseProgressRows skips header and separator rows", () => {
     "| ---- | -------- | ------- |",
     "| 3.1  | WIP      | desc    |",
   ].join("\n");
-  const rows = parseProgressRows(content);
-  assertEquals(rows.length, 1);
-  assertEquals(rows[0].scenario, 3.1);
+  const result = parseProgressRows(content);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.length, 1);
+  assertEquals(result.value[0].scenario, "3.1");
 });
 
 Deno.test("parseProgressRows returns empty for non-table content", () => {
-  assertEquals(parseProgressRows("just some text"), []);
-  assertEquals(parseProgressRows(""), []);
+  const r1 = parseProgressRows("just some text");
+  assertEquals(r1.ok, true);
+  if (r1.ok) assertEquals(r1.value, []);
+
+  const r2 = parseProgressRows("");
+  assertEquals(r2.ok, true);
+  if (r2.ok) assertEquals(r2.value, []);
+});
+
+Deno.test("parseProgressRows skips header with various column names", () => {
+  const content = [
+    "| Scenario | Status | Description | Notes |",
+    "| -------- | ------ | ----------- | ----- |",
+    "| 1        | WIP    | something   |       |",
+  ].join("\n");
+  const result = parseProgressRows(content);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.length, 1);
+  assertEquals(result.value[0].scenario, "1");
+  assertEquals(result.value[0].status, "WIP");
+});
+
+Deno.test("parseProgressRows handles separator with colons for alignment", () => {
+  const content = [
+    "| # | Status | Summary |",
+    "| :-- | :------: | ------: |",
+    "| 5 | VERIFIED | aligned |",
+  ].join("\n");
+  const result = parseProgressRows(content);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.length, 1);
+  assertEquals(result.value[0].scenario, "5");
 });

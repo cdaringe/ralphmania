@@ -9,9 +9,9 @@ export const buildPrompt = (
     specFile,
     progressFile,
   }: {
-    targetScenario: number | undefined;
+    targetScenario: string | undefined;
     validationFailurePath: string | undefined;
-    actionableScenarios: readonly number[];
+    actionableScenarios: readonly string[];
     specFile?: string;
     progressFile?: string;
   },

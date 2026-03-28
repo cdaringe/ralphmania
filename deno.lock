@@ -17,7 +17,8 @@
     "jsr:@std/path@*": "1.1.1",
     "jsr:@std/path@1": "1.1.1",
     "jsr:@std/semver@^1.0.8": "1.0.8",
-    "jsr:@std/text@^1.0.17": "1.0.17"
+    "jsr:@std/text@^1.0.17": "1.0.17",
+    "npm:neverthrow@^8.2.0": "8.2.0"
   },
   "jsr": {
     "@cliffy/ansi@1.0.0": {
@@ -90,10 +91,24 @@
       "integrity": "4b2c4ef67ae5b6c1dfd447c81c83a43718f52e3c7e748d8b33f694aba9895f95"
     }
   },
+  "npm": {
+    "@rollup/rollup-linux-x64-gnu@4.60.0": {
+      "integrity": "sha512-EtylprDtQPdS5rXvAayrNDYoJhIz1/vzN2fEubo3yLE7tfAw+948dO0g4M0vkTVFhKojnF+n6C8bDNe+gDRdTg==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "neverthrow@8.2.0": {
+      "integrity": "sha512-kOCT/1MCPAxY5iUV3wytNFUMUolzuwd/VF/1KCx7kf6CutrOsTie+84zTGTpgQycjvfLdBBdvBvFLqFD2c0wkQ==",
+      "optionalDependencies": [
+        "@rollup/rollup-linux-x64-gnu"
+      ]
+    }
+  },
   "workspace": {
     "dependencies": [
       "jsr:@cliffy/ansi@1",
-      "jsr:@cliffy/command@1"
+      "jsr:@cliffy/command@1",
+      "npm:neverthrow@^8.2.0"
     ]
   }
 }

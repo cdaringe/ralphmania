@@ -12,7 +12,7 @@ import { noopLog } from "./fixtures.ts";
 const stubWorktree: WorktreeInfo = {
   path: "/tmp/ralph-wt-0",
   branch: "ralph/worker-0-scenario-1-123",
-  scenario: 1,
+  scenario: "1",
 };
 
 const stubRun = (

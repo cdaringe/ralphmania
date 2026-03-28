@@ -168,7 +168,7 @@ Deno.test("transitionReadingProgress with actionable scenarios → finding_actio
 Deno.test("transitionReadingProgress invalid status clears validationFailurePath", async () => {
   const content = "| 1.1 | COMPLETE | done |";
   const ctx = makeCtx({
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
   });
   const state: ReadingProgressState = {
@@ -189,7 +189,7 @@ Deno.test("transitionReadingProgress invalid status clears validationFailurePath
 
 Deno.test("transitionFindingActionable with no actionable → done", async () => {
   const content = "| 1.1 | VERIFIED | done |\n| 1.2 | OBSOLETE | skip |";
-  const ctx = makeCtx({ expectedScenarioIds: [1.1, 1.2] });
+  const ctx = makeCtx({ expectedScenarioIds: ["1.1", "1.2"] });
   const state: FindingActionableState = {
     tag: "finding_actionable",
     iterationsUsed: 0,
@@ -213,8 +213,8 @@ Deno.test("transitionFindingActionable with actionable scenarios → running_wor
   assertEquals(next.tag, "running_workers");
   if (next.tag === "running_workers") {
     // NEEDS_REWORK should come first in ordering
-    assertEquals(next.uniqueActionable[0], 1.2);
-    assertEquals(next.uniqueActionable[1], 1.1);
+    assertEquals(next.uniqueActionable[0], "1.2");
+    assertEquals(next.uniqueActionable[1], "1.1");
   }
 });
 
@@ -253,7 +253,7 @@ Deno.test("transitionRunningWorkers with worktrees → validating", async () => 
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [1.1],
+    uniqueActionable: ["1.1"],
     escalation: {},
   };
   const next = await transitionRunningWorkers(state, ctx);
@@ -274,7 +274,7 @@ Deno.test("transitionRunningWorkers no worktrees → reading_progress (skip roun
     tag: "running_workers",
     iterationsUsed: 2,
     validationFailurePath: undefined,
-    uniqueActionable: [1.1],
+    uniqueActionable: ["1.1"],
     escalation: {},
   };
   const next = await transitionRunningWorkers(state, ctx);
@@ -299,7 +299,7 @@ Deno.test("transitionRunningWorkers passes correct escalation levels to workers"
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [1.1, 1.2],
+    uniqueActionable: ["1.1", "1.2"],
     escalation: { "1.1": 1 },
   };
   await transitionRunningWorkers(state, ctx);
@@ -321,7 +321,7 @@ Deno.test("transitionRunningWorkers passes workerIndex to runIteration for stdio
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [5.1, 9.1],
+    uniqueActionable: ["5.1", "9.1"],
     escalation: {},
   };
   await transitionRunningWorkers(state, ctx);
@@ -342,7 +342,7 @@ Deno.test("transitionRunningWorkers writes agent checkpoint", async () => {
     tag: "running_workers",
     iterationsUsed: 0,
     validationFailurePath: undefined,
-    uniqueActionable: [1.1],
+    uniqueActionable: ["1.1"],
     escalation: {},
   };
   await transitionRunningWorkers(state, ctx);
@@ -510,7 +510,7 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
   let round = 0;
   const ctx = makeCtx({
     iterations: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     deps: stubDeps({
       readProgress: () => {
         round++;
@@ -544,7 +544,7 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
 Deno.test("transition sequence: checkpoint resume skips to validating", async () => {
   const ctx = makeCtx({
     iterations: 5,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     deps: stubDeps({
       readCheckpoint: () =>
         Promise.resolve({
@@ -610,7 +610,7 @@ Deno.test("transitionCheckingDoneness all verified but validation failure → re
 
 Deno.test("transitionFindingActionable no actionable but validation failure → forces scenarios to running_workers", async () => {
   const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
-  const ctx = makeCtx({ expectedScenarioIds: [1.1, 1.2] });
+  const ctx = makeCtx({ expectedScenarioIds: ["1.1", "1.2"] });
   const state: FindingActionableState = {
     tag: "finding_actionable",
     iterationsUsed: 0,
@@ -620,14 +620,14 @@ Deno.test("transitionFindingActionable no actionable but validation failure → 
   const next = await transitionFindingActionable(state, ctx);
   assertEquals(next.tag, "running_workers");
   if (next.tag === "running_workers") {
-    assertEquals(next.uniqueActionable, [1.1, 1.2]);
+    assertEquals(next.uniqueActionable, ["1.1", "1.2"]);
     assertEquals(next.validationFailurePath, "/tmp/fail.log");
   }
 });
 
 Deno.test("transitionFindingActionable validation failure but all OBSOLETE → done (cannot recover)", async () => {
   const content = "| 1.1 | OBSOLETE | skip |\n| 1.2 | OBSOLETE | skip |";
-  const ctx = makeCtx({ expectedScenarioIds: [1.1, 1.2] });
+  const ctx = makeCtx({ expectedScenarioIds: ["1.1", "1.2"] });
   const state: FindingActionableState = {
     tag: "finding_actionable",
     iterationsUsed: 0,

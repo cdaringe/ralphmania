@@ -70,7 +70,7 @@ export const runParallelLoop = async (
     agent: string;
     iterations: number;
     parallelism: number;
-    expectedScenarioIds: readonly number[];
+    expectedScenarioIds: readonly string[];
     signal: AbortSignal;
     log: Logger;
     plugin: Plugin;

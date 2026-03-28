@@ -28,33 +28,33 @@ import type { ScenarioStatus } from "./constants.ts";
 /** Unstarted — status cell is empty or missing. */
 export type UnimplementedState = Readonly<{
   tag: "unimplemented";
-  scenario: number;
+  scenario: string;
 }>;
 
 export type WipState = Readonly<{
   tag: "wip";
-  scenario: number;
+  scenario: string;
 }>;
 
 export type WorkCompleteState = Readonly<{
   tag: "work_complete";
-  scenario: number;
+  scenario: string;
 }>;
 
 export type VerifiedState = Readonly<{
   tag: "verified";
-  scenario: number;
+  scenario: string;
 }>;
 
 export type NeedsReworkState = Readonly<{
   tag: "needs_rework";
-  scenario: number;
+  scenario: string;
   reworkNotes: string;
 }>;
 
 export type ObsoleteState = Readonly<{
   tag: "obsolete";
-  scenario: number;
+  scenario: string;
 }>;
 
 export type ScenarioState =
@@ -97,7 +97,7 @@ const TAG_TO_STATUS: Readonly<Record<Tag, ScenarioStatus | "">> = {
 
 /** Convert a progress.md status string to a ScenarioState. */
 export const statusToState = (
-  scenario: number,
+  scenario: string,
   status: string,
   reworkNotes = "",
 ): ScenarioState | undefined => {
@@ -197,9 +197,9 @@ export const validateTransition = (
  * visible in logs.
  */
 export const validateProgressTransitions = (
-  oldRows: ReadonlyArray<{ scenario: number; status: string }>,
+  oldRows: ReadonlyArray<{ scenario: string; status: string }>,
   newRows: ReadonlyArray<{
-    scenario: number;
+    scenario: string;
     status: string;
     reworkNotes?: string;
   }>,

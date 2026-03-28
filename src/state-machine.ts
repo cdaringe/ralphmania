@@ -37,7 +37,7 @@ import { Status } from "./constants.ts";
 export type MachineDeps = {
   readonly readProgress: () => Promise<string>;
   readonly createWorktree: (
-    opts: { scenario: number; workerIndex: number; log: Logger },
+    opts: { scenario: string; workerIndex: number; log: Logger },
   ) => Promise<Result<WorktreeInfo, string>>;
   readonly runIteration: (
     opts: {
@@ -49,7 +49,7 @@ export type MachineDeps = {
       plugin: Plugin;
       level: EscalationLevel | undefined;
       cwd?: string;
-      targetScenarioOverride?: number;
+      targetScenarioOverride?: string;
       specFile?: string;
       progressFile?: string;
       /** Worker index forwarded to the agent executor for stdio prefixing. */
@@ -97,7 +97,7 @@ export type MachineContext = {
   readonly agent: Agent;
   readonly iterations: number;
   readonly parallelism: number;
-  readonly expectedScenarioIds: readonly number[];
+  readonly expectedScenarioIds: readonly string[];
   readonly signal: AbortSignal;
   readonly log: Logger;
   readonly plugin: Plugin;
@@ -140,7 +140,7 @@ export type RunningWorkersState = Readonly<{
   tag: "running_workers";
   iterationsUsed: number;
   validationFailurePath: string | undefined;
-  uniqueActionable: readonly number[];
+  uniqueActionable: readonly string[];
   escalation: Readonly<EscalationState>;
 }>;
 
@@ -221,9 +221,15 @@ export const transitionReadingProgress = async (
   const content = await ctx.deps.readProgress();
   let validationFailurePath = state.validationFailurePath;
 
-  const invalidStatuses = validateProgressStatuses(content);
-  if (invalidStatuses.length > 0) {
-    for (const { scenario, status } of invalidStatuses) {
+  const invalidResult = validateProgressStatuses(content);
+  if (!invalidResult.ok) {
+    ctx.log({
+      tags: ["error", "orchestrator"],
+      message: invalidResult.error,
+    });
+    validationFailurePath = undefined;
+  } else if (invalidResult.value.length > 0) {
+    for (const { scenario, status } of invalidResult.value) {
       ctx.log({
         tags: ["error", "orchestrator"],
         message:
@@ -233,8 +239,9 @@ export const transitionReadingProgress = async (
     validationFailurePath = undefined;
   }
 
+  const allVerifiedResult = isAllVerified(content, ctx.expectedScenarioIds);
   if (
-    isAllVerified(content, ctx.expectedScenarioIds) && !validationFailurePath
+    allVerifiedResult.ok && allVerifiedResult.value && !validationFailurePath
   ) {
     ctx.log({
       tags: ["info", "orchestrator"],
@@ -256,7 +263,15 @@ export const transitionFindingActionable = async (
   ctx: MachineContext,
 ): Promise<RunningWorkersState | DoneState> => {
   const content = state.progressContent;
-  const rows = parseProgressRows(content);
+  const parsed = parseProgressRows(content);
+  if (!parsed.ok) {
+    ctx.log({
+      tags: ["error", "orchestrator"],
+      message: parsed.error,
+    });
+    return { tag: "done", iterationsUsed: state.iterationsUsed };
+  }
+  const rows = parsed.value;
   const specIds = ctx.expectedScenarioIds;
   const progressIds = rows.map((r) => r.scenario);
   const mismatch = xor(specIds, progressIds);
@@ -472,7 +487,10 @@ export const transitionRunningWorkers = async (
 
     // Detect: did each worker's scenario actually land?
     const postMerge = await ctx.deps.readProgress();
-    const stillActionable = new Set(findActionableScenarios(postMerge));
+    const actionableResult = findActionableScenarios(postMerge);
+    const stillActionable = new Set(
+      actionableResult.ok ? actionableResult.value : [],
+    );
     results.forEach((wr) => {
       const scenario = uniqueActionable[wr.workerIndex];
       if (scenario !== undefined) {
@@ -559,8 +577,9 @@ export const transitionCheckingDoneness = async (
   ctx: MachineContext,
 ): Promise<ReadingProgressState | DoneState> => {
   const content = await ctx.deps.readProgress();
+  const allVerifiedResult = isAllVerified(content, ctx.expectedScenarioIds);
   if (
-    isAllVerified(content, ctx.expectedScenarioIds) &&
+    allVerifiedResult.ok && allVerifiedResult.value &&
     !state.validationFailurePath
   ) {
     ctx.log({

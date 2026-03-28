@@ -57,9 +57,9 @@ export type EscalationState = Record<string, EscalationLevel>;
 export type ModelSelection = {
   readonly model: string;
   readonly mode: ToolMode;
-  readonly targetScenario: number | undefined;
+  readonly targetScenario: string | undefined;
   readonly effort: EffortLevel | undefined;
-  readonly actionableScenarios: readonly number[];
+  readonly actionableScenarios: readonly string[];
 };
 
 /** Outcome of a single agent iteration. */

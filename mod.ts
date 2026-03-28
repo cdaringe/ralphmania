@@ -188,7 +188,8 @@ const main = async (): Promise<number> => {
     () => "",
   );
   const finalSection = finalContent.split("END_DEMO")[1] ?? "";
-  const allDone = isAllVerified(finalSection, expectedScenarioIds);
+  const allDoneResult = isAllVerified(finalSection, expectedScenarioIds);
+  const allDone = allDoneResult.ok && allDoneResult.value;
 
   await plugin.onLoopEnd?.({
     finalState: {

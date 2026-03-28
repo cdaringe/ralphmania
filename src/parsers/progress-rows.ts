@@ -1,38 +1,54 @@
+import type { Result } from "../types.ts";
+import { err, ok } from "../types.ts";
+
 /** A parsed row from the progress.md markdown table. */
 export type ProgressRow = {
-  readonly scenario: number;
+  readonly scenario: string;
   readonly status: string;
   readonly summary: string;
   readonly reworkNotes: string;
 };
 
+const splitCells = (line: string): string[] =>
+  line.replace(/^\|/, "").split("|").map((c) => c.trim());
+
+const isSeparatorRow = (cells: string[]): boolean =>
+  cells.length > 0 && cells.filter(Boolean).every((c) => /^[-:]+$/.test(c));
+
 /**
  * Parse progress.md markdown table content into structured rows.
- * Skips headers, separators, and malformed lines.
- *
- * Resilient to imperfect tables: trims whitespace, tolerates missing
- * trailing pipes, ignores lines that don't start with `|`, and handles
- * variable column counts gracefully.
+ * Uses the separator row (e.g. `| --- | --- |`) as the structural
+ * delimiter — everything at or above it is the header, everything
+ * below is data.
  */
-export const parseProgressRows = (content: string): ProgressRow[] => {
+export const parseProgressRows = (
+  content: string,
+): Result<ProgressRow[], string> => {
+  const tableLines = content.split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("|"));
+  const separatorIdx = tableLines.findIndex((l) =>
+    isSeparatorRow(splitCells(l))
+  );
+  const dataLines = separatorIdx === -1
+    ? tableLines
+    : tableLines.slice(separatorIdx + 1);
+
   const rows: ProgressRow[] = [];
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    // Only consider lines that look like table rows
-    if (!trimmed.startsWith("|")) continue;
+  const errors: string[] = [];
 
-    const cells = trimmed
-      .replace(/^\|/, "")
-      .split("|")
-      .map((c) => c.trim());
+  for (const line of dataLines) {
+    const cells = splitCells(line);
+    if (cells.length < 2) {
+      errors.push(`Malformed table row (too few columns): ${line}`);
+      continue;
+    }
 
-    if (cells.length < 2) continue;
-
-    const scenario = parseFloat(cells[0]);
-    if (isNaN(scenario)) continue;
-
-    // Separator rows: e.g. "| -- | -------- |"
-    if (/^-+$/.test(cells[0].trim())) continue;
+    const scenario = cells[0] ?? "";
+    if (!scenario) {
+      errors.push(`Table row has empty scenario ID: ${line}`);
+      continue;
+    }
 
     rows.push({
       scenario,
@@ -41,5 +57,8 @@ export const parseProgressRows = (content: string): ProgressRow[] => {
       reworkNotes: cells[3] ?? "",
     });
   }
-  return rows;
+
+  return errors.length > 0
+    ? err(`Failed to parse progress rows:\n${errors.join("\n")}`)
+    : ok(rows);
 };

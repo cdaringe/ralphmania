@@ -2,7 +2,13 @@ import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { findActionableScenarios, isAllVerified } from "../src/model.ts";
 import { runParallelLoop } from "../src/orchestrator.ts";
 import { noopLog, stubDeps, stubWorktree } from "./fixtures.ts";
-import { ok } from "../src/types.ts";
+import { ok, type Result } from "../src/types.ts";
+
+/** Unwrap a Result, throwing on error. */
+const unwrap = <T>(r: Result<T, string>): T => {
+  if (!r.ok) throw new Error(`Unexpected error: ${r.error}`);
+  return r.value;
+};
 
 // --- Model function tests (used by parallel orchestration) ---
 
@@ -14,7 +20,12 @@ Deno.test("findActionableScenarios finds scenarios that are not VERIFIED or OBSO
     "| 1.4 | NEEDS_REWORK | fix |",
     "| 1.5 |          |      |",
   ].join("\n");
-  assertEquals(findActionableScenarios(content), [1.1, 1.2, 1.4, 1.5]);
+  assertEquals(unwrap(findActionableScenarios(content)), [
+    "1.1",
+    "1.2",
+    "1.4",
+    "1.5",
+  ]);
 });
 
 Deno.test("findActionableScenarios returns empty when all VERIFIED", () => {
@@ -22,7 +33,7 @@ Deno.test("findActionableScenarios returns empty when all VERIFIED", () => {
     "| 1.1 | VERIFIED | done |",
     "| 1.2 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(findActionableScenarios(content), []);
+  assertEquals(unwrap(findActionableScenarios(content)), []);
 });
 
 Deno.test("findActionableScenarios returns all when none done", () => {
@@ -30,7 +41,7 @@ Deno.test("findActionableScenarios returns all when none done", () => {
     "| 1.1 |          |      |",
     "| 1.2 |          |      |",
   ].join("\n");
-  assertEquals(findActionableScenarios(content), [1.1, 1.2]);
+  assertEquals(unwrap(findActionableScenarios(content)), ["1.1", "1.2"]);
 });
 
 Deno.test("isAllVerified returns true when all VERIFIED and IDs match", () => {
@@ -38,7 +49,7 @@ Deno.test("isAllVerified returns true when all VERIFIED and IDs match", () => {
     "| 1.1 | VERIFIED | done |",
     "| 1.2 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2]), true);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2"])), true);
 });
 
 Deno.test("isAllVerified returns false when expected scenario IDs are missing", () => {
@@ -46,7 +57,10 @@ Deno.test("isAllVerified returns false when expected scenario IDs are missing", 
     "| 1.1 | VERIFIED | done |",
     "| 1.2 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2, 1.3, 1.4, 1.5]), false);
+  assertEquals(
+    unwrap(isAllVerified(content, ["1.1", "1.2", "1.3", "1.4", "1.5"])),
+    false,
+  );
 });
 
 Deno.test("isAllVerified returns false when IDs do not match expected", () => {
@@ -54,7 +68,7 @@ Deno.test("isAllVerified returns false when IDs do not match expected", () => {
     "| 1.1 | VERIFIED | done |",
     "| 1.3 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2]), false);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2"])), false);
 });
 
 Deno.test("isAllVerified returns false when non-sequential IDs miss expected set", () => {
@@ -64,7 +78,20 @@ Deno.test("isAllVerified returns false when non-sequential IDs miss expected set
     "| 8.1 | VERIFIED | ok   |",
   ].join("\n");
   assertEquals(
-    isAllVerified(content, [1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1, 10.1]),
+    unwrap(
+      isAllVerified(content, [
+        "1.1",
+        "2.1",
+        "3.1",
+        "4.1",
+        "5.1",
+        "6.1",
+        "7.1",
+        "8.1",
+        "9.1",
+        "10.1",
+      ]),
+    ),
     false,
   );
 });
@@ -74,7 +101,7 @@ Deno.test("isAllVerified returns true when expectedScenarioIds is undefined", ()
     "| 1.1 | VERIFIED | done |",
     "| 1.2 | VERIFIED | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content), true);
+  assertEquals(unwrap(isAllVerified(content)), true);
 });
 
 Deno.test("isAllVerified returns false when some WORK_COMPLETE", () => {
@@ -82,11 +109,11 @@ Deno.test("isAllVerified returns false when some WORK_COMPLETE", () => {
     "| 1.1 | VERIFIED | done |",
     "| 1.2 | WORK_COMPLETE | yep  |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2]), false);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2"])), false);
 });
 
 Deno.test("isAllVerified returns false on empty content", () => {
-  assertEquals(isAllVerified("", []), false);
+  assertEquals(unwrap(isAllVerified("", [])), false);
 });
 
 Deno.test("isAllVerified returns false when some not done", () => {
@@ -94,7 +121,7 @@ Deno.test("isAllVerified returns false when some not done", () => {
     "| 1.1 | VERIFIED | done |",
     "| 1.2 |          |      |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2]), false);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2"])), false);
 });
 
 Deno.test("findActionableScenarios skips OBSOLETE scenarios", () => {
@@ -103,7 +130,7 @@ Deno.test("findActionableScenarios skips OBSOLETE scenarios", () => {
     "| 1.2 |          |                  |",
     "| 1.3 | VERIFIED | done             |",
   ].join("\n");
-  assertEquals(findActionableScenarios(content), [1.2]);
+  assertEquals(unwrap(findActionableScenarios(content)), ["1.2"]);
 });
 
 Deno.test("isAllVerified returns true when all VERIFIED and OBSOLETE cover expected IDs", () => {
@@ -112,7 +139,7 @@ Deno.test("isAllVerified returns true when all VERIFIED and OBSOLETE cover expec
     "| 1.2 | OBSOLETE | skipped  |",
     "| 1.3 | VERIFIED | done     |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2, 1.3]), true);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2", "1.3"])), true);
 });
 
 Deno.test("isAllVerified returns false when OBSOLETE leaves some IDs incomplete", () => {
@@ -121,7 +148,7 @@ Deno.test("isAllVerified returns false when OBSOLETE leaves some IDs incomplete"
     "| 1.2 | OBSOLETE | skipped  |",
     "| 1.3 |          |          |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2, 1.3]), false);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2", "1.3"])), false);
 });
 
 Deno.test("isAllVerified returns true when all rows are OBSOLETE matching expected IDs", () => {
@@ -129,7 +156,7 @@ Deno.test("isAllVerified returns true when all rows are OBSOLETE matching expect
     "| 1.1 | OBSOLETE | skipped |",
     "| 1.2 | OBSOLETE | skipped |",
   ].join("\n");
-  assertEquals(isAllVerified(content, [1.1, 1.2]), true);
+  assertEquals(unwrap(isAllVerified(content, ["1.1", "1.2"])), true);
 });
 
 // --- runParallelLoop tests ---
@@ -141,7 +168,7 @@ Deno.test("runParallelLoop exits immediately when all scenarios verified", async
     agent: "claude",
     iterations: 5,
     parallelism: 2,
-    expectedScenarioIds: [1.1, 1.2],
+    expectedScenarioIds: ["1.1", "1.2"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -161,7 +188,7 @@ Deno.test("runParallelLoop dispatches parallelism workers", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 2,
-    expectedScenarioIds: [1.1, 1.2, 1.3],
+    expectedScenarioIds: ["1.1", "1.2", "1.3"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -186,7 +213,7 @@ Deno.test("runParallelLoop stops after max iterations", async () => {
     agent: "claude",
     iterations: 3,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -206,7 +233,7 @@ Deno.test("runParallelLoop stops early when verified after round", async () => {
     agent: "claude",
     iterations: 10,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -235,7 +262,7 @@ Deno.test("runParallelLoop merges worktrees with new commits", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -261,7 +288,7 @@ Deno.test("runParallelLoop skips merge when no new commits", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -287,7 +314,7 @@ Deno.test("runParallelLoop returns 130 on aborted signal", async () => {
     agent: "claude",
     iterations: 5,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: controller.signal,
     log: noopLog,
     plugin: {},
@@ -306,7 +333,7 @@ Deno.test("runParallelLoop runs validation after each round", async () => {
     agent: "claude",
     iterations: 2,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -331,7 +358,7 @@ Deno.test("runParallelLoop cleans up worktrees on worker failure", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -357,7 +384,7 @@ Deno.test("runParallelLoop passes validation failure path to next round workers"
     agent: "claude",
     iterations: 2,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -392,7 +419,7 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
     agent: "claude",
     iterations: 3,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -428,7 +455,7 @@ Deno.test("runParallelLoop writes checkpoint after each round", async () => {
     agent: "claude",
     iterations: 3,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -456,7 +483,7 @@ Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -481,7 +508,7 @@ Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => 
     agent: "claude",
     iterations: 5,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -513,7 +540,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
     agent: "claude",
     iterations: 4,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -547,7 +574,7 @@ Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async 
     agent: "claude",
     iterations: 2,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -581,7 +608,7 @@ Deno.test("runParallelLoop resumes at validate step — skips agent work", async
     agent: "claude",
     iterations: 4,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -608,13 +635,13 @@ Deno.test("runParallelLoop resumes at validate step — skips agent work", async
 
 Deno.test("runParallelLoop always prescribes targetScenarioOverride to workers", async () => {
   const content = "| 1.1 |          |      |";
-  let override: number | undefined = undefined;
+  let override: string | undefined = undefined;
 
   await runParallelLoop({
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -629,7 +656,7 @@ Deno.test("runParallelLoop always prescribes targetScenarioOverride to workers",
   });
 
   // Worker 0 must be prescribed scenario 1.1 (the only actionable one)
-  assertEquals(override, 1.1);
+  assertEquals(override, "1.1");
 });
 
 Deno.test("runParallelLoop logs error for invalid progress statuses", async () => {
@@ -640,7 +667,7 @@ Deno.test("runParallelLoop logs error for invalid progress statuses", async () =
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1, 1.2],
+    expectedScenarioIds: ["1.1", "1.2"],
     signal: AbortSignal.timeout(10_000),
     log: (opts) => {
       if (opts.tags[0] === "error") errors.push(opts.message);
@@ -664,13 +691,13 @@ Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", a
     "| 1.2 |          |      |",
     "| 1.3 |          |      |",
   ].join("\n");
-  const overrides: number[] = [];
+  const overrides: string[] = [];
 
   await runParallelLoop({
     agent: "claude",
     iterations: 1,
     parallelism: 3,
-    expectedScenarioIds: [1.1, 1.2, 1.3],
+    expectedScenarioIds: ["1.1", "1.2", "1.3"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -689,7 +716,7 @@ Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", a
   });
 
   // Each worker gets a distinct scenario; no duplicates
-  assertEquals(overrides.sort((a, b) => a - b), [1.1, 1.2, 1.3]);
+  assertEquals(overrides.sort(), ["1.1", "1.2", "1.3"]);
 });
 
 Deno.test("runParallelLoop skips round when all worktree creations fail", async () => {
@@ -700,7 +727,7 @@ Deno.test("runParallelLoop skips round when all worktree creations fail", async 
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -728,7 +755,7 @@ Deno.test("runParallelLoop triggers reconcileMerge on conflict", async () => {
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -753,13 +780,13 @@ Deno.test("runParallelLoop deduplicates scenarios so no two workers get the same
     "| 18.1 | NEEDS_REWORK | fix |",
     "| 18.1 | NEEDS_REWORK | fix |",
   ].join("\n");
-  const overrides: number[] = [];
+  const overrides: string[] = [];
 
   await runParallelLoop({
     agent: "claude",
     iterations: 1,
     parallelism: 2,
-    expectedScenarioIds: [18.1],
+    expectedScenarioIds: ["18.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -778,7 +805,7 @@ Deno.test("runParallelLoop deduplicates scenarios so no two workers get the same
   });
 
   // Only one worker should be launched — scenario 18.1 must not be duplicated
-  assertEquals(overrides, [18.1]);
+  assertEquals(overrides, ["18.1"]);
 });
 
 Deno.test("runParallelLoop deduplicates across rework and actionable lists", async () => {
@@ -788,13 +815,13 @@ Deno.test("runParallelLoop deduplicates across rework and actionable lists", asy
     "| 5.1 |          |      |",
     "| 5.2 |          |      |",
   ].join("\n");
-  const overrides: number[] = [];
+  const overrides: string[] = [];
 
   await runParallelLoop({
     agent: "claude",
     iterations: 1,
     parallelism: 3,
-    expectedScenarioIds: [5.1, 5.2],
+    expectedScenarioIds: ["5.1", "5.2"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -813,7 +840,7 @@ Deno.test("runParallelLoop deduplicates across rework and actionable lists", asy
   });
 
   // Should only get [5.1, 5.2], not [5.1, 5.1, 5.2]
-  assertEquals(overrides.sort((a, b) => a - b), [5.1, 5.2]);
+  assertEquals(overrides.sort(), ["5.1", "5.2"]);
 });
 
 Deno.test("runParallelLoop logs resolved/still-actionable after merge", async () => {
@@ -824,7 +851,7 @@ Deno.test("runParallelLoop logs resolved/still-actionable after merge", async ()
     agent: "claude",
     iterations: 1,
     parallelism: 1,
-    expectedScenarioIds: [1.1],
+    expectedScenarioIds: ["1.1"],
     signal: AbortSignal.timeout(10_000),
     log: (opts) => {
       messages.push(opts.message);
@@ -860,13 +887,13 @@ Deno.test("runParallelLoop does not assign workers to VERIFIED scenarios with im
     "| 1.2  |         ",
     "| 18.1 | VERIFIED",
   ].join("\n");
-  const overrides: number[] = [];
+  const overrides: string[] = [];
 
   await runParallelLoop({
     agent: "claude",
     iterations: 1,
     parallelism: 2,
-    expectedScenarioIds: [1.1, 1.2, 18.1],
+    expectedScenarioIds: ["1.1", "1.2", "18.1"],
     signal: AbortSignal.timeout(10_000),
     log: noopLog,
     plugin: {},
@@ -885,5 +912,5 @@ Deno.test("runParallelLoop does not assign workers to VERIFIED scenarios with im
   });
 
   // Only scenario 1.2 (empty status) should get a worker — not 1.1 or 18.1
-  assertEquals(overrides, [1.2]);
+  assertEquals(overrides, ["1.2"]);
 });

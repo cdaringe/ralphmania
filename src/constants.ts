@@ -106,7 +106,7 @@ export const AUTONOMOUS_PROMPT = `
 4. Update repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
 `.trim();
 
-export const buildTargetedPrompt = (scenario: number): string =>
+export const buildTargetedPrompt = (scenario: string): string =>
   `
 1. Read @specification.md & @progress.md files. Read .ralph/repo_map.md if it exists.
 2. Implement scenario ${scenario}. Do NOT work on any other scenario. Add tests.

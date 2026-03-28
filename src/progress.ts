@@ -6,12 +6,16 @@ const PROGRESS_FILE = "progress.md";
 export const SPEC_FILE = "specification.md";
 
 /** Parse scenario count by counting data rows in the scenario table. */
-export const parseScenarioCount = (specContent: string): number =>
-  parseProgressRows(specContent).length;
+export const parseScenarioCount = (specContent: string): number => {
+  const parsed = parseProgressRows(specContent);
+  return parsed.ok ? parsed.value.length : 0;
+};
 
 /** Parse scenario IDs from the scenario table. */
-export const parseScenarioIds = (specContent: string): number[] =>
-  parseProgressRows(specContent).map((r) => r.scenario);
+export const parseScenarioIds = (specContent: string): string[] => {
+  const parsed = parseProgressRows(specContent);
+  return parsed.ok ? parsed.value.map((r) => r.scenario) : [];
+};
 
 const generateProgressTemplate = (scenarioCount: number): string => {
   const rows = Array.from(

@@ -6,7 +6,7 @@ import { WORKTREE_BASE_DIR } from "./constants.ts";
 export type WorktreeInfo = {
   readonly path: string;
   readonly branch: string;
-  readonly scenario: number;
+  readonly scenario: string;
 };
 
 export type MergeResult = "merged" | "conflict";
@@ -32,7 +32,7 @@ const run = async (
 
 export const createWorktree = async (
   { scenario, workerIndex, log }: {
-    scenario: number;
+    scenario: string;
     workerIndex: number;
     log: Logger;
   },

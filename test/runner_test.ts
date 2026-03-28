@@ -256,14 +256,14 @@ Deno.test("ndjsonResultTransform handles split chunks", async () => {
 
 Deno.test("workerPrefix produces fixed-length text prefix for worker 0 scenario 33", () => {
   // In non-TTY test env colors.ts strips ANSI codes, so we get plain text.
-  const prefix = workerPrefix(0, 33);
+  const prefix = workerPrefix(0, "33");
   assertStringIncludes(prefix, "[w0/s33]");
   assertStringIncludes(prefix, " "); // trailing space
 });
 
-Deno.test("workerPrefix zero-pads single-digit scenarios", () => {
-  const prefix = workerPrefix(1, 4);
-  assertStringIncludes(prefix, "s04");
+Deno.test("workerPrefix shows string scenario as-is", () => {
+  const prefix = workerPrefix(1, "4");
+  assertStringIncludes(prefix, "s4");
 });
 
 Deno.test("workerPrefix uses -- for undefined scenario", () => {
@@ -274,7 +274,7 @@ Deno.test("workerPrefix uses -- for undefined scenario", () => {
 Deno.test("workerPrefix cycles colors across worker indices", () => {
   // Just verify all produce non-empty strings — color codes vary by TTY.
   for (let i = 0; i < 5; i++) {
-    const prefix = workerPrefix(i, 1);
+    const prefix = workerPrefix(i, "1");
     assertEquals(typeof prefix, "string");
     assertEquals(prefix.length > 0, true);
   }

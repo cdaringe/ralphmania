@@ -13,9 +13,9 @@ Deno.test("buildPrompt without scenario or actionable", () => {
 
 Deno.test("buildPrompt with target scenario is prescriptive", () => {
   const prompt = buildPrompt({
-    targetScenario: 3,
+    targetScenario: "3",
     validationFailurePath: undefined,
-    actionableScenarios: [3, 7],
+    actionableScenarios: ["3", "7"],
   });
   assertStringIncludes(prompt, "Implement scenario 3");
   assertStringIncludes(prompt, "Do NOT work on any other scenario");
@@ -27,9 +27,9 @@ Deno.test("buildPrompt with target scenario is prescriptive", () => {
 
 Deno.test("buildPrompt general mode scopes to targetScenario", () => {
   const prompt = buildPrompt({
-    targetScenario: 3,
+    targetScenario: "3",
     validationFailurePath: undefined,
-    actionableScenarios: [3],
+    actionableScenarios: ["3"],
   });
   assertStringIncludes(prompt, "Implement scenario 3");
   assertEquals(prompt.includes("Find the next"), false);
@@ -37,9 +37,9 @@ Deno.test("buildPrompt general mode scopes to targetScenario", () => {
 
 Deno.test("buildPrompt targeted omits actionable list", () => {
   const prompt = buildPrompt({
-    targetScenario: 5,
+    targetScenario: "5",
     validationFailurePath: undefined,
-    actionableScenarios: [5, 12, 20],
+    actionableScenarios: ["5", "12", "20"],
   });
   assertEquals(prompt.includes("Actionable scenarios"), false);
   assertStringIncludes(prompt, "scenario 5");
@@ -49,7 +49,7 @@ Deno.test("buildPrompt autonomous includes actionable list", () => {
   const prompt = buildPrompt({
     targetScenario: undefined,
     validationFailurePath: undefined,
-    actionableScenarios: [5, 12],
+    actionableScenarios: ["5", "12"],
   });
   assertStringIncludes(prompt, "Actionable scenarios");
   assertStringIncludes(prompt, "5, 12");
@@ -68,9 +68,9 @@ Deno.test("buildPrompt with validation failure", () => {
 
 Deno.test("buildPrompt with scenario and validation failure", () => {
   const prompt = buildPrompt({
-    targetScenario: 2,
+    targetScenario: "2",
     validationFailurePath: "/tmp/out.log",
-    actionableScenarios: [2],
+    actionableScenarios: ["2"],
   });
   assertStringIncludes(prompt, "scenario 2");
   assertStringIncludes(prompt, "VALIDATION FAILED");
@@ -148,7 +148,7 @@ Deno.test("buildCommandSpec codex", () => {
 });
 
 Deno.test("buildTargetedPrompt includes critique for same scenario", () => {
-  const prompt = buildTargetedPrompt(7);
+  const prompt = buildTargetedPrompt("7");
   assertStringIncludes(prompt, "CRITIQUE scenario 7");
 });
 

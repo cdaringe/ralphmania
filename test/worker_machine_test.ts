@@ -28,20 +28,20 @@ Deno.test("resolveWorkerModelSelection claude level 0 → CLAUDE_CODER", () => {
   const s = resolveWorkerModelSelection({
     agent: "claude",
     level: 0,
-    targetScenario: 3,
+    targetScenario: "3",
   });
   assertEquals(s.model, "sonnet");
   assertEquals(s.mode, "general");
   assertEquals(s.effort, "high");
-  assertEquals(s.targetScenario, 3);
-  assertEquals(s.actionableScenarios, [3]);
+  assertEquals(s.targetScenario, "3");
+  assertEquals(s.actionableScenarios, ["3"]);
 });
 
 Deno.test("resolveWorkerModelSelection claude level 1 → CLAUDE_ESCALATED", () => {
   const s = resolveWorkerModelSelection({
     agent: "claude",
     level: 1,
-    targetScenario: 7,
+    targetScenario: "7",
   });
   assertEquals(s.model, "opus");
   assertEquals(s.mode, "strong");
@@ -52,7 +52,7 @@ Deno.test("resolveWorkerModelSelection claude undefined level → CLAUDE_CODER",
   const s = resolveWorkerModelSelection({
     agent: "claude",
     level: undefined,
-    targetScenario: 1,
+    targetScenario: "1",
   });
   assertEquals(s.model, "sonnet");
 });
@@ -61,7 +61,7 @@ Deno.test("resolveWorkerModelSelection codex level 0 → general", () => {
   const s = resolveWorkerModelSelection({
     agent: "codex",
     level: 0,
-    targetScenario: 1,
+    targetScenario: "1",
   });
   assertEquals(s.model, "gpt-5.1-codex-max");
   assertEquals(s.mode, "general");
@@ -72,7 +72,7 @@ Deno.test("resolveWorkerModelSelection codex level 1 → strong", () => {
   const s = resolveWorkerModelSelection({
     agent: "codex",
     level: 1,
-    targetScenario: 1,
+    targetScenario: "1",
   });
   assertEquals(s.model, "gpt-5.3-codex");
   assertEquals(s.mode, "strong");
@@ -96,7 +96,7 @@ Deno.test("isWorkerTerminal returns false for non-terminal", () => {
       iterationNum: 0,
       agent: "claude",
       level: undefined,
-      targetScenarioOverride: 1,
+      targetScenarioOverride: "1",
       validationFailurePath: undefined,
       specFile: undefined,
       progressFile: undefined,
@@ -114,7 +114,7 @@ Deno.test("initialWorkerState creates resolving_model state", () => {
     iterationNum: 5,
     agent: "codex",
     level: 1,
-    targetScenarioOverride: 3,
+    targetScenarioOverride: "3",
     validationFailurePath: "/tmp/fail.log",
     specFile: "spec.md",
     progressFile: "progress.md",
@@ -123,7 +123,7 @@ Deno.test("initialWorkerState creates resolving_model state", () => {
   assertEquals(s.iterationNum, 5);
   assertEquals(s.agent, "codex");
   assertEquals(s.level, 1);
-  assertEquals(s.targetScenarioOverride, 3);
+  assertEquals(s.targetScenarioOverride, "3");
   assertEquals(s.validationFailurePath, "/tmp/fail.log");
 });
 
@@ -136,7 +136,7 @@ Deno.test("transitionResolvingModel with targetScenarioOverride uses resolveWork
     iterationNum: 0,
     agent: "claude",
     level: 1,
-    targetScenarioOverride: 5,
+    targetScenarioOverride: "5",
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -145,7 +145,7 @@ Deno.test("transitionResolvingModel with targetScenarioOverride uses resolveWork
   const next = await transitionResolvingModel(state, {}, noopLog);
   assertEquals(next.tag, "model_resolved");
   assertEquals(next.selection.model, "opus"); // escalated
-  assertEquals(next.selection.targetScenario, 5);
+  assertEquals(next.selection.targetScenario, "5");
 });
 
 Deno.test("transitionResolvingModel fires onModelSelected plugin hook", async () => {
@@ -153,7 +153,7 @@ Deno.test("transitionResolvingModel fires onModelSelected plugin hook", async ()
     iterationNum: 0,
     agent: "claude",
     level: 0,
-    targetScenarioOverride: 1,
+    targetScenarioOverride: "1",
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -182,9 +182,9 @@ Deno.test("transitionModelResolved builds prompt with target scenario", async ()
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 3,
+      targetScenario: "3",
       effort: "high",
-      actionableScenarios: [3],
+      actionableScenarios: ["3"],
     },
     validationFailurePath: undefined,
     specFile: undefined,
@@ -204,9 +204,9 @@ Deno.test("transitionModelResolved includes validation failure in prompt", async
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     validationFailurePath: "/tmp/fail.log",
     specFile: undefined,
@@ -226,9 +226,9 @@ Deno.test("transitionModelResolved fires onPromptBuilt plugin hook", async () =>
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     validationFailurePath: undefined,
     specFile: undefined,
@@ -255,9 +255,9 @@ Deno.test("transitionPromptBuilt builds command spec for claude", async () => {
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     prompt: "test prompt",
   };
@@ -276,9 +276,9 @@ Deno.test("transitionPromptBuilt builds command spec for codex", async () => {
     selection: {
       model: "gpt-5.1-codex",
       mode: "fast",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: undefined,
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     prompt: "test prompt",
   };
@@ -295,9 +295,9 @@ Deno.test("transitionPromptBuilt fires onCommandBuilt plugin hook", async () => 
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     prompt: "test prompt",
   };
@@ -325,9 +325,9 @@ Deno.test("transitionCommandBuilt produces running_agent state", () => {
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     spec: { command: "claude", args: ["--model", "sonnet", "prompt"] },
   };
@@ -349,9 +349,9 @@ Deno.test("transitionRunningAgent with successful agent → done/continue", asyn
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     spec: { command: "echo", args: ["hello"] },
   };
@@ -380,9 +380,9 @@ Deno.test("transitionRunningAgent forwards workerIndex to execute for stdio pref
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 33,
+      targetScenario: "33",
       effort: "high",
-      actionableScenarios: [33],
+      actionableScenarios: ["33"],
     },
     spec: { command: "echo", args: ["hello"] },
   };
@@ -415,9 +415,9 @@ Deno.test("transitionRunningAgent fires onIterationEnd plugin hook", async () =>
     selection: {
       model: "sonnet",
       mode: "general",
-      targetScenario: 1,
+      targetScenario: "1",
       effort: "high",
-      actionableScenarios: [1],
+      actionableScenarios: ["1"],
     },
     spec: { command: "echo", args: ["hello"] },
   };
@@ -467,7 +467,7 @@ Deno.test("worker pipeline: resolving_model → ... → done", async () => {
     iterationNum: 0,
     agent: "claude",
     level: 0,
-    targetScenarioOverride: 1,
+    targetScenarioOverride: "1",
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
