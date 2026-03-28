@@ -437,11 +437,40 @@ export const transitionRunningWorkers = async (
           ...(scenario !== undefined
             ? { targetScenarioOverride: scenario }
             : {}),
-        }).then((iterationResult): WorkerResult => ({
-          workerIndex: i,
-          iterationResult,
-          worktree: wt,
-        }));
+        }).then(async (iterationResult): Promise<WorkerResult> => {
+          // Run validation in the worker's worktree before merging
+          const validation = await ctx.deps.runValidation({
+            iterationNum: iterationsUsed,
+            log: wLog,
+            cwd: wt.path,
+          });
+          if (validation.status === "failed") {
+            wLog({
+              tags: ["info", "orchestrator"],
+              message: yellow(
+                `Worker ${i} validation failed, re-running iteration to fix`,
+              ),
+            });
+            // Re-run iteration with the validation failure so the agent can fix
+            await ctx.deps.runIteration({
+              iterationNum: iterationsUsed,
+              agent: ctx.agent,
+              signal: ctx.signal,
+              log: wLog,
+              validationFailurePath: validation.outputPath,
+              plugin: ctx.plugin,
+              level: effectiveLevel,
+              cwd: wt.path,
+              specFile: ctx.specFile,
+              progressFile: ctx.progressFile,
+              workerIndex: i,
+              ...(scenario !== undefined
+                ? { targetScenarioOverride: scenario }
+                : {}),
+            });
+          }
+          return { workerIndex: i, iterationResult, worktree: wt };
+        });
       }),
     );
   } finally {

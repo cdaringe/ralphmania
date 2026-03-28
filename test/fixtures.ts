@@ -157,7 +157,7 @@ export const integrationDeps = (
       progress: ProgressStore;
     }) => void;
     onValidation?: (
-      opts: { iterationNum: number },
+      opts: { iterationNum: number; cwd?: string },
     ) => ValidationResult;
   },
 ): Partial<MachineDeps> => ({

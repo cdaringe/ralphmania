@@ -212,10 +212,12 @@ Deno.test("integration: onValidationComplete override prevents failure propagati
       onIteration: ({ validationFailurePath }) => {
         failurePaths.push(validationFailurePath);
       },
-      onValidation: () => ({
-        status: "failed" as const,
-        outputPath: "/tmp/overridden.log",
-      }),
+      onValidation: ({ cwd }) =>
+        // Worker-level validation passes; only orchestrator-level fails
+        cwd !== undefined ? { status: "passed" as const } : {
+          status: "failed" as const,
+          outputPath: "/tmp/overridden.log",
+        },
     }),
   });
 
@@ -241,8 +243,10 @@ Deno.test("integration: validation failure feeds back to next round", async () =
       onIteration: ({ validationFailurePath }) => {
         failurePaths.push(validationFailurePath);
       },
-      onValidation: ({ iterationNum }) =>
-        iterationNum === 0
+      onValidation: ({ iterationNum, cwd }) =>
+        // Only fail at orchestrator level so worker-level validation
+        // does not trigger a fix-up re-run.
+        cwd === undefined && iterationNum === 0
           ? {
             status: "failed" as const,
             outputPath: "/tmp/round0-fail.log",
@@ -599,8 +603,9 @@ Deno.test("integration: full lifecycle — implement, rework, fix, verify", asyn
           );
         }
       },
-      onValidation: ({ iterationNum }) =>
-        iterationNum === 1
+      onValidation: ({ iterationNum, cwd }) =>
+        // Only fail at orchestrator level
+        cwd === undefined && iterationNum === 1
           ? {
             status: "failed" as const,
             outputPath: "/tmp/validation-fail.log",

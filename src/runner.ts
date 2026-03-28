@@ -6,7 +6,8 @@ import type {
   ModelSelection,
   Result,
 } from "./types.ts";
-import { err, extractSDKText, ok } from "./types.ts";
+import { err, ok } from "./types.ts";
+import { extractSDKText } from "./agents/claude/sdk-text.ts";
 import {
   COMPLETION_MARKER,
   nonInteractiveEnv,

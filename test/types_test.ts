@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
-import { err, extractSDKText, isSDKMessage, ok } from "../src/types.ts";
+import { err, ok } from "../src/types.ts";
+import { extractSDKText, isSDKMessage } from "../src/agents/claude/sdk-text.ts";
 
 Deno.test("ok creates success result", () => {
   const result = ok(42);

@@ -327,7 +327,8 @@ Deno.test("runParallelLoop returns 130 on aborted signal", async () => {
 
 Deno.test("runParallelLoop runs validation after each round", async () => {
   const content = "| 1.1 |          |      |";
-  let validationCount = 0;
+  let workerValidationCount = 0;
+  let orchestratorValidationCount = 0;
 
   await runParallelLoop({
     agent: "claude",
@@ -340,14 +341,16 @@ Deno.test("runParallelLoop runs validation after each round", async () => {
     level: undefined,
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
-      runValidation: () => {
-        validationCount++;
+      runValidation: ({ cwd }) => {
+        if (cwd !== undefined) workerValidationCount++;
+        else orchestratorValidationCount++;
         return Promise.resolve({ status: "passed" as const });
       },
     }),
   });
 
-  assertEquals(validationCount, 2);
+  assertEquals(workerValidationCount, 2);
+  assertEquals(orchestratorValidationCount, 2);
 });
 
 Deno.test("runParallelLoop cleans up worktrees on worker failure", async () => {
@@ -395,9 +398,11 @@ Deno.test("runParallelLoop passes validation failure path to next round workers"
         failurePaths.push(opts.validationFailurePath);
         return Promise.resolve({ status: "continue" });
       },
-      runValidation: ({ iterationNum }) =>
+      runValidation: ({ iterationNum, cwd }) =>
         Promise.resolve(
-          iterationNum === 0
+          // Only fail at orchestrator level so worker-level validation
+          // does not trigger a fix-up re-run.
+          cwd === undefined && iterationNum === 0
             ? {
               status: "failed" as const,
               outputPath: "/tmp/validation-0.log",
@@ -413,7 +418,7 @@ Deno.test("runParallelLoop passes validation failure path to next round workers"
 Deno.test("runParallelLoop clears validation failure path after passing", async () => {
   const content = "| 1.1 |          |      |";
   const failurePaths: (string | undefined)[] = [];
-  let round = 0;
+  let orchestratorRound = 0;
 
   await runParallelLoop({
     agent: "claude",
@@ -430,8 +435,13 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
         failurePaths.push(opts.validationFailurePath);
         return Promise.resolve({ status: "continue" });
       },
-      runValidation: () => {
-        const r = round++;
+      runValidation: ({ cwd }) => {
+        // Worker-level validation always passes
+        if (cwd !== undefined) {
+          return Promise.resolve({ status: "passed" as const });
+        }
+        // Orchestrator-level: first round fails, rest pass
+        const r = orchestratorRound++;
         return Promise.resolve(
           r === 0
             ? {
@@ -445,6 +455,47 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
   });
 
   assertEquals(failurePaths, [undefined, "/tmp/fail.log", undefined]);
+});
+
+Deno.test("runParallelLoop worker validation failure triggers fix-up iteration", async () => {
+  const content = "| 1.1 |          |      |";
+  const iterationCalls: { validationFailurePath: string | undefined }[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(content),
+      runIteration: (opts) => {
+        iterationCalls.push({
+          validationFailurePath: opts.validationFailurePath,
+        });
+        return Promise.resolve({ status: "continue" });
+      },
+      runValidation: ({ cwd }) =>
+        Promise.resolve(
+          // Worker-level validation fails, orchestrator passes
+          cwd !== undefined
+            ? {
+              status: "failed" as const,
+              outputPath: "/tmp/worker-fail.log",
+            }
+            : { status: "passed" as const },
+        ),
+    }),
+  });
+
+  // First call: initial worker iteration (no validation failure)
+  // Second call: fix-up iteration with worker validation failure path
+  assertEquals(iterationCalls.length, 2);
+  assertEquals(iterationCalls[0].validationFailurePath, undefined);
+  assertEquals(iterationCalls[1].validationFailurePath, "/tmp/worker-fail.log");
 });
 
 Deno.test("runParallelLoop writes checkpoint after each round", async () => {
