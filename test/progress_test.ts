@@ -3,10 +3,85 @@ import {
   DEFAULT_FILE_PATHS,
   ensureProgressFile,
   parseScenarioCount,
+  parseScenarioIds,
 } from "../src/progress.ts";
+import type { ProgressFileDeps } from "../src/progress.ts";
 import type { Logger } from "../src/types.ts";
 
 const noop: Logger = () => {};
+
+// ---------------------------------------------------------------------------
+// [ARCH.1] In-memory ProgressFileDeps factory — no real filesystem
+// ---------------------------------------------------------------------------
+
+const makeMemFS = (
+  initial: Record<string, string> = {},
+): { files: Record<string, string>; io: ProgressFileDeps } => {
+  const files: Record<string, string> = { ...initial };
+  const io: ProgressFileDeps = {
+    readTextFile: (p) =>
+      p in files
+        ? Promise.resolve(files[p])
+        : Promise.reject(new Error(`no such file: ${p}`)),
+    writeTextFile: (p, c) => {
+      files[p] = c;
+      return Promise.resolve();
+    },
+    stat: (p) =>
+      p in files
+        ? Promise.resolve(undefined)
+        : Promise.reject(new Error(`no such file: ${p}`)),
+  };
+  return { files, io };
+};
+
+// [ARCH.1] Domain logic works with injected in-memory I/O (no Deno calls)
+
+Deno.test("[ARCH.1] ensureProgressFile creates template via in-memory fs", async () => {
+  const { files, io } = makeMemFS({
+    "spec.md": "| 1 | CLI | foo |\n| 2 | UX | bar |",
+  });
+  await ensureProgressFile(noop, {
+    specFile: "spec.md",
+    progressFile: "progress.md",
+  }, io);
+  assertStringIncludes(files["progress.md"], "| 1 ");
+  assertStringIncludes(files["progress.md"], "| 2 ");
+});
+
+Deno.test("[ARCH.1] ensureProgressFile syncs new rows via in-memory fs", async () => {
+  const { files, io } = makeMemFS({
+    "spec.md": "| 1 | CLI | foo |\n| 2 | UX | bar |",
+    "progress.md": "<!-- END_DEMO -->\n# Progress\n| 1 | VERIFIED | done | |\n",
+  });
+  await ensureProgressFile(noop, {
+    specFile: "spec.md",
+    progressFile: "progress.md",
+  }, io);
+  assertStringIncludes(files["progress.md"], "| 2 ");
+});
+
+Deno.test("[ARCH.1] ensureProgressFile no-ops when spec has equal rows via in-memory fs", async () => {
+  const { files, io } = makeMemFS({
+    "spec.md": "| 1 | CLI | foo |",
+    "progress.md": "<!-- END_DEMO -->\n| 1 | VERIFIED | done | |\n",
+  });
+  const before = files["progress.md"];
+  await ensureProgressFile(noop, {
+    specFile: "spec.md",
+    progressFile: "progress.md",
+  }, io);
+  assertEquals(files["progress.md"], before);
+});
+
+Deno.test("[ARCH.1] ensureProgressFile defaults to 10 rows with missing spec via in-memory fs", async () => {
+  const { files, io } = makeMemFS({});
+  await ensureProgressFile(noop, {
+    specFile: "missing.md",
+    progressFile: "progress.md",
+  }, io);
+  assertStringIncludes(files["progress.md"], "| 10");
+});
 
 Deno.test("parseScenarioCount counts data rows in scenario table", () => {
   const content = [
@@ -21,6 +96,11 @@ Deno.test("parseScenarioCount counts data rows in scenario table", () => {
 
 Deno.test("parseScenarioCount returns 0 for empty content", () => {
   assertEquals(parseScenarioCount(""), 0);
+});
+
+Deno.test("parseScenarioCount returns 0 when parseProgressRows errors", () => {
+  // A row with only one cell (no trailing pipe) triggers a parse error
+  assertEquals(parseScenarioCount("| malformed-single-cell"), 0);
 });
 
 Deno.test("parseScenarioCount ignores header rows", () => {
@@ -38,6 +118,20 @@ Deno.test("parseScenarioCount handles multi-digit scenario numbers", () => {
     "| 20 | UX  | desc |",
   ].join("\n");
   assertEquals(parseScenarioCount(content), 3);
+});
+
+Deno.test("parseScenarioIds extracts scenario ids from table", () => {
+  const content = [
+    "| 1  | CLI | some desc |",
+    "| 2  | UX  | another   |",
+    "| 3a | UX  | lettered  |",
+  ].join("\n");
+  assertEquals(parseScenarioIds(content), ["1", "2", "3a"]);
+});
+
+Deno.test("parseScenarioIds returns empty array when parseProgressRows errors", () => {
+  // A row with only one cell (no trailing pipe) triggers a parse error
+  assertEquals(parseScenarioIds("| malformed-single-cell"), []);
 });
 
 Deno.test("DEFAULT_FILE_PATHS has expected defaults", () => {
