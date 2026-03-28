@@ -45,6 +45,12 @@ export const GUI_HTML: string = `<!DOCTYPE html>
     .t-info{color:#22d3ee}.t-error{color:#f87171;font-weight:700}
     .t-debug{color:#52525b}.t-orch{color:#4ade80}
     .t-validate{color:#fbbf24}.t-trans{color:#a78bfa}
+    .s-verified{color:#1a7a1a}.s-needs-rework{color:#c0392b}.s-wip{color:#e67e22}
+    .s-work-complete{color:#2980b9}.s-obsolete{color:#888}.s-not-started{color:#999}
+    .s-orphaned{color:#c0392b}
+    #status-list{margin-top:6px;display:flex;flex-direction:column;gap:1px;max-height:40vh;overflow-y:auto}
+    .srow{display:flex;justify-content:space-between;font-size:10px;padding:1px 0}
+    .srow span:first-child{color:var(--muted)}
   </style>
 </head>
 <body>
@@ -56,6 +62,11 @@ export const GUI_HTML: string = `<!DOCTYPE html>
 <main>
   <aside>
     <div><div class="pt">Orchestrator</div><div id="state-val">—</div></div>
+    <div>
+      <div class="pt">Progress <a href="/status" target="_blank" style="font-size:9px;color:var(--muted);text-decoration:none;float:right">[full \\u2192]</a></div>
+      <div id="status-summary" style="font-size:11px;color:var(--muted)">\\u2014</div>
+      <div id="status-list"></div>
+    </div>
     <div>
       <div class="pt">Workers</div>
       <div id="workers"><span style="color:var(--muted);font-size:11px">none</span></div>
@@ -117,16 +128,51 @@ export const GUI_HTML: string = `<!DOCTYPE html>
     var rm=ev.message.match(workerEndRe);
     if(rm){workers.delete(parseInt(rm[1],10));renderWorkers();}
   }
+  // --- Status diff (GUI.b) ---
+  var statusSummary=document.getElementById('status-summary'),
+    statusList=document.getElementById('status-list');
+  function fetchStatus(){
+    fetch('/api/status').then(function(r){return r.json();}).then(function(d){
+      if(d.error)return;
+      var total=d.specOnly.length+d.shared.length;
+      var verified=d.shared.filter(function(s){return s.status==='VERIFIED';}).length;
+      var rework=d.shared.filter(function(s){return s.status==='NEEDS_REWORK';}).length;
+      var wip=d.shared.filter(function(s){return s.status==='WIP'||s.status==='WORK_COMPLETE';}).length;
+      var ns=d.specOnly.length;
+      var parts=[verified+'/'+total+' verified'];
+      if(rework>0)parts.push(rework+' rework');
+      if(wip>0)parts.push(wip+' wip');
+      if(ns>0)parts.push(ns+' not started');
+      if(d.progressOnly.length>0)parts.push(d.progressOnly.length+' orphaned');
+      statusSummary.textContent=parts.join(' \\u00b7 ');
+      var html='';
+      d.shared.forEach(function(s){
+        var cls='s-'+s.status.toLowerCase().replace(/_/g,'-');
+        html+='<div class="srow"><span>'+esc(s.id)+'</span><span class="'+cls+'">'+esc(s.status)+'</span></div>';
+      });
+      d.specOnly.forEach(function(id){
+        html+='<div class="srow"><span>'+esc(id)+'</span><span class="s-not-started">NOT_STARTED</span></div>';
+      });
+      d.progressOnly.forEach(function(id){
+        html+='<div class="srow"><span>'+esc(id)+'</span><span class="s-orphaned">ORPHANED</span></div>';
+      });
+      statusList.innerHTML=html;
+    }).catch(function(){});
+  }
+  fetchStatus();
+
   function handle(ev){
     if(ev.type==='log'){
       handleLog(ev);
     }else if(ev.type==='state'){
       stateEl.textContent=ev.to;
       if(ev.to==='done'||ev.to==='aborted'){workers.clear();renderWorkers();}
+      fetchStatus();
     }else if(ev.type==='worker_active'){
       workers.set(ev.workerIndex,{scenario:ev.scenario});renderWorkers();
     }else if(ev.type==='worker_done'){
       workers.delete(ev.workerIndex);renderWorkers();
+      fetchStatus();
     }
   }
   function connect(){

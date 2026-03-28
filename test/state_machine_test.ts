@@ -512,6 +512,7 @@ Deno.test("transition sequence: init → reading_progress → finding_actionable
     iterations: 1,
     expectedScenarioIds: ["1.1"],
     deps: stubDeps({
+      readSpec: () => Promise.resolve("| 1.1 | Scenario one |"),
       readProgress: () => {
         round++;
         return Promise.resolve(
@@ -552,6 +553,7 @@ Deno.test("transition sequence: checkpoint resume skips to validating", async ()
           step: "validate" as const,
           validationFailurePath: undefined,
         }),
+      readSpec: () => Promise.resolve("| 1.1 | Scenario one |"),
       readProgress: () => Promise.resolve("| 1.1 | VERIFIED | done |"),
     }),
   });
@@ -636,4 +638,72 @@ Deno.test("transitionFindingActionable validation failure but all OBSOLETE → d
   };
   const next = await transitionFindingActionable(state, ctx);
   assertEquals(next.tag, "done");
+});
+
+// ---------------------------------------------------------------------------
+// Deep verification: spec/progress mismatch prevents premature exit
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionCheckingDoneness spec/progress ID mismatch → reading_progress (not done)", async () => {
+  // Progress has IDs 43, 44 all VERIFIED, but spec has DOCSSITE.1, DOCSSITE.2
+  const progressContent = "| 43 | VERIFIED | done |\n| 44 | VERIFIED | done |";
+  const specContent =
+    "| DOCSSITE.1 | Build docs site |\n| DOCSSITE.2 | Deploy docs site |";
+  const ctx = makeCtx({
+    expectedScenarioIds: ["DOCSSITE.1", "DOCSSITE.2"],
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(progressContent),
+      readSpec: () => Promise.resolve(specContent),
+    }),
+  });
+  const state: CheckingDonenessState = {
+    tag: "checking_doneness",
+    iterationsUsed: 3,
+    validationFailurePath: undefined,
+  };
+  const next = await transitionCheckingDoneness(state, ctx);
+  assertEquals(next.tag, "reading_progress");
+});
+
+Deno.test("transitionReadingProgress spec/progress ID mismatch → finding_actionable (not done)", async () => {
+  const progressContent = "| 43 | VERIFIED | done |\n| 44 | VERIFIED | done |";
+  const specContent =
+    "| DOCSSITE.1 | Build docs site |\n| DOCSSITE.2 | Deploy docs site |";
+  const ctx = makeCtx({
+    expectedScenarioIds: ["DOCSSITE.1", "DOCSSITE.2"],
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(progressContent),
+      readSpec: () => Promise.resolve(specContent),
+    }),
+  });
+  const state: ReadingProgressState = {
+    tag: "reading_progress",
+    iterationsUsed: 0,
+    validationFailurePath: undefined,
+  };
+  const next = await transitionReadingProgress(state, ctx);
+  assertEquals(next.tag, "finding_actionable");
+});
+
+Deno.test("transitionCheckingDoneness with fresh spec matching progress → done", async () => {
+  const progressContent =
+    "| A.1 | VERIFIED | done |\n| A.2 | VERIFIED | done |";
+  const specContent = "| A.1 | Scenario A1 |\n| A.2 | Scenario A2 |";
+  const ctx = makeCtx({
+    expectedScenarioIds: ["A.1", "A.2"],
+    deps: stubDeps({
+      readProgress: () => Promise.resolve(progressContent),
+      readSpec: () => Promise.resolve(specContent),
+    }),
+  });
+  const state: CheckingDonenessState = {
+    tag: "checking_doneness",
+    iterationsUsed: 5,
+    validationFailurePath: undefined,
+  };
+  const next = await transitionCheckingDoneness(state, ctx);
+  assertEquals(next.tag, "done");
+  if (next.tag === "done") {
+    assertEquals(next.iterationsUsed, 5);
+  }
 });

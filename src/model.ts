@@ -2,7 +2,6 @@ import type {
   Agent,
   EffortLevel,
   EscalationLevel,
-  EscalationState,
   Logger,
   ModelSelection,
   Result,
@@ -12,15 +11,22 @@ import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
   CLAUDE_VERIFIER,
-  ESCALATION_FILE,
   REWORK_THRESHOLD,
   Status,
-  VALID_STATUSES,
 } from "./constants.ts";
-export { parseProgressRows } from "./parsers/progress-rows.ts";
-export type { ProgressRow } from "./parsers/progress-rows.ts";
-import type { ProgressRow } from "./parsers/progress-rows.ts";
-import { parseProgressRows } from "./parsers/progress-rows.ts";
+import {
+  readEscalationState,
+  updateEscalationState,
+  writeEscalationState,
+} from "./orchestrator/escalation.ts";
+import {
+  detectScenarioFromProgress,
+  findActionableScenarios,
+  findReworkScenarios,
+  parseImplementedCount,
+  parseProgressRows,
+  parseTotalCount,
+} from "./orchestrator/progress-queries.ts";
 
 /** Injectable I/O deps for model resolution functions. */
 export type ModelIODeps = {
@@ -51,93 +57,6 @@ export const getModel = (
       general: "gpt-5.1-codex-max",
       strong: "gpt-5.3-codex",
     } as const)[mode];
-
-export const detectScenarioFromProgress = (
-  content: string,
-): Result<string | undefined, string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  const rework = parsed.value.find((r) => r.status === Status.NEEDS_REWORK);
-  return ok(rework?.scenario);
-};
-
-/** Find ALL scenario IDs with NEEDS_REWORK status. */
-export const findReworkScenarios = (
-  content: string,
-): Result<string[], string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  return ok(
-    parsed.value
-      .filter((r) => r.status === Status.NEEDS_REWORK)
-      .map((r) => r.scenario),
-  );
-};
-
-/**
- * Pure escalation-state transition.
- *
- * - Scenarios still in rework: bump level (capped at 3).
- * - Scenarios newly in rework: start at level 1.
- * - Scenarios no longer in rework: removed from state.
- */
-const clampLevel = (n: number): EscalationLevel => n >= 1 ? 1 : 0;
-
-export const updateEscalationState = (
-  { current, reworkScenarios }: {
-    current: EscalationState;
-    reworkScenarios: string[];
-  },
-): EscalationState =>
-  Object.fromEntries(
-    [...new Set(reworkScenarios)].map((key) => [
-      key,
-      clampLevel(current[key] !== undefined ? current[key] + 1 : 1),
-    ]),
-  );
-
-/**
- * Derive the ordered actionable scenario list from parsed progress rows.
- * NEEDS_REWORK scenarios sort first so rework work is prioritised.
- * Pure derivation — no I/O.
- */
-export const orderActionableScenarios = (
-  rows: ProgressRow[],
-  specIds: readonly string[],
-): string[] => {
-  const doneSet = new Set(
-    rows
-      .filter((r) =>
-        r.status === Status.VERIFIED || r.status === Status.OBSOLETE
-      )
-      .map((r) => r.scenario),
-  );
-  const reworkIds = new Set(
-    rows.filter((r) => r.status === Status.NEEDS_REWORK).map((r) => r.scenario),
-  );
-  const actionable = specIds.filter((id) => !doneSet.has(id));
-  return [
-    ...actionable.filter((s) => reworkIds.has(s)),
-    ...actionable.filter((s) => !reworkIds.has(s)),
-  ];
-};
-
-/**
- * Compute the effective escalation level for a given scenario by combining
- * the per-scenario state from `.ralph/escalation.json` with the operator's
- * floor (`minLevel`). Result is clamped to the binary {@link EscalationLevel}
- * range (0 | 1). Pure derivation — no I/O.
- */
-export const computeEffectiveLevel = (
-  scenario: string | undefined,
-  escalation: EscalationState,
-  minLevel: EscalationLevel | undefined,
-): EscalationLevel => {
-  const scenarioLevel = scenario !== undefined
-    ? (escalation[scenario] ?? 0)
-    : 0;
-  return clampLevel(Math.max(minLevel ?? 0, scenarioLevel));
-};
 
 export const computeModelSelection = (
   { content, agent, escalationLevel, isVerifierMode }: {
@@ -184,112 +103,6 @@ export const computeModelSelection = (
   });
 };
 
-/** Count rows with WORK_COMPLETE or VERIFIED status in progress.md content. */
-export const parseImplementedCount = (
-  content: string,
-): Result<number, string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  return ok(
-    parsed.value.filter((r) =>
-      r.status === Status.WORK_COMPLETE || r.status === Status.VERIFIED
-    ).length,
-  );
-};
-
-/** Count total non-OBSOLETE scenario rows in progress.md content. */
-export const parseTotalCount = (content: string): Result<number, string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  return ok(parsed.value.filter((r) => r.status !== Status.OBSOLETE).length);
-};
-
-/** Find scenario IDs that are not VERIFIED or OBSOLETE (i.e. actionable).
- * WORK_COMPLETE is actionable — it means "ready for verification", not "done". */
-export const findActionableScenarios = (
-  content: string,
-): Result<string[], string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  const done: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
-  return ok(
-    parsed.value
-      .filter((r) => !done.has(r.status))
-      .map((r) => r.scenario),
-  );
-};
-
-/** Check whether every expected scenario is present and VERIFIED or OBSOLETE. */
-export const isAllVerified = (
-  content: string,
-  expectedScenarioIds?: readonly string[],
-): Result<boolean, string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  const rows = parsed.value;
-  const doneStatuses: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
-  const allDone = rows.length > 0 &&
-    rows.every((r) => doneStatuses.has(r.status));
-  if (!allDone) return ok(false);
-  if (expectedScenarioIds !== undefined) {
-    const presentIds = new Set(rows.map((r) => r.scenario));
-    for (const id of expectedScenarioIds) {
-      if (!presentIds.has(id)) return ok(false);
-    }
-  }
-  return ok(true);
-};
-
-/** Read persisted escalation state, defaulting to `{}` if missing. */
-export const readEscalationState = async (
-  log: Logger,
-  io: ModelIODeps = defaultModelIO,
-): Promise<EscalationState> => {
-  try {
-    return JSON.parse(await io.readTextFile(ESCALATION_FILE));
-  } catch {
-    log({
-      tags: ["debug", "escalation"],
-      message: "No escalation state found, starting fresh",
-    });
-    return {};
-  }
-};
-
-/** Persist escalation state to `.ralph/escalation.json`. */
-export const writeEscalationState = async (
-  state: EscalationState,
-  log: Logger,
-  io: ModelIODeps = defaultModelIO,
-): Promise<void> => {
-  try {
-    await io.mkdir(".ralph", { recursive: true });
-    await io.writeTextFile(ESCALATION_FILE, JSON.stringify(state));
-  } catch (e) {
-    log({
-      tags: ["error", "escalation"],
-      message: `Failed to write escalation state: ${e}`,
-    });
-  }
-};
-
-/**
- * Validate that every scenario row in progress.md uses a recognized status.
- * Returns an array of `{ scenario, status }` for each invalid entry.
- */
-export const validateProgressStatuses = (
-  content: string,
-): Result<{ scenario: string; status: string }[], string> => {
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  const validSet = new Set<string>(VALID_STATUSES);
-  return ok(
-    parsed.value
-      .filter((r) => r.status !== "" && !validSet.has(r.status))
-      .map((r) => ({ scenario: r.scenario, status: r.status })),
-  );
-};
-
 const formatStatusMessage = (
   { reworkCount, model, implementedCount, totalCount, effort, level }: {
     reworkCount: number;
@@ -319,6 +132,8 @@ const logStrongScope = (
         `strong-model pass scoped to scenario ${selection.targetScenario}`,
     });
 };
+
+const clampLevel = (n: number): EscalationLevel => n >= 1 ? 1 : 0;
 
 const resolveClaudeSelection = async (
   { content, log, minLevel, defaults, io }: {

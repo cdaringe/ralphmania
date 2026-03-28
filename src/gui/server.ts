@@ -11,6 +11,11 @@ import type { GuiEventBus } from "./events.ts";
 import type { AgentInputBus } from "./input-bus.ts";
 import type { Logger } from "../types.ts";
 import { createLogger } from "../logger.ts";
+import type { StatusDiff } from "../status-diff.ts";
+import { generateStatusHtml } from "../status-diff.ts";
+
+/** Returns the current spec-vs-progress status diff. */
+export type StatusProvider = () => Promise<StatusDiff>;
 
 export type GuiServerOptions = {
   readonly port: number;
@@ -19,11 +24,13 @@ export type GuiServerOptions = {
   readonly signal?: AbortSignal;
   /** When provided, POST /input/:workerId routes text to agent subprocess stdin. */
   readonly agentInputBus?: AgentInputBus;
+  /** When provided, enables /api/status (JSON) and /status (HTML) endpoints. */
+  readonly statusProvider?: StatusProvider;
 };
 
 /** Start the GUI HTTP server. Resolves when the server closes. */
 export const startGuiServer = async (opts: GuiServerOptions): Promise<void> => {
-  const { port, bus, signal, agentInputBus } = opts;
+  const { port, bus, signal, agentInputBus, statusProvider } = opts;
   const log = opts.log ?? createLogger();
 
   const handler = async (req: Request): Promise<Response> => {
@@ -91,6 +98,48 @@ export const startGuiServer = async (opts: GuiServerOptions): Promise<void> => {
       return new Response(WORKER_PAGE_HTML, {
         headers: { "Content-Type": "text/html; charset=utf-8" },
       });
+    }
+
+    // GET /api/status — JSON status diff (GUI.b)
+    if (path === "/api/status") {
+      if (!statusProvider) {
+        return new Response(
+          JSON.stringify({ specOnly: [], progressOnly: [], shared: [] }),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+      try {
+        const diff = await statusProvider();
+        return new Response(JSON.stringify(diff), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "status unavailable" }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    // GET /status — full HTML status page (GUI.b)
+    if (path === "/status") {
+      if (!statusProvider) {
+        return new Response(
+          "<html><body><p>No status provider configured.</p></body></html>",
+          { headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }
+      try {
+        const diff = await statusProvider();
+        return new Response(generateStatusHtml(diff), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      } catch {
+        return new Response("<pre>Status unavailable</pre>", {
+          status: 500,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
     }
 
     return new Response(GUI_HTML, {

@@ -1,6 +1,9 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
-import { findActionableScenarios, isAllVerified } from "../src/model.ts";
-import { runParallelLoop } from "../src/orchestrator.ts";
+import {
+  findActionableScenarios,
+  isAllVerified,
+} from "../src/orchestrator/progress-queries.ts";
+import { runParallelLoop } from "../src/orchestrator/mod.ts";
 import { noopLog, stubDeps, stubWorktree } from "./fixtures.ts";
 import { err, ok, type Result } from "../src/types.ts";
 

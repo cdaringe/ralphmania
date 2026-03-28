@@ -42,10 +42,13 @@ import { serveReceipts } from "./src/serve.ts";
 import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
-import { getModel, isAllVerified } from "./src/model.ts";
+import { getModel } from "./src/model.ts";
+import { isAllVerified } from "./src/orchestrator/progress-queries.ts";
 import { DEFAULT_FILE_PATHS, parseScenarioIds } from "./src/progress.ts";
 import type { FilePaths } from "./src/progress.ts";
 export type { FilePaths } from "./src/progress.ts";
+import { parseProgressRows } from "./src/parsers/progress-rows.ts";
+import { computeStatusDiff } from "./src/status-diff.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -53,7 +56,7 @@ import {
 } from "./src/constants.ts";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
-import { runParallelLoop } from "./src/orchestrator.ts";
+import { runParallelLoop } from "./src/orchestrator/mod.ts";
 import { resetAllWorktrees } from "./src/git/worktree.ts";
 import { computeExitCode } from "./src/exit.ts";
 import { createEventBus } from "./src/gui/events.ts";
@@ -170,6 +173,16 @@ const main = async (): Promise<number> => {
       log,
       signal: guiController.signal,
       agentInputBus,
+      statusProvider: async () => {
+        const [specRaw, progressRaw] = await Promise.all([
+          Deno.readTextFile(filePaths.specFile).catch(() => ""),
+          Deno.readTextFile(filePaths.progressFile).catch(() => ""),
+        ]);
+        const specIds = parseScenarioIds(specRaw);
+        const progressResult = parseProgressRows(progressRaw);
+        const progressRows = progressResult.isOk() ? progressResult.value : [];
+        return computeStatusDiff(specIds, progressRows);
+      },
     }).catch((): void => {});
   }
 

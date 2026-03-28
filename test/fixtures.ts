@@ -43,6 +43,8 @@ export const stubDeps = (
   overrides: Partial<MachineDeps> = {},
 ): MachineDeps => ({
   readProgress: () => Promise.resolve(""),
+  readSpec: () =>
+    Promise.resolve("| 1.1 | Scenario one |\n| 1.2 | Scenario two |"),
   createWorktree: ({ workerIndex }) =>
     Promise.resolve(ok(stubWorktree(workerIndex))),
   runIteration: () => Promise.resolve({ status: "continue" }),
@@ -57,6 +59,7 @@ export const stubDeps = (
   clearCheckpoint: () => Promise.resolve(),
   readEscalationState: () => Promise.resolve({}),
   writeEscalationState: () => Promise.resolve(),
+  selectScenarioBatch: ({ scenarioIds }) => Promise.resolve([...scenarioIds]),
   ...overrides,
 });
 
@@ -165,6 +168,8 @@ export const integrationDeps = (
   },
 ): Partial<MachineDeps> => ({
   readProgress: () => Promise.resolve(progress.get()),
+  readSpec: () =>
+    Promise.resolve("| 1.1 | Scenario one |\n| 1.2 | Scenario two |"),
   createWorktree: ({ workerIndex }) =>
     Promise.resolve(ok(stubWorktree(workerIndex))),
   runIteration: (opts) => {
@@ -191,4 +196,5 @@ export const integrationDeps = (
   clearCheckpoint: () => Promise.resolve(),
   readEscalationState: escalation.read,
   writeEscalationState: escalation.write,
+  selectScenarioBatch: ({ scenarioIds }) => Promise.resolve([...scenarioIds]),
 });

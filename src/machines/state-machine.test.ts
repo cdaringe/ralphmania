@@ -53,8 +53,12 @@ const reworkProgress = `
 
 const noop = (): void => {};
 
+const specContent =
+  "| ARCH.1 | Architecture scenario 1 |\n| ARCH.2 | Architecture scenario 2 |";
+
 const makeDeps = (overrides: Partial<MachineDeps> = {}): MachineDeps => ({
   readProgress: () => Promise.resolve(wipProgress),
+  readSpec: () => Promise.resolve(specContent),
   createWorktree: ({ workerIndex }) =>
     Promise.resolve(
       ok({
@@ -75,6 +79,7 @@ const makeDeps = (overrides: Partial<MachineDeps> = {}): MachineDeps => ({
   clearCheckpoint: () => Promise.resolve(undefined),
   readEscalationState: () => Promise.resolve({}),
   writeEscalationState: () => Promise.resolve(undefined),
+  selectScenarioBatch: ({ scenarioIds }) => Promise.resolve([...scenarioIds]),
   ...overrides,
 });
 
@@ -724,4 +729,68 @@ Deno.test("full orchestrator loop terminates on abort signal", async () => {
     steps++;
   }
   assertEquals(state.tag, "aborted");
+});
+
+// ---------------------------------------------------------------------------
+// selectScenarioBatch integration
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionFindingActionable: selectScenarioBatch is called and filters batch", async () => {
+  const ctx = makeCtx({
+    expectedScenarioIds: ["ARCH.1", "ARCH.2"],
+    parallelism: 2,
+    deps: makeDeps({
+      selectScenarioBatch: ({ scenarioIds }) =>
+        Promise.resolve([scenarioIds[0] ?? ""]),
+    }),
+  });
+  const next = await transitionFindingActionable(
+    {
+      tag: "finding_actionable",
+      iterationsUsed: 0,
+      validationFailurePath: undefined,
+      progressContent: wipProgress,
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "running_workers");
+  if (next.tag === "running_workers") {
+    // selectScenarioBatch returned only the first scenario
+    assertEquals(next.uniqueActionable.length, 1);
+  }
+});
+
+Deno.test("transitionFindingActionable: clustering reduces parallel batch to one per cluster", async () => {
+  const multiWipProgress = `
+# Progress
+
+| # | Status | Summary | Rework Notes |
+| --- | --- | --- | --- |
+| ARCH.1 | WIP | in progress | |
+| ARCH.2 | WIP | in progress | |
+| 1 | WIP | in progress | |
+`.trim();
+  const ctx = makeCtx({
+    expectedScenarioIds: ["ARCH.1", "ARCH.2", "1"],
+    parallelism: 3,
+    deps: makeDeps({
+      readProgress: () => Promise.resolve(multiWipProgress),
+      // Simulate clustering that returns only 1 scenario (all same cluster)
+      selectScenarioBatch: ({ scenarioIds }) =>
+        Promise.resolve([scenarioIds[0] ?? ""]),
+    }),
+  });
+  const next = await transitionFindingActionable(
+    {
+      tag: "finding_actionable",
+      iterationsUsed: 0,
+      validationFailurePath: undefined,
+      progressContent: multiWipProgress,
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "running_workers");
+  if (next.tag === "running_workers") {
+    assertEquals(next.uniqueActionable.length, 1);
+  }
 });

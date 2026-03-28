@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
-import { runParallelLoop } from "../src/orchestrator.ts";
-import type { ParallelDeps } from "../src/orchestrator.ts";
+import { runParallelLoop } from "../src/orchestrator/mod.ts";
+import type { ParallelDeps } from "../src/orchestrator/mod.ts";
 import { resolveWorkerModelSelection } from "../src/runner.ts";
 import type {
   EscalationLevel,
@@ -453,6 +453,8 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
     deps: {
       ...integrationDeps({ progress }).valueOf() as object,
       readProgress: () => Promise.resolve(progress.get()),
+      readSpec: () =>
+        Promise.resolve("| 1.1 | Scenario one |\n| 1.2 | Scenario two |"),
       createWorktree: ({ workerIndex }) =>
         Promise.resolve(ok(stubWorktree(workerIndex))),
       runIteration: () => Promise.resolve({ status: "continue" as const }),
@@ -474,6 +476,8 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
       clearCheckpoint: () => Promise.resolve(),
       readEscalationState: () => Promise.resolve({}),
       writeEscalationState: () => Promise.resolve(),
+      selectScenarioBatch: ({ scenarioIds }) =>
+        Promise.resolve([...scenarioIds]),
     } satisfies ParallelDeps,
   });
 

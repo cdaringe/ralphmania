@@ -1,66 +1,11 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import {
-  computeEffectiveLevel,
   computeModelSelection,
-  detectScenarioFromProgress,
-  findReworkScenarios,
   getModel,
-  orderActionableScenarios,
-  parseImplementedCount,
-  parseTotalCount,
-  updateEscalationState,
-  validateProgressStatuses,
+  resolveModelSelection,
 } from "../src/model.ts";
-
-// parseImplementedCount tests
-
-Deno.test("parseImplementedCount counts WORK_COMPLETE rows", () => {
-  const content = [
-    "| # | Status |",
-    "| -- | -- |",
-    "| 1.1 | WORK_COMPLETE | done |",
-    "| 1.2 |          |      |",
-    "| 1.3 | VERIFIED | yep  |",
-  ].join("\n");
-  const r = parseImplementedCount(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, 2);
-});
-
-Deno.test("parseImplementedCount returns 0 when none implemented", () => {
-  const r = parseImplementedCount(
-    "| # | Status |\n| -- | -- |\n| 1.1 |          |      |",
-  );
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, 0);
-});
-
-// parseTotalCount tests
-
-Deno.test("parseTotalCount counts all scenario rows", () => {
-  const content = [
-    "| #    | Status |",
-    "| ---- | ------ |",
-    "| 1.1  | WORK_COMPLETE |",
-    "| 1.2  |          |",
-  ].join("\n");
-  const r = parseTotalCount(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, 2);
-});
-
-Deno.test("parseTotalCount excludes OBSOLETE rows", () => {
-  const content = [
-    "| # | Status |",
-    "| -- | -- |",
-    "| 1.1 | VERIFIED |",
-    "| 1.2 | OBSOLETE |",
-    "| 1.3 |          |",
-  ].join("\n");
-  const r = parseTotalCount(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, 2);
-});
+import type { Logger } from "../src/types.ts";
+import { noopLog } from "./fixtures.ts";
 
 // getModel tests
 
@@ -89,115 +34,6 @@ Deno.test("getModel codex general", () => {
 
 Deno.test("getModel codex strong", () => {
   assertEquals(getModel({ agent: "codex", mode: "strong" }), "gpt-5.3-codex");
-});
-
-// detectScenarioFromProgress tests
-
-Deno.test("detectScenarioFromProgress without NEEDS_REWORK", () => {
-  const result = detectScenarioFromProgress(
-    "| # | Status |\n| -- | -- |\n| 1.1 | COMPLETED |",
-  );
-  assertEquals(result.isOk(), true);
-  if (result.isOk()) assertEquals(result.value, undefined);
-});
-
-Deno.test("detectScenarioFromProgress with NEEDS_REWORK", () => {
-  const result = detectScenarioFromProgress(
-    "| # | Status |\n| -- | -- |\n| 3.1 | NEEDS_REWORK | some notes",
-  );
-  assertEquals(result.isOk(), true);
-  if (result.isOk()) assertEquals(result.value, "3.1");
-});
-
-Deno.test("detectScenarioFromProgress finds first NEEDS_REWORK", () => {
-  const content = [
-    "| # | Status |",
-    "| -- | -- |",
-    "| 1.1 | COMPLETED |",
-    "| 2.1 | NEEDS_REWORK | fix it",
-    "| 3.1 | NEEDS_REWORK | also fix",
-  ].join("\n");
-  const result = detectScenarioFromProgress(content);
-  assertEquals(result.isOk(), true);
-  if (result.isOk()) assertEquals(result.value, "2.1");
-});
-
-Deno.test("detectScenarioFromProgress empty content", () => {
-  const result = detectScenarioFromProgress("");
-  assertEquals(result.isOk(), true);
-  if (result.isOk()) assertEquals(result.value, undefined);
-});
-
-// findReworkScenarios tests
-
-Deno.test("findReworkScenarios finds all rework scenario numbers", () => {
-  const content = [
-    "| # | Status |",
-    "| -- | -- |",
-    "| 1.1 | WORK_COMPLETE |",
-    "| 2.1 | NEEDS_REWORK | fix it |",
-    "| 3.1 | VERIFIED |",
-    "| 5.1 | NEEDS_REWORK | broken |",
-  ].join("\n");
-  const r = findReworkScenarios(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, ["2.1", "5.1"]);
-});
-
-Deno.test("findReworkScenarios returns empty for no rework", () => {
-  const r = findReworkScenarios(
-    "| # | Status |\n| -- | -- |\n| 1.1 | WORK_COMPLETE |",
-  );
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, []);
-});
-
-Deno.test("findReworkScenarios returns empty for empty content", () => {
-  const r = findReworkScenarios("");
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, []);
-});
-
-// updateEscalationState tests
-
-Deno.test("updateEscalationState adds new rework scenarios at level 1", () => {
-  const result = updateEscalationState({
-    current: {},
-    reworkScenarios: ["3.1", "7.2"],
-  });
-  assertEquals(result, { "3.1": 1, "7.2": 1 });
-});
-
-Deno.test("updateEscalationState bumps existing scenarios capped at 1", () => {
-  const result = updateEscalationState({
-    current: { "3.1": 1, "7.2": 1 },
-    reworkScenarios: ["3.1", "7.2"],
-  });
-  assertEquals(result, { "3.1": 1, "7.2": 1 });
-});
-
-Deno.test("updateEscalationState caps at level 1", () => {
-  const result = updateEscalationState({
-    current: { "3.1": 1 },
-    reworkScenarios: ["3.1"],
-  });
-  assertEquals(result, { "3.1": 1 });
-});
-
-Deno.test("updateEscalationState removes cleared scenarios", () => {
-  const result = updateEscalationState({
-    current: { "3.1": 1, "7.2": 1 },
-    reworkScenarios: ["3.1"],
-  });
-  assertEquals(result, { "3.1": 1 });
-});
-
-Deno.test("updateEscalationState handles mix of new, bump, and clear", () => {
-  const result = updateEscalationState({
-    current: { "1.1": 1, "5.1": 1 },
-    reworkScenarios: ["1.1", "9.1"],
-  });
-  assertEquals(result, { "1.1": 1, "9.1": 1 });
 });
 
 // computeModelSelection tests
@@ -296,48 +132,6 @@ Deno.test("computeModelSelection codex above threshold", () => {
   }
 });
 
-// validateProgressStatuses tests
-
-Deno.test("validateProgressStatuses returns empty for all valid statuses", () => {
-  const content = [
-    "| # | Status |",
-    "| -- | -- |",
-    "| 1.1 | WIP |",
-    "| 1.2 | WORK_COMPLETE |",
-    "| 1.3 | VERIFIED |",
-    "| 1.4 | NEEDS_REWORK |",
-    "| 1.5 | OBSOLETE |",
-  ].join("\n");
-  const r = validateProgressStatuses(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, []);
-});
-
-Deno.test("validateProgressStatuses detects invalid statuses", () => {
-  const content = [
-    "| # | Status |",
-    "| -- | -- |",
-    "| 1.1 | VERIFIED |",
-    "| 1.2 | COMPLETE |",
-    "| 1.3 | DONE |",
-  ].join("\n");
-  const r = validateProgressStatuses(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) {
-    assertEquals(r.value, [
-      { scenario: "1.2", status: "COMPLETE" },
-      { scenario: "1.3", status: "DONE" },
-    ]);
-  }
-});
-
-Deno.test("validateProgressStatuses ignores rows without status", () => {
-  const content = "| # | Status |\n| -- | -- |\n| 1.1 |          |";
-  const r = validateProgressStatuses(content);
-  assertEquals(r.isOk(), true);
-  if (r.isOk()) assertEquals(r.value, []);
-});
-
 Deno.test("computeModelSelection claude without escalation level falls through to codex path", () => {
   const content = "| # | Status |\n| -- | -- |\n| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "claude" });
@@ -351,70 +145,12 @@ Deno.test("computeModelSelection claude without escalation level falls through t
 
 // resolveModelSelection tests
 
-import {
-  readEscalationState,
-  resolveModelSelection,
-  writeEscalationState,
-} from "../src/model.ts";
-import type { Logger } from "../src/types.ts";
-import { ESCALATION_FILE } from "../src/constants.ts";
-import { noopLog } from "./fixtures.ts";
-
 const writeTempProgress = async (content: string): Promise<string> => {
   const dir = await Deno.makeTempDir();
   const path = `${dir}/progress.md`;
   await Deno.writeTextFile(path, `<!-- END_DEMO -->\n${content}`);
   return path;
 };
-
-// readEscalationState / writeEscalationState tests
-
-Deno.test("readEscalationState returns {} when file missing", async () => {
-  let existed = false;
-  try {
-    await Deno.rename(ESCALATION_FILE, ESCALATION_FILE + ".bak");
-    existed = true;
-  } catch { /* file doesn't exist */ }
-  try {
-    const result = await readEscalationState(noopLog);
-    assertEquals(result, {});
-  } finally {
-    if (existed) {
-      await Deno.rename(ESCALATION_FILE + ".bak", ESCALATION_FILE);
-    }
-  }
-});
-
-Deno.test("readEscalationState reads valid state", async () => {
-  const original = await Deno.readTextFile(ESCALATION_FILE).catch(() => null);
-  try {
-    await Deno.mkdir(".ralph", { recursive: true });
-    await Deno.writeTextFile(ESCALATION_FILE, '{"3":1}');
-    const result = await readEscalationState(noopLog);
-    assertEquals(result, { "3": 1 });
-  } finally {
-    if (original !== null) {
-      await Deno.writeTextFile(ESCALATION_FILE, original);
-    } else {
-      await Deno.remove(ESCALATION_FILE).catch(() => {});
-    }
-  }
-});
-
-Deno.test("writeEscalationState persists state", async () => {
-  const original = await Deno.readTextFile(ESCALATION_FILE).catch(() => null);
-  try {
-    await writeEscalationState({ "5": 1 }, noopLog);
-    const content = JSON.parse(await Deno.readTextFile(ESCALATION_FILE));
-    assertEquals(content, { "5": 1 });
-  } finally {
-    if (original !== null) {
-      await Deno.writeTextFile(ESCALATION_FILE, original);
-    } else {
-      await Deno.remove(ESCALATION_FILE).catch(() => {});
-    }
-  }
-});
 
 Deno.test("resolveModelSelection returns defaults for missing file", async () => {
   const result = await resolveModelSelection({
@@ -602,77 +338,4 @@ Deno.test("resolveModelSelection codex logs status for no rework", async () => {
     messages.some((m) => m.includes("implemented")),
     true,
   );
-});
-
-// ---------------------------------------------------------------------------
-// orderActionableScenarios
-// ---------------------------------------------------------------------------
-
-Deno.test("orderActionableScenarios: NEEDS_REWORK scenarios sort first", () => {
-  const rows = [
-    { scenario: "1", status: "NEEDS_REWORK", summary: "", reworkNotes: "" },
-    { scenario: "2", status: "", summary: "", reworkNotes: "" },
-    { scenario: "3", status: "VERIFIED", summary: "", reworkNotes: "" },
-  ];
-  const result = orderActionableScenarios(rows, ["1", "2", "3"]);
-  assertEquals(result, ["1", "2"]);
-});
-
-Deno.test("orderActionableScenarios: excludes VERIFIED and OBSOLETE", () => {
-  const rows = [
-    { scenario: "1", status: "VERIFIED", summary: "", reworkNotes: "" },
-    { scenario: "2", status: "OBSOLETE", summary: "", reworkNotes: "" },
-    { scenario: "3", status: "", summary: "", reworkNotes: "" },
-  ];
-  const result = orderActionableScenarios(rows, ["1", "2", "3"]);
-  assertEquals(result, ["3"]);
-});
-
-Deno.test("orderActionableScenarios: preserves spec order within each priority group", () => {
-  const rows = [
-    { scenario: "b", status: "NEEDS_REWORK", summary: "", reworkNotes: "" },
-    { scenario: "a", status: "NEEDS_REWORK", summary: "", reworkNotes: "" },
-    { scenario: "d", status: "", summary: "", reworkNotes: "" },
-    { scenario: "c", status: "", summary: "", reworkNotes: "" },
-  ];
-  const result = orderActionableScenarios(rows, ["a", "b", "c", "d"]);
-  // rework-first: a and b first (in specIds order), then c and d
-  assertEquals(result, ["a", "b", "c", "d"]);
-});
-
-Deno.test("orderActionableScenarios: returns empty when all done", () => {
-  const rows = [
-    { scenario: "1", status: "VERIFIED", summary: "", reworkNotes: "" },
-    { scenario: "2", status: "OBSOLETE", summary: "", reworkNotes: "" },
-  ];
-  const result = orderActionableScenarios(rows, ["1", "2"]);
-  assertEquals(result, []);
-});
-
-// ---------------------------------------------------------------------------
-// computeEffectiveLevel
-// ---------------------------------------------------------------------------
-
-Deno.test("computeEffectiveLevel: returns 0 when both minLevel and scenario level are 0", () => {
-  assertEquals(computeEffectiveLevel("1", { "1": 0 }, 0), 0);
-});
-
-Deno.test("computeEffectiveLevel: scenario level 1 overrides minLevel 0", () => {
-  assertEquals(computeEffectiveLevel("1", { "1": 1 }, 0), 1);
-});
-
-Deno.test("computeEffectiveLevel: minLevel 1 overrides scenario level 0", () => {
-  assertEquals(computeEffectiveLevel("1", { "1": 0 }, 1), 1);
-});
-
-Deno.test("computeEffectiveLevel: undefined scenario returns 0 when minLevel is 0", () => {
-  assertEquals(computeEffectiveLevel(undefined, {}, 0), 0);
-});
-
-Deno.test("computeEffectiveLevel: undefined scenario uses minLevel", () => {
-  assertEquals(computeEffectiveLevel(undefined, {}, 1), 1);
-});
-
-Deno.test("computeEffectiveLevel: missing scenario in state defaults to 0", () => {
-  assertEquals(computeEffectiveLevel("99", {}, undefined), 0);
 });

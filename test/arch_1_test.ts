@@ -72,8 +72,8 @@ Deno.test("ARCH.1: src/model.ts Deno calls confined to c8-ignored wiring", () =>
 Deno.test("ARCH.1: src/progress.ts Deno calls confined to c8-ignored wiring", () =>
   checkModule("../src/progress.ts"));
 
-Deno.test("ARCH.1: src/orchestrator.ts Deno calls confined to c8-ignored wiring", () =>
-  checkModule("../src/orchestrator.ts"));
+Deno.test("ARCH.1: src/orchestrator/mod.ts Deno calls confined to c8-ignored wiring", () =>
+  checkModule("../src/orchestrator/mod.ts"));
 
 // ---------------------------------------------------------------------------
 // Port shape — verify MachineDeps has all required dep keys at runtime
@@ -97,6 +97,7 @@ Deno.test("ARCH.1: stubDeps satisfies MachineDeps port shape", async () => {
     "clearCheckpoint",
     "readEscalationState",
     "writeEscalationState",
+    "selectScenarioBatch",
   ] as const;
   for (const key of required) {
     assert(

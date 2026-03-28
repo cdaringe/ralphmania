@@ -20,7 +20,8 @@ const SCENARIOS_DIR = "./docs/scenarios";
 const RECEIPTS_DIR = ".ralph/receipts";
 
 interface ScenarioData {
-  number: number;
+  id: number | string; // Can be 01, ARCH.1, GUI.a, CLI.1, etc.
+  number: number; // For sorting: 1-99 for numbered, 100+ for others
   title: string;
   intro: string;
   requirement: string;
@@ -35,52 +36,74 @@ interface ScenarioData {
  * Read and parse a scenario markdown file
  */
 const readScenario = async (
-  { num, log }: { num: number; log: Logger },
+  { id, log }: { id: number | string; log: Logger },
 ): Promise<Result<ScenarioData, string>> => {
-  const filename = String(num).padStart(2, "0");
+  const idStr = String(id);
+  let searchPattern: string;
+  let numberForSort: number;
+
+  if (typeof id === "number") {
+    searchPattern = String(id).padStart(2, "0") + "-";
+    numberForSort = id;
+  } else {
+    searchPattern = idStr + "-";
+    // Assign sort numbers to non-numeric IDs
+    if (idStr.startsWith("ARCH")) {
+      numberForSort = 100 + parseInt(idStr.match(/\d+/)?.[0] || "0");
+    } else if (idStr.startsWith("GUI")) {
+      numberForSort = 200 + idStr.charCodeAt(4) - 97; // GUI.a=0, GUI.b=1, etc.
+    } else if (idStr.startsWith("CLI")) {
+      numberForSort = 300 + parseInt(idStr.match(/\d+/)?.[0] || "0");
+    } else {
+      numberForSort = 400;
+    }
+  }
 
   const entries = await Array.fromAsync(Deno.readDir(SCENARIOS_DIR));
   const docFile = entries
     .find((file) =>
-      file.isFile &&
-      file.name.startsWith(filename + "-") &&
+      file.isFile && file.name.startsWith(searchPattern) &&
       file.name.endsWith(".md")
-    )?.name;
+    )
+    ?.name;
 
   if (!docFile) {
-    return err(`Scenario ${num} documentation not found`);
+    return err(`Scenario ${idStr} documentation not found`);
   }
 
   const content = await Deno.readTextFile(join(SCENARIOS_DIR, docFile));
   const sections = parseMarkdown(content);
 
   // Handle both "Requirement" and "Specification" section names
-  const requirement = sections.requirement || sections.specification || "";
-  const intro = generateIntro(sections.implementation || "", requirement);
-  const hasVideo = checkVideoExists(num);
+  const requirement = sections.requirement || sections.scenario ||
+    sections.specification || "";
+  const intro = generateIntro(
+    sections.howitisachieved || sections.implementation || "",
+    requirement,
+  );
+  const hasVideo = checkVideoExists(idStr);
 
   log({
     tags: ["info", "receipt"],
-    message: `Loaded scenario ${String(num).padStart(2, "0")}: ${
-      extractTitle(content)
-    }`,
+    message: `Loaded scenario ${idStr}: ${extractTitle(content)}`,
   });
 
   return ok({
-    number: num,
+    id,
+    number: numberForSort,
     title: extractTitle(content),
     intro,
     requirement,
-    implementation: sections.implementation || "",
+    implementation: sections.howitisachieved || sections.implementation || "",
     evidence: sections.evidence || sections.evidencereferences || "",
-    testFiles: extractTestFiles(sections.implementation),
+    testFiles: extractTestFiles(sections.implementation || ""),
     status: "VERIFIED",
     hasVideo,
   });
 };
 
 /**
- * Parse markdown content into sections
+ * Parse markdown content into sections, handling various heading styles
  */
 const parseMarkdown = (content: string): Record<string, string> => {
   const lines = content.split("\n");
@@ -90,7 +113,7 @@ const parseMarkdown = (content: string): Record<string, string> => {
         const updated = acc.currentSection
           ? {
             ...acc.sections,
-            [acc.currentSection.toLowerCase().replace(/\s+/g, "")]: acc
+            [acc.currentSection.toLowerCase().replace(/[^\w]/g, "")]: acc
               .currentContent.trim(),
           }
           : acc.sections;
@@ -111,13 +134,28 @@ const parseMarkdown = (content: string): Record<string, string> => {
     },
   );
 
-  return currentSection
+  const finalSections = currentSection
     ? {
       ...sections,
-      [currentSection.toLowerCase().replace(/\s+/g, "")]: currentContent
+      [currentSection.toLowerCase().replace(/[^\w]/g, "")]: currentContent
         .trim(),
     }
     : sections;
+
+  // Normalize section keys for flexibility
+  const normalized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(finalSections)) {
+    normalized[key] = value;
+    // Add aliases for common variations
+    if (key === "howitisachieved") {
+      normalized["implementation"] = value;
+    }
+    if (key === "scenario") {
+      normalized["requirement"] = value;
+    }
+  }
+
+  return normalized;
 };
 
 /**
@@ -151,12 +189,12 @@ const generateIntro = (implementation: string, requirement: string): string => {
 /**
  * Check if a video file exists for this scenario
  */
-const checkVideoExists = (num: number): boolean => {
-  const videoPath = join(
-    RECEIPTS_DIR,
-    "videos",
-    `scenario-${String(num).padStart(2, "0")}.mp4`,
-  );
+const checkVideoExists = (id: number | string): boolean => {
+  const idStr = String(id);
+  const filename = typeof id === "number"
+    ? `scenario-${String(id).padStart(2, "0")}`
+    : `scenario-${idStr}`;
+  const videoPath = join(RECEIPTS_DIR, "videos", `${filename}.mp4`);
   try {
     Deno.statSync(videoPath);
     return true;
@@ -195,20 +233,22 @@ const generateReceipt = (scenario: ScenarioData): string => {
     .join("\n");
 
   const pad = (n: number) => String(n).padStart(2, "0");
+  const idStr = typeof scenario.id === "number"
+    ? pad(scenario.id)
+    : String(scenario.id);
+  const videoFilename = typeof scenario.id === "number"
+    ? `scenario-${pad(scenario.id)}.mp4`
+    : `scenario-${scenario.id}.mp4`;
 
   const videoHtml = scenario.hasVideo
     ? `
     <div class="section">
       <h2>🎬 Test Evidence Video</h2>
       <video controls width="100%" class="test-video">
-        <source src="videos/scenario-${
-      pad(scenario.number)
-    }.mp4" type="video/mp4">
+        <source src="videos/${videoFilename}" type="video/mp4">
         Your browser does not support the video tag.
       </video>
-      <p><em>E2E test execution showing scenario ${
-      pad(scenario.number)
-    } requirements in action</em></p>
+      <p><em>E2E test execution showing scenario ${idStr} requirements in action</em></p>
     </div>`
     : "";
 
@@ -227,7 +267,7 @@ const generateReceipt = (scenario: ScenarioData): string => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scenario ${pad(scenario.number)} - ${scenario.title} | Receipts</title>
+  <title>Scenario ${idStr} - ${scenario.title} | Receipts</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/atom-one-dark.min.css">
   <script src="https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js"><\/script>
   <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/highlight.min.js"><\/script>
@@ -239,7 +279,7 @@ const generateReceipt = (scenario: ScenarioData): string => {
 
     <header>
       ${statusBadge}
-      <h1>Scenario ${pad(scenario.number)}: ${scenario.title}</h1>
+      <h1>Scenario ${idStr}: ${scenario.title}</h1>
       <p class="scenario-meta">Evidence of requirement completion</p>
     </header>
 
@@ -278,9 +318,7 @@ ${scenario.implementation}
       <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 15px;">
         <p><strong>To verify:</strong></p>
         <pre><code>deno test --allow-all</code></pre>
-        <p style="margin-top: 10px; font-size: 0.9em; color: #666;">All tests pass, confirming scenario ${
-    pad(scenario.number)
-  } requirement is satisfied.</p>
+        <p style="margin-top: 10px; font-size: 0.9em; color: #666;">All tests pass, confirming scenario ${idStr} requirement is satisfied.</p>
       </div>
     </div>
 
@@ -292,7 +330,7 @@ ${scenario.evidence}
     </div>
 
     <footer>
-      <p>Receipt generated for Scenario ${pad(scenario.number)}</p>
+      <p>Receipt generated for Scenario ${idStr}</p>
       <p>All scenarios verified and tested ✓</p>
     </footer>
   </div>
@@ -735,23 +773,27 @@ const generateIndex = (scenarios: ScenarioData[]): string => {
 
   const scenarioLinks = scenarios
     .map(
-      (s) => `
-    <a href="scenario-${
-        String(s.number).padStart(2, "0")
-      }.html" class="scenario-card">
+      (s) => {
+        const idStr = typeof s.id === "number"
+          ? String(s.id).padStart(2, "0")
+          : String(s.id);
+        const filename = typeof s.id === "number"
+          ? `scenario-${String(s.id).padStart(2, "0")}.html`
+          : `scenario-${s.id}.html`;
+        return `
+    <a href="${filename}" class="scenario-card">
       <div class="card-header">
-        <div class="scenario-number">Scenario ${
-        String(s.number).padStart(2, "0")
-      }</div>
+        <div class="scenario-number">Scenario ${idStr}</div>
         <span class="scenario-status status-${
-        s.status === "VERIFIED" ? "verified" : "rework"
-      }">
+          s.status === "VERIFIED" ? "verified" : "rework"
+        }">
           ${s.status === "VERIFIED" ? "✅ VERIFIED" : "⚠️ NEEDS_REWORK"}
         </span>
       </div>
       <div class="scenario-title">${s.title}</div>
       <div class="card-footer">${s.testFiles.length} test file(s)</div>
-    </a>`,
+    </a>`;
+      },
     )
     .join("\n");
 
@@ -813,20 +855,45 @@ ${scenarioLinks}
 };
 
 /**
- * Auto-discover all scenario files
+ * Auto-discover all scenario files (numbered, ARCH, GUI, CLI)
  */
-const discoverScenarios = (log: Logger): number[] => {
+const discoverScenarios = (log: Logger): (number | string)[] => {
   try {
     return [...Deno.readDirSync(SCENARIOS_DIR)]
       .filter((file) => file.isFile && file.name.endsWith(".md"))
-      .map((file) => file.name.match(/^(\d+)-/))
-      .filter((m): m is RegExpMatchArray => m !== null)
-      .map((m) => parseInt(m[1], 10))
-      .sort((a, b) => a - b);
+      .map((file) => {
+        // Match numbered scenarios
+        const numMatch = file.name.match(/^(\d+)-/);
+        if (numMatch) return parseInt(numMatch[1], 10);
+
+        // Match ARCH scenarios (ARCH.1, ARCH.2, etc.)
+        const archMatch = file.name.match(/^(ARCH\.\d+[a-z]?)-/);
+        if (archMatch) return archMatch[1];
+
+        // Match GUI scenarios (GUI.a, GUI.b, etc.)
+        const guiMatch = file.name.match(/^(GUI\.[a-d])-/);
+        if (guiMatch) return guiMatch[1];
+
+        // Match CLI scenarios (CLI.1, etc.)
+        const cliMatch = file.name.match(/^(CLI\.\d+)-/);
+        if (cliMatch) return cliMatch[1];
+
+        return null;
+      })
+      .filter((m): m is number | string => m !== null)
+      .sort((a, b) => {
+        // Sort: numbers first, then strings alphabetically
+        if (typeof a === "number" && typeof b === "number") return a - b;
+        if (typeof a === "string" && typeof b === "string") {
+          return a.localeCompare(b);
+        }
+        return typeof a === "number" ? -1 : 1;
+      });
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     log({
       tags: ["error", "receipt"],
-      message: `Failed to read scenarios directory: ${e}`,
+      message: `Failed to read scenarios directory: ${msg}`,
     });
     return [];
   }
@@ -871,33 +938,34 @@ const main = async (log: Logger): Promise<void> => {
 
   // Read all scenarios in parallel
   const results = await Promise.all(
-    scenarioNumbers.map((num) => readScenario({ num, log })),
+    scenarioNumbers.map((id) => readScenario({ id, log })),
   );
-  const scenarios = results.flatMap((r) =>
-    r.ok
-      ? [r.value]
-      : (log({ tags: ["error", "receipt"], message: r.error }), [])
-  );
+  const scenarios = results.flatMap((r) => {
+    if (r.ok) return [r.value];
+    log({ tags: ["error", "receipt"], message: r.error });
+    return [];
+  });
 
   log({
     tags: ["info", "receipt"],
     message: `Generating HTML receipts for ${scenarios.length} scenarios...`,
   });
 
+  // Sort scenarios by number for proper ordering
+  scenarios.sort((a, b) => a.number - b.number);
+
   // Generate individual receipts
   await Promise.all(
     scenarios.map(async (scenario) => {
       const html = generateReceipt(scenario);
-      const filename = join(
-        RECEIPTS_DIR,
-        `scenario-${String(scenario.number).padStart(2, "0")}.html`,
-      );
+      const idStr = typeof scenario.id === "number"
+        ? String(scenario.id).padStart(2, "0")
+        : String(scenario.id);
+      const filename = join(RECEIPTS_DIR, `scenario-${idStr}.html`);
       await Deno.writeTextFile(filename, html);
       log({
         tags: ["info", "receipt"],
-        message: `Generated scenario-${
-          String(scenario.number).padStart(2, "0")
-        }.html`,
+        message: `Generated scenario-${idStr}.html`,
       });
     }),
   );
@@ -925,5 +993,7 @@ const main = async (log: Logger): Promise<void> => {
 
 main(createLogger()).catch((e) => {
   const log = createLogger();
-  log({ tags: ["error", "receipt"], message: `Fatal error: ${e}` });
+  const msg = e instanceof Error ? e.message : String(e);
+  log({ tags: ["error", "receipt"], message: `Fatal error: ${msg}` });
+  console.error("Stack:", e instanceof Error ? e.stack : e);
 });

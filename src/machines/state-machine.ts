@@ -20,16 +20,75 @@ import type { WorktreeInfo } from "../git/worktree.ts";
 import type { Plugin } from "../plugin.ts";
 import {
   computeEffectiveLevel,
+  updateEscalationState,
+} from "../orchestrator/escalation.ts";
+import {
   findActionableScenarios,
   isAllVerified,
   orderActionableScenarios,
   parseProgressRows,
-  updateEscalationState,
   validateProgressStatuses,
-} from "../model.ts";
+} from "../orchestrator/progress-queries.ts";
+import { parseScenarioIds } from "../progress.ts";
 import { dim, green, yellow } from "../colors.ts";
 import { difference, xor } from "../set-fns.ts";
 import { Status } from "../constants.ts";
+
+// ---------------------------------------------------------------------------
+// Deep completion verification — re-reads spec + progress from disk
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-parse both spec and progress from disk, detect ID mismatches, and
+ * verify every scenario is VERIFIED/OBSOLETE. Returns `true` only when the
+ * spec IDs and progress IDs are in perfect agreement and all are done.
+ */
+const verifyCompletion = async (
+  ctx: MachineContext,
+): Promise<{ done: boolean; freshSpecIds: readonly string[] }> => {
+  const [specContent, progressContent] = await Promise.all([
+    ctx.deps.readSpec(),
+    ctx.deps.readProgress(),
+  ]);
+  const freshSpecIds = parseScenarioIds(specContent);
+  const parsed = parseProgressRows(progressContent);
+  if (parsed.isErr()) {
+    ctx.log({
+      tags: ["error", "orchestrator"],
+      message: `deep-verify parse error: ${parsed.error}`,
+    });
+    return { done: false, freshSpecIds };
+  }
+
+  const progressIds = parsed.value.map((r) => r.scenario);
+  const mismatch = xor(freshSpecIds, progressIds);
+  if (mismatch.size > 0) {
+    const parts: string[] = [];
+    const inSpecNotProgress = difference(freshSpecIds, progressIds);
+    const inProgressNotSpec = difference(progressIds, freshSpecIds);
+    if (inSpecNotProgress.size > 0) {
+      parts.push(
+        `in spec but not progress: [${[...inSpecNotProgress].join(", ")}]`,
+      );
+    }
+    if (inProgressNotSpec.size > 0) {
+      parts.push(
+        `in progress but not spec: [${[...inProgressNotSpec].join(", ")}]`,
+      );
+    }
+    ctx.log({
+      tags: ["error", "orchestrator"],
+      message: `scenario id mismatch — ${parts.join("; ")}`,
+    });
+    return { done: false, freshSpecIds };
+  }
+
+  const allVerifiedResult = isAllVerified(progressContent, freshSpecIds);
+  return {
+    done: allVerifiedResult.isOk() && allVerifiedResult.value,
+    freshSpecIds,
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Dependencies (same as ParallelDeps, re-exported for convenience)
@@ -38,6 +97,7 @@ import { Status } from "../constants.ts";
 /** Dependencies injectable for testing. */
 export type MachineDeps = {
   readonly readProgress: () => Promise<string>;
+  readonly readSpec: () => Promise<string>;
   readonly createWorktree: (
     opts: { scenario: string; workerIndex: number; log: Logger },
   ) => Promise<Result<WorktreeInfo, string>>;
@@ -89,6 +149,12 @@ export type MachineDeps = {
     state: EscalationState,
     log: Logger,
   ) => Promise<void>;
+  readonly selectScenarioBatch: (opts: {
+    scenarioIds: readonly string[];
+    specFile: string | undefined;
+    parallelism: number;
+    log: Logger;
+  }) => Promise<readonly string[]>;
 };
 
 // ---------------------------------------------------------------------------
@@ -241,16 +307,15 @@ export const transitionReadingProgress = async (
     validationFailurePath = undefined;
   }
 
-  const allVerifiedResult = isAllVerified(content, ctx.expectedScenarioIds);
-  if (
-    allVerifiedResult.isOk() && allVerifiedResult.value &&
-    !validationFailurePath
-  ) {
-    ctx.log({
-      tags: ["info", "orchestrator"],
-      message: green("All scenarios VERIFIED"),
-    });
-    return { tag: "done", iterationsUsed: state.iterationsUsed };
+  if (!validationFailurePath) {
+    const { done } = await verifyCompletion(ctx);
+    if (done) {
+      ctx.log({
+        tags: ["info", "orchestrator"],
+        message: green("All scenarios VERIFIED"),
+      });
+      return { tag: "done", iterationsUsed: state.iterationsUsed };
+    }
   }
 
   return {
@@ -347,11 +412,26 @@ export const transitionFindingActionable = async (
   });
   await ctx.deps.writeEscalationState(newEscalation, ctx.log);
 
+  const batchScenarios = await ctx.deps.selectScenarioBatch({
+    scenarioIds: uniqueActionable,
+    specFile: ctx.specFile,
+    parallelism: ctx.parallelism,
+    log: ctx.log,
+  });
+
+  if (batchScenarios.length < uniqueActionable.length) {
+    ctx.log({
+      tags: ["info", "orchestrator"],
+      message:
+        `Conflict-aware dispatch: ${uniqueActionable.length} actionable → ${batchScenarios.length} batch (parallelism=${ctx.parallelism})`,
+    });
+  }
+
   return {
     tag: "running_workers",
     iterationsUsed: state.iterationsUsed,
     validationFailurePath: state.validationFailurePath,
-    uniqueActionable,
+    uniqueActionable: batchScenarios,
     escalation: newEscalation,
   };
 };
@@ -598,17 +678,15 @@ export const transitionCheckingDoneness = async (
   state: CheckingDonenessState,
   ctx: MachineContext,
 ): Promise<ReadingProgressState | DoneState> => {
-  const content = await ctx.deps.readProgress();
-  const allVerifiedResult = isAllVerified(content, ctx.expectedScenarioIds);
-  if (
-    allVerifiedResult.isOk() && allVerifiedResult.value &&
-    !state.validationFailurePath
-  ) {
-    ctx.log({
-      tags: ["info", "orchestrator"],
-      message: green("All scenarios VERIFIED"),
-    });
-    return { tag: "done", iterationsUsed: state.iterationsUsed };
+  if (!state.validationFailurePath) {
+    const { done } = await verifyCompletion(ctx);
+    if (done) {
+      ctx.log({
+        tags: ["info", "orchestrator"],
+        message: green("All scenarios VERIFIED"),
+      });
+      return { tag: "done", iterationsUsed: state.iterationsUsed };
+    }
   }
   return {
     tag: "reading_progress",

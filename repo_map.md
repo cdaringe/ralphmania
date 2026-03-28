@@ -7,8 +7,10 @@
 
 See @ARCHITECTURE.md for full system diagram. Key concepts:
 
-- **Orchestrator** (`src/orchestrator.ts`) drives `runParallelLoop` via
-  `src/machines/state-machine.ts`
+- **Orchestrator** (`src/orchestrator/mod.ts`) drives `runParallelLoop` via
+  `src/machines/state-machine.ts`; `src/orchestrator/escalation.ts` manages
+  escalation state; `src/orchestrator/progress-queries.ts` provides progress
+  file query functions
 - **State Machine** (`src/machines/state-machine.ts`):
   `init → reading_progress → finding_actionable → running_workers → validating → checking_doneness → done`
 - **Workers** (`src/machines/worker-machine.ts`):
@@ -33,6 +35,7 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
 - `src/machines/` — all state machines (orchestrator, worker, scenario)
 - `src/git/` — git subprocess operations (worktree, reconcile)
 - `src/parsers/` — parsers (progress rows)
+- `src/orchestrator/` — orchestrator loop, escalation state, progress queries
 - `src/*.ts` root — cross-cutting: types, constants, model, plugin, cli, etc.
 
 ## Key Design Decisions
