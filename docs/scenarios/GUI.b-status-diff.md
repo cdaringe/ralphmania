@@ -19,10 +19,10 @@ The main GUI page at `/` includes a **Progress** sidebar section that:
 
 ### Endpoints on the GUI server (`src/gui/server.ts`)
 
-| Route         | Response                                               |
-| ------------- | ------------------------------------------------------ |
-| `/api/status` | JSON `StatusDiff` (specOnly, progressOnly, shared)     |
-| `/status`     | Self-contained HTML page via `generateStatusHtml`      |
+| Route         | Response                                           |
+| ------------- | -------------------------------------------------- |
+| `/api/status` | JSON `StatusDiff` (specOnly, progressOnly, shared) |
+| `/status`     | Self-contained HTML page via `generateStatusHtml`  |
 
 Both endpoints use a `StatusProvider` function injected via `GuiServerOptions`,
 keeping the server testable with DI (no real file I/O in tests).
@@ -31,7 +31,8 @@ keeping the server testable with DI (no real file I/O in tests).
 
 Two pure functions compute the set-theoretic diff:
 
-- **`computeStatusDiff(specIds, progressRows)`** → `{ specOnly, progressOnly, shared }`
+- **`computeStatusDiff(specIds, progressRows)`** →
+  `{ specOnly, progressOnly, shared }`
 - **`generateStatusHtml(diff)`** → full HTML page with color-coded status table
 
 ### Wiring: `mod.ts`
@@ -44,18 +45,18 @@ The `statusProvider` reads `specification.md` and `progress.md` via
 
 ### E2E tests: `test/gui_status_e2e_test.ts` (10 tests)
 
-| Test                                               | Covers                                       |
-| -------------------------------------------------- | -------------------------------------------- |
-| GET /api/status returns JSON diff (provider)       | JSON endpoint with configured provider       |
-| GET /api/status returns empty diff (no provider)   | Graceful fallback when no provider            |
-| GET /api/status returns 500 (provider throws)      | Error handling                               |
-| GET /status returns HTML (provider)                | Full HTML status page rendering              |
-| GET /status returns fallback (no provider)         | No-provider graceful response                |
-| GET /status returns 500 (provider throws)          | Error handling                               |
-| GET / HTML contains status section + fetchStatus   | Main page includes Progress sidebar + JS     |
-| SSE delivers worker_active and worker_done events  | SSE event delivery for worker lifecycle      |
-| Status reflects updated data on re-fetch           | Dynamic status updates across requests       |
-| GuiLogger → SSE worker_active integration          | Full stack: logger → bus → SSE → client      |
+| Test                                              | Covers                                   |
+| ------------------------------------------------- | ---------------------------------------- |
+| GET /api/status returns JSON diff (provider)      | JSON endpoint with configured provider   |
+| GET /api/status returns empty diff (no provider)  | Graceful fallback when no provider       |
+| GET /api/status returns 500 (provider throws)     | Error handling                           |
+| GET /status returns HTML (provider)               | Full HTML status page rendering          |
+| GET /status returns fallback (no provider)        | No-provider graceful response            |
+| GET /status returns 500 (provider throws)         | Error handling                           |
+| GET / HTML contains status section + fetchStatus  | Main page includes Progress sidebar + JS |
+| SSE delivers worker_active and worker_done events | SSE event delivery for worker lifecycle  |
+| Status reflects updated data on re-fetch          | Dynamic status updates across requests   |
+| GuiLogger → SSE worker_active integration         | Full stack: logger → bus → SSE → client  |
 
 ### Unit tests: `test/status_diff_test.ts` (10 tests)
 
