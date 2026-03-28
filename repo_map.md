@@ -15,6 +15,11 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   `resolving_model → model_resolved → prompt_built → command_built → running_agent → done`
 - **Scenario Machine** (`src/machines/scenario-machine.ts`): scenario lifecycle
   FSM (`unimplemented → wip → work_complete → verified/obsolete`)
+- **GUI** (`src/gui/`): realtime web UI — `events.ts` (pure event bus),
+  `logger.ts` (Logger wrapper → bus), `server.ts` (HTTP+SSE server), `html.ts`
+  (embedded SPA). Activated via `--gui [--gui-port N]` flag. `createGuiLogger`
+  wraps the main logger to tee all log calls to the bus; it also detects
+  `transition`-tagged messages and emits explicit `state` events.
 - **Runner** (`src/runner.ts`): `executeAgent` spawns agent subprocess;
   `pipeStream` handles I/O; `linePrefixTransform`/`workerPrefix` add per-worker
   terminal prefix (scenario 33)

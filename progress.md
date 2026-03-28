@@ -41,4 +41,4 @@
 | 30      | VERIFIED | [Strict Deno lint enforcement as quality gate](docs/scenarios/30-lint-enforcement.md)                                         |              |
 | 32      | VERIFIED | [Non-zero exit code when iterations exhausted without completion](docs/scenarios/32-non-zero-exit-on-incomplete.md)           |              |
 | 33      | VERIFIED | [Worker stdio per-line colored prefix for terminal output](docs/scenarios/33-worker-stdio-prefix.md)                          |              |
-| GUI.a   | WIP      | [Interactive web GUI with SSE realtime updates](docs/scenarios/GUI.a-interactive-web-gui.md)                                  |              |
+| GUI.a   | VERIFIED | [Interactive web GUI with SSE realtime updates](docs/scenarios/GUI.a-interactive-web-gui.md)                                  |              |
