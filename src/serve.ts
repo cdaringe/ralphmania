@@ -3,6 +3,9 @@ import { extname } from "jsr:@std/path@1";
 import { RALPH_RECEIPTS_DIRNAME } from "./constants.ts";
 import type { Logger } from "./types.ts";
 import { createLogger } from "./logger.ts";
+import { DEFAULT_FILE_PATHS, parseScenarioIds } from "./progress.ts";
+import { parseProgressRows } from "./parsers/progress-rows.ts";
+import { computeStatusDiff, generateStatusHtml } from "./status-diff.ts";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -28,6 +31,10 @@ export type ServeOptions = {
   log?: Logger;
   /** If provided, server runs until aborted (useful for tests) */
   signal?: AbortSignal;
+  /** Path to specification.md for the /status endpoint. */
+  specFile?: string;
+  /** Path to progress.md for the /status endpoint. */
+  progressFile?: string;
 };
 
 /** Serve the receipts directory as a static HTTP site. */
@@ -35,10 +42,39 @@ export const serveReceipts = async (opts: ServeOptions): Promise<void> => {
   const { open, port, signal } = opts;
   const log = opts.log ?? createLogger();
   const receiptsDir = opts.receiptsDir ?? RALPH_RECEIPTS_DIRNAME;
+  const specFile = opts.specFile ?? DEFAULT_FILE_PATHS.specFile;
+  const progressFile = opts.progressFile ?? DEFAULT_FILE_PATHS.progressFile;
   const url = `http://localhost:${port}`;
 
   const handler = async (req: Request): Promise<Response> => {
     const pathname = new URL(req.url).pathname;
+
+    if (pathname === "/status") {
+      try {
+        const [specContent, progressContent] = await Promise.all([
+          Deno.readTextFile(specFile),
+          Deno.readTextFile(progressFile),
+        ]);
+        const specIds = parseScenarioIds(specContent);
+        const progressResult = parseProgressRows(progressContent);
+        const progressRows = progressResult.isOk() ? progressResult.value : [];
+        const diff = computeStatusDiff(specIds, progressRows);
+        const html = generateStatusHtml(diff);
+        return new Response(html, {
+          status: 200,
+          headers: { "content-type": MIME[".html"] ?? "text/html" },
+        });
+      } catch (e) {
+        return new Response(
+          `<pre>Error generating status: ${String(e)}</pre>`,
+          {
+            status: 500,
+            headers: { "content-type": MIME[".html"] ?? "text/html" },
+          },
+        );
+      }
+    }
+
     // Resolve to index.html for directory roots
     const suffix = pathname === "/" ? "/index.html" : pathname;
     const filePath = `${receiptsDir}${suffix}`;
