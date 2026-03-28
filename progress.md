@@ -43,3 +43,4 @@
 | 33      | VERIFIED | [Worker stdio per-line colored prefix for terminal output](docs/scenarios/33-worker-stdio-prefix.md)                          |              |
 | GUI.a   | VERIFIED | [Realtime interactive web GUI via SSE](docs/scenarios/GUI.a-interactive-web-gui.md)                                          |              |
 | GUI.b   | VERIFIED | [Overall status page showing spec/progress set differences at /status](docs/scenarios/GUI.b-status-diff.md)                   |              |
+| GUI.c   | VERIFIED | [Dedicated worker page at /worker/:id showing task, state, and stream](docs/scenarios/GUI.c-worker-page.md)                   |              |

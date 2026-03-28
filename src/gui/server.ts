@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { GUI_HTML } from "./html.ts";
+import { GUI_HTML, WORKER_PAGE_HTML } from "./html.ts";
 import type { GuiEventBus } from "./events.ts";
 import type { Logger } from "../types.ts";
 import { createLogger } from "../logger.ts";
@@ -64,6 +64,14 @@ export const startGuiServer = async (opts: GuiServerOptions): Promise<void> => {
           "Connection": "keep-alive",
           "X-Accel-Buffering": "no",
         },
+      });
+    }
+
+    // Dedicated worker detail page: /worker/:id
+    const workerMatch = path.match(/^\/worker\/(\d+)$/);
+    if (workerMatch) {
+      return new Response(WORKER_PAGE_HTML, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
       });
     }
 

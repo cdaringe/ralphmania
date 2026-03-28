@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@^1.0.11";
 import { createEventBus } from "../src/gui/events.ts";
 import { startGuiServer } from "../src/gui/server.ts";
-import { GUI_HTML } from "../src/gui/html.ts";
+import { GUI_HTML, WORKER_PAGE_HTML } from "../src/gui/html.ts";
 
 Deno.test("startGuiServer serves HTML page at /", async () => {
   const bus = createEventBus();
@@ -121,4 +121,62 @@ Deno.test("GUI_HTML contains expected UI elements", () => {
   assert(GUI_HTML.includes("Workers")); // workers panel
   assert(GUI_HTML.includes("state-val")); // state panel element
   assert(GUI_HTML.includes("launching")); // worker launch parsing
+  assert(GUI_HTML.includes("/worker/")); // worker detail page links
+});
+
+Deno.test("startGuiServer serves WORKER_PAGE_HTML at /worker/:id", async () => {
+  const bus = createEventBus();
+  const ctrl = new AbortController();
+  const serverPromise = startGuiServer({
+    port: 18445,
+    bus,
+    signal: ctrl.signal,
+  });
+
+  await new Promise<void>((r) => setTimeout(r, 50));
+
+  const res = await fetch("http://localhost:18445/worker/0");
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("content-type"), "text/html; charset=utf-8");
+  const text = await res.text();
+  assert(text.includes("ralphmania"));
+  assert(text.includes("worker-title")); // worker header element
+  assert(text.includes("scenario-val")); // scenario display element
+  assert(text.includes("state-val")); // state display element
+  assert(text.includes("/events")); // connects to SSE stream
+
+  ctrl.abort();
+  await serverPromise.catch((): void => {});
+});
+
+Deno.test("startGuiServer serves WORKER_PAGE_HTML for any worker id", async () => {
+  const bus = createEventBus();
+  const ctrl = new AbortController();
+  const serverPromise = startGuiServer({
+    port: 18446,
+    bus,
+    signal: ctrl.signal,
+  });
+
+  await new Promise<void>((r) => setTimeout(r, 50));
+
+  const res = await fetch("http://localhost:18446/worker/3");
+  assertEquals(res.status, 200);
+  const text = await res.text();
+  assert(text === WORKER_PAGE_HTML);
+
+  ctrl.abort();
+  await serverPromise.catch((): void => {});
+});
+
+Deno.test("WORKER_PAGE_HTML contains required worker page elements", () => {
+  assert(WORKER_PAGE_HTML.includes("ralphmania")); // brand
+  assert(WORKER_PAGE_HTML.includes("worker-title")); // worker index display
+  assert(WORKER_PAGE_HTML.includes("scenario-val")); // scenario display
+  assert(WORKER_PAGE_HTML.includes("state-val")); // state display
+  assert(WORKER_PAGE_HTML.includes("/events")); // SSE stream connection
+  assert(WORKER_PAGE_HTML.includes("worker_active")); // handles worker_active event
+  assert(WORKER_PAGE_HTML.includes("worker_done")); // handles worker_done event
+  assert(WORKER_PAGE_HTML.includes("overview")); // back link to main page
+  assert(WORKER_PAGE_HTML.includes("workerIndex")); // filters by worker index
 });
