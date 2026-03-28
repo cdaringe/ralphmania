@@ -19,7 +19,7 @@
  * @module
  */
 
-import type { ScenarioStatus } from "./constants.ts";
+import type { ScenarioStatus } from "../constants.ts";
 
 // ---------------------------------------------------------------------------
 // State types
@@ -203,7 +203,7 @@ export const validateProgressTransitions = (
     status: string;
     reworkNotes?: string;
   }>,
-  log?: import("./types.ts").Logger,
+  log?: import("../types.ts").Logger,
 ): TransitionResult[] => {
   const oldMap = new Map(oldRows.map((r) => [r.scenario, r.status]));
   const violations: TransitionResult[] = [];

@@ -15,9 +15,9 @@ import type {
   LoopCheckpoint,
   Result,
   ValidationResult,
-} from "./types.ts";
-import type { WorktreeInfo } from "./worktree.ts";
-import type { Plugin } from "./plugin.ts";
+} from "../types.ts";
+import type { WorktreeInfo } from "../git/worktree.ts";
+import type { Plugin } from "../plugin.ts";
 import {
   computeEffectiveLevel,
   findActionableScenarios,
@@ -26,10 +26,10 @@ import {
   parseProgressRows,
   updateEscalationState,
   validateProgressStatuses,
-} from "./model.ts";
-import { dim, green, yellow } from "./colors.ts";
-import { difference, xor } from "./set-fns.ts";
-import { Status } from "./constants.ts";
+} from "../model.ts";
+import { dim, green, yellow } from "../colors.ts";
+import { difference, xor } from "../set-fns.ts";
+import { Status } from "../constants.ts";
 
 // ---------------------------------------------------------------------------
 // Dependencies (same as ParallelDeps, re-exported for convenience)

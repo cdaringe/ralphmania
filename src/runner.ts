@@ -21,8 +21,8 @@ import {
   initialWorkerState,
   isWorkerTerminal,
   workerTransition,
-} from "./worker-machine.ts";
-import type { AgentRunDeps } from "./worker-machine.ts";
+} from "./machines/worker-machine.ts";
+import type { AgentRunDeps } from "./machines/worker-machine.ts";
 
 /**
  * Parse an NDJSON line from `claude --output-format=stream-json` and extract
@@ -171,7 +171,7 @@ export const pipeStream = async ({ stream, output, marker }: {
 };
 
 // Re-export from worker-machine for backward compatibility.
-export { resolveWorkerModelSelection } from "./worker-machine.ts";
+export { resolveWorkerModelSelection } from "./machines/worker-machine.ts";
 
 /* c8 ignore start — real subprocess execution, tested via integration */
 /**
@@ -301,15 +301,16 @@ export const runIteration = async (
     workerIndex?: number;
   },
 ): Promise<IterationResult> => {
-  let current: import("./worker-machine.ts").WorkerState = initialWorkerState({
-    iterationNum,
-    agent,
-    level,
-    targetScenarioOverride,
-    validationFailurePath,
-    specFile,
-    progressFile,
-  });
+  let current: import("./machines/worker-machine.ts").WorkerState =
+    initialWorkerState({
+      iterationNum,
+      agent,
+      level,
+      targetScenarioOverride,
+      validationFailurePath,
+      specFile,
+      progressFile,
+    });
 
   while (!isWorkerTerminal(current)) {
     current = await workerTransition(current, {

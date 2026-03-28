@@ -9,14 +9,14 @@ import {
   transitionResolvingModel,
   transitionRunningAgent,
   workerTransition,
-} from "../src/worker-machine.ts";
+} from "../src/machines/worker-machine.ts";
 import type {
   CommandBuiltState,
   ModelResolvedState,
   PromptBuiltState,
   RunningAgentState,
   WorkerState,
-} from "../src/worker-machine.ts";
+} from "../src/machines/worker-machine.ts";
 import type { Plugin } from "../src/plugin.ts";
 import { noopLog } from "./fixtures.ts";
 

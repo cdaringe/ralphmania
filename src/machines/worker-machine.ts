@@ -21,11 +21,11 @@ import type {
   IterationResult,
   Logger,
   ModelSelection,
-} from "./types.ts";
-import type { HookContext, Plugin } from "./plugin.ts";
-import { getModel, resolveModelSelection } from "./model.ts";
-import { CLAUDE_CODER, CLAUDE_ESCALATED } from "./constants.ts";
-import { buildCommandSpec, buildPrompt } from "./command.ts";
+} from "../types.ts";
+import type { HookContext, Plugin } from "../plugin.ts";
+import { getModel, resolveModelSelection } from "../model.ts";
+import { CLAUDE_CODER, CLAUDE_ESCALATED } from "../constants.ts";
+import { buildCommandSpec, buildPrompt } from "../command.ts";
 
 // ---------------------------------------------------------------------------
 // Model resolution

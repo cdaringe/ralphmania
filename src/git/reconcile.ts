@@ -1,9 +1,9 @@
-import type { Agent, Logger } from "./types.ts";
+import type { Agent, Logger } from "../types.ts";
 import type { WorktreeInfo } from "./worktree.ts";
-import { nonInteractiveEnv, RECONCILE_TIMEOUT_MS } from "./constants.ts";
-import { getModel } from "./model.ts";
-import { buildCommandSpec } from "./command.ts";
-import { ndjsonResultTransform, pipeStream } from "./runner.ts";
+import { nonInteractiveEnv, RECONCILE_TIMEOUT_MS } from "../constants.ts";
+import { getModel } from "../model.ts";
+import { buildCommandSpec } from "../command.ts";
+import { ndjsonResultTransform, pipeStream } from "../runner.ts";
 
 /** Extract file paths from `git status --porcelain` with unmerged markers. */
 export const parseConflictedFiles = (porcelain: string): string[] =>

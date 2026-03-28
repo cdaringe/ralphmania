@@ -4,9 +4,9 @@ import {
   hasUnresolvedConflicts,
   parseConflictedFiles,
   reconcileMerge,
-} from "../src/reconcile.ts";
-import type { ReconcileDeps } from "../src/reconcile.ts";
-import type { WorktreeInfo } from "../src/worktree.ts";
+} from "../src/git/reconcile.ts";
+import type { ReconcileDeps } from "../src/git/reconcile.ts";
+import type { WorktreeInfo } from "../src/git/worktree.ts";
 import { noopLog } from "./fixtures.ts";
 
 const stubWorktree: WorktreeInfo = {
