@@ -3,26 +3,35 @@ import { err, extractSDKText, isSDKMessage, ok } from "../src/types.ts";
 
 Deno.test("ok creates success result", () => {
   const result = ok(42);
-  assertEquals(result, { ok: true, value: 42 });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) assertEquals(result.value, 42);
 });
 
 Deno.test("ok wraps any value", () => {
-  assertEquals(ok("hello"), { ok: true, value: "hello" });
-  assertEquals(ok(undefined), { ok: true, value: undefined });
-  assertEquals(ok(null), { ok: true, value: null });
+  const r1 = ok("hello");
+  assertEquals(r1.isOk(), true);
+  if (r1.isOk()) assertEquals(r1.value, "hello");
+  const r2 = ok(undefined);
+  assertEquals(r2.isOk(), true);
+  if (r2.isOk()) assertEquals(r2.value, undefined);
+  const r3 = ok(null);
+  assertEquals(r3.isOk(), true);
+  if (r3.isOk()) assertEquals(r3.value, null);
 });
 
 Deno.test("err creates failure result", () => {
   const result = err("fail");
-  assertEquals(result, { ok: false, error: "fail" });
+  assertEquals(result.isErr(), true);
+  if (result.isErr()) assertEquals(result.error, "fail");
 });
 
 Deno.test("err wraps any error", () => {
-  assertEquals(err(404), { ok: false, error: 404 });
-  assertEquals(err({ code: "NOT_FOUND" }), {
-    ok: false,
-    error: { code: "NOT_FOUND" },
-  });
+  const r1 = err(404);
+  assertEquals(r1.isErr(), true);
+  if (r1.isErr()) assertEquals(r1.error, 404);
+  const r2 = err({ code: "NOT_FOUND" });
+  assertEquals(r2.isErr(), true);
+  if (r2.isErr()) assertEquals(r2.error, { code: "NOT_FOUND" });
 });
 
 // isSDKMessage tests

@@ -63,7 +63,8 @@ Write a specification document _like_ the following:
 | 2 | Dashboard | The GUI SHALL support user stats on /dashboard |
 ```
 
-Try to append only. Mark invalid scenarios `REMOVED`.
+Append only into your specification. Your scenarios IDs can be anything--not
+just numbers. For example `GUI.1`, `GUI.1a`, `DASH.x`, etc--not just integers.
 
 **progress.md** (managed by the agent, editable by you):
 
@@ -74,10 +75,11 @@ Try to append only. Mark invalid scenarios `REMOVED`.
 | 2 | NEEDS_REWORK | docs/scenarios/dashboard.md | missing error states |
 ```
 
-Set a scenario to `NEEDS_REWORK` with notes and ralphmania will direct the agent
-to fix it, escalating to a stronger model if rework persists. The agent
-verification step will do this sometimes, or you the user may do this at the end
-of an iteration cycle!
+- Set a status to `NEEDS_REWORK` with notes and ralphmania will direct the agent
+  to fix it, escalating to a stronger model if rework persists. The agent
+  verification step will do this sometimes, or you the user may do this at the
+  end of an iteration cycle!
+- Set a status to `OBSOLETE` if you no longer need that scenario.
 
 ## Plugins
 

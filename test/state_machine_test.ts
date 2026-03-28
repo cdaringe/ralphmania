@@ -1,4 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
+import { err } from "../src/types.ts";
 import {
   isTerminal,
   transition,
@@ -266,8 +267,7 @@ Deno.test("transitionRunningWorkers with worktrees → validating", async () => 
 Deno.test("transitionRunningWorkers no worktrees → reading_progress (skip round)", async () => {
   const ctx = makeCtx({
     deps: stubDeps({
-      createWorktree: () =>
-        Promise.resolve({ ok: false, error: "git failed" } as const),
+      createWorktree: () => Promise.resolve(err("git failed")),
     }),
   });
   const state: RunningWorkersState = {

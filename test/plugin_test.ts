@@ -37,8 +37,8 @@ Deno.test("resolvePlugin returns empty plugin for null 'plugin' export", () => {
 
 Deno.test("loadPlugin returns noop when no path given", async () => {
   const result = await loadPlugin({ pluginPath: undefined, log: testLog });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value, noopPlugin);
   }
 });
@@ -48,7 +48,7 @@ Deno.test("loadPlugin returns error for invalid path", async () => {
     pluginPath: "./nonexistent-plugin-abc123.ts",
     log: testLog,
   });
-  assertEquals(result.ok, false);
+  assertEquals(result.isErr(), true);
 });
 
 Deno.test("loadPlugin loads named 'plugin' export from real file", async () => {
@@ -58,8 +58,8 @@ export const plugin = {
 };
 `);
   const result = await loadPlugin({ pluginPath: path, log: testLog });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     const modified = result.value.onPromptBuilt?.({
       prompt: "hello",
       selection: {
@@ -80,8 +80,8 @@ Deno.test("loadPlugin returns empty plugin for module with no 'plugin' export", 
 export const unrelated = "nothing here";
 `);
   const result = await loadPlugin({ pluginPath: path, log: testLog });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.onPromptBuilt, undefined);
   }
 });
@@ -94,8 +94,8 @@ export const plugin = {
 `);
   const fileUrl = `file://${path}`;
   const result = await loadPlugin({ pluginPath: fileUrl, log: testLog });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(typeof result.value.onPromptBuilt, "function");
   }
 });
@@ -109,8 +109,8 @@ export const plugin = {
 };
 `);
   const result = await loadPlugin({ pluginPath: path, log: testLog });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     const resolved = await result.value.onConfigResolved?.({
       agent: "claude",
       iterations: 5,

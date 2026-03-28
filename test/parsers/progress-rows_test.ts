@@ -5,11 +5,11 @@ import { parseProgressRows } from "../../src/parsers/progress-rows.ts";
 const unwrap = (content: string) => {
   const result = parseProgressRows(content);
   assertEquals(
-    result.ok,
+    result.isOk(),
     true,
-    `Expected ok, got: ${!result.ok && result.error}`,
+    `Expected ok, got: ${result.isErr() && result.error}`,
   );
-  if (!result.ok) throw new Error("unreachable");
+  if (result.isErr()) throw new Error("unreachable");
   return result.value;
 };
 
@@ -287,8 +287,8 @@ Deno.test("returns error for row with empty scenario ID", () => {
     "|   | WIP | oops |",
   ].join("\n");
   const result = parseProgressRows(content);
-  assertEquals(result.ok, false);
-  if (!result.ok) {
+  assertEquals(result.isErr(), true);
+  if (result.isErr()) {
     assertEquals(result.error.includes("empty scenario ID"), true);
   }
 });

@@ -22,8 +22,8 @@ Deno.test("createWorktree creates and cleanupWorktree removes", async () => {
     log: noopLog,
   });
 
-  assertEquals(result.ok, true);
-  if (!result.ok) return;
+  assertEquals(result.isOk(), true);
+  if (!result.isOk()) return;
 
   const wt = result.value;
   assertEquals(wt.scenario, "99");
@@ -40,7 +40,7 @@ Deno.test("createWorktree creates and cleanupWorktree removes", async () => {
 
   // Cleanup
   const cleanup = await cleanupWorktree({ worktree: wt, log: noopLog });
-  assertEquals(cleanup.ok, true);
+  assertEquals(cleanup.isOk(), true);
 
   // Verify directory removed
   const afterStat = await Deno.stat(wt.path).catch(() => null);

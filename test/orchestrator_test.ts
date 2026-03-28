@@ -2,11 +2,11 @@ import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { findActionableScenarios, isAllVerified } from "../src/model.ts";
 import { runParallelLoop } from "../src/orchestrator.ts";
 import { noopLog, stubDeps, stubWorktree } from "./fixtures.ts";
-import { ok, type Result } from "../src/types.ts";
+import { err, ok, type Result } from "../src/types.ts";
 
 /** Unwrap a Result, throwing on error. */
 const unwrap = <T>(r: Result<T, string>): T => {
-  if (!r.ok) throw new Error(`Unexpected error: ${r.error}`);
+  if (r.isErr()) throw new Error(`Unexpected error: ${r.error}`);
   return r.value;
 };
 
@@ -734,8 +734,7 @@ Deno.test("runParallelLoop skips round when all worktree creations fail", async 
     level: undefined,
     deps: stubDeps({
       readProgress: () => Promise.resolve(content),
-      createWorktree: () =>
-        Promise.resolve({ ok: false, error: "git failed" } as const),
+      createWorktree: () => Promise.resolve(err("git failed")),
       runIteration: () => {
         iterationRan = true;
         return Promise.resolve({ status: "continue" });

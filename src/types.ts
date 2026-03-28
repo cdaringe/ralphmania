@@ -9,24 +9,8 @@ export type Logger = (
   opts: { tags: [LogLevel, ...string[]]; message: string },
 ) => void;
 
-/**
- * A discriminated union representing success or failure.
- *
- * @example
- * ```ts
- * import { ok, err, type Result } from "@cdaringe/ralphmania";
- *
- * const divide = (a: number, b: number): Result<number, string> =>
- *   b === 0 ? err("division by zero") : ok(a / b);
- * ```
- */
-export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
-
-/** Construct a success {@link Result}. */
-export const ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
-
-/** Construct a failure {@link Result}. */
-export const err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+export { err, ok } from "neverthrow";
+export type { Result } from "neverthrow";
 
 /** Outcome of running the validation script after an iteration. */
 export type ValidationResult =

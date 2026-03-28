@@ -7,7 +7,7 @@ import type {
   ModelSelection,
   Result,
 } from "./types.ts";
-import { ok } from "./types.ts";
+import { err, ok } from "./types.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -55,7 +55,7 @@ export const detectScenarioFromProgress = (
   content: string,
 ): Result<string | undefined, string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   const rework = parsed.value.find((r) => r.status === Status.NEEDS_REWORK);
   return ok(rework?.scenario);
 };
@@ -65,7 +65,7 @@ export const findReworkScenarios = (
   content: string,
 ): Result<string[], string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   return ok(
     parsed.value
       .filter((r) => r.status === Status.NEEDS_REWORK)
@@ -106,8 +106,8 @@ export const computeModelSelection = (
   const scenarioResult = detectScenarioFromProgress(content);
   const actionableResult = findActionableScenarios(content);
 
-  if (!scenarioResult.ok) return scenarioResult;
-  if (!actionableResult.ok) return actionableResult;
+  if (scenarioResult.isErr()) return err(scenarioResult.error);
+  if (actionableResult.isErr()) return err(actionableResult.error);
 
   if (agent === "claude" && escalationLevel !== undefined) {
     const config = escalationLevel >= 1
@@ -123,7 +123,7 @@ export const computeModelSelection = (
   }
 
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   const reworkCount =
     parsed.value.filter((r) => r.status === Status.NEEDS_REWORK).length;
   const mode = reworkCount > REWORK_THRESHOLD
@@ -145,7 +145,7 @@ export const parseImplementedCount = (
   content: string,
 ): Result<number, string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   return ok(
     parsed.value.filter((r) =>
       r.status === Status.WORK_COMPLETE || r.status === Status.VERIFIED
@@ -156,7 +156,7 @@ export const parseImplementedCount = (
 /** Count total non-OBSOLETE scenario rows in progress.md content. */
 export const parseTotalCount = (content: string): Result<number, string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   return ok(parsed.value.filter((r) => r.status !== Status.OBSOLETE).length);
 };
 
@@ -166,7 +166,7 @@ export const findActionableScenarios = (
   content: string,
 ): Result<string[], string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   const done: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
   return ok(
     parsed.value
@@ -181,7 +181,7 @@ export const isAllVerified = (
   expectedScenarioIds?: readonly string[],
 ): Result<boolean, string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   const rows = parsed.value;
   const doneStatuses: Set<string> = new Set([Status.VERIFIED, Status.OBSOLETE]);
   const allDone = rows.length > 0 &&
@@ -237,7 +237,7 @@ export const validateProgressStatuses = (
   content: string,
 ): Result<{ scenario: string; status: string }[], string> => {
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) return parsed;
+  if (parsed.isErr()) return err(parsed.error);
   const validSet = new Set<string>(VALID_STATUSES);
   return ok(
     parsed.value
@@ -287,7 +287,7 @@ const resolveClaudeSelection = async (
 ): Promise<ModelSelection> => {
   const currentState = await readEscalationState(log, io);
   const reworkResult = findReworkScenarios(content);
-  if (!reworkResult.ok) {
+  if (reworkResult.isErr()) {
     log({ tags: ["error", "model"], message: reworkResult.error });
     return defaults;
   }
@@ -299,7 +299,7 @@ const resolveClaudeSelection = async (
   await writeEscalationState(newState, log, io);
 
   const scenarioResult = detectScenarioFromProgress(content);
-  if (!scenarioResult.ok) {
+  if (scenarioResult.isErr()) {
     log({ tags: ["error", "model"], message: scenarioResult.error });
     return defaults;
   }
@@ -310,12 +310,12 @@ const resolveClaudeSelection = async (
 
   const implementedResult = parseImplementedCount(content);
   const totalResult = parseTotalCount(content);
-  if (!implementedResult.ok || !totalResult.ok) {
+  if (implementedResult.isErr() || totalResult.isErr()) {
     log({
       tags: ["error", "model"],
-      message: !implementedResult.ok
+      message: implementedResult.isErr()
         ? implementedResult.error
-        : (totalResult as { ok: false; error: string }).error,
+        : (totalResult as { error: string }).error,
     });
     return defaults;
   }
@@ -333,7 +333,7 @@ const resolveClaudeSelection = async (
     isVerifierMode,
   });
 
-  if (!result.ok) {
+  if (result.isErr()) {
     log({ tags: ["error", "model"], message: result.error });
     return defaults;
   }
@@ -371,13 +371,13 @@ const resolveCodexSelection = (
   },
 ): ModelSelection => {
   const result = computeModelSelection({ content, agent });
-  if (!result.ok) {
+  if (result.isErr()) {
     log({ tags: ["error", "model"], message: result.error });
     return defaults;
   }
 
   const parsed = parseProgressRows(content);
-  const reworkCount = parsed.ok
+  const reworkCount = parsed.isOk()
     ? parsed.value.filter((r) => r.status === Status.NEEDS_REWORK).length
     : 0;
   const implementedResult = parseImplementedCount(content);
@@ -387,8 +387,8 @@ const resolveCodexSelection = (
     message: formatStatusMessage({
       reworkCount,
       model: result.value.model,
-      implementedCount: implementedResult.ok ? implementedResult.value : 0,
-      totalCount: totalResult.ok ? totalResult.value : 0,
+      implementedCount: implementedResult.isOk() ? implementedResult.value : 0,
+      totalCount: totalResult.isOk() ? totalResult.value : 0,
     }),
   });
   logStrongScope(log, result.value);

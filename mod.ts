@@ -111,7 +111,7 @@ const main = async (): Promise<number> => {
   const log = createLogger();
   const parsed = await parseCliArgsInteractive(Deno.args, version);
 
-  if (!parsed.ok) {
+  if (parsed.isErr()) {
     log({ tags: ["error"], message: parsed.error });
     return 1;
   }
@@ -119,7 +119,7 @@ const main = async (): Promise<number> => {
   const { pluginPath } = parsed.value;
 
   const pluginResult = await loadPlugin({ pluginPath, log });
-  if (!pluginResult.ok) {
+  if (pluginResult.isErr()) {
     log({ tags: ["error"], message: pluginResult.error });
     return 1;
   }
@@ -159,7 +159,7 @@ const main = async (): Promise<number> => {
   await ensureProgressFile(log, filePaths);
 
   const hookResult = await ensureValidationHook(log);
-  if (!hookResult.ok) {
+  if (hookResult.isErr()) {
     log({ tags: ["error"], message: hookResult.error });
     return 1;
   }
@@ -189,7 +189,7 @@ const main = async (): Promise<number> => {
   );
   const finalSection = finalContent.split("END_DEMO")[1] ?? "";
   const allDoneResult = isAllVerified(finalSection, expectedScenarioIds);
-  const allDone = allDoneResult.ok && allDoneResult.value;
+  const allDone = allDoneResult.isOk() && allDoneResult.value;
 
   await plugin.onLoopEnd?.({
     finalState: {
@@ -205,7 +205,7 @@ const main = async (): Promise<number> => {
       await updateReceipts({ agent, plugin, log }))
     : undefined;
 
-  receiptsResult && !receiptsResult.ok &&
+  receiptsResult && receiptsResult.isErr() &&
     log({ tags: ["error"], message: receiptsResult.error });
 
   !allDone &&

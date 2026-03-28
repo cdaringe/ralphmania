@@ -222,7 +222,7 @@ export const transitionReadingProgress = async (
   let validationFailurePath = state.validationFailurePath;
 
   const invalidResult = validateProgressStatuses(content);
-  if (!invalidResult.ok) {
+  if (invalidResult.isErr()) {
     ctx.log({
       tags: ["error", "orchestrator"],
       message: invalidResult.error,
@@ -241,7 +241,8 @@ export const transitionReadingProgress = async (
 
   const allVerifiedResult = isAllVerified(content, ctx.expectedScenarioIds);
   if (
-    allVerifiedResult.ok && allVerifiedResult.value && !validationFailurePath
+    allVerifiedResult.isOk() && allVerifiedResult.value &&
+    !validationFailurePath
   ) {
     ctx.log({
       tags: ["info", "orchestrator"],
@@ -264,7 +265,7 @@ export const transitionFindingActionable = async (
 ): Promise<RunningWorkersState | DoneState> => {
   const content = state.progressContent;
   const parsed = parseProgressRows(content);
-  if (!parsed.ok) {
+  if (parsed.isErr()) {
     ctx.log({
       tags: ["error", "orchestrator"],
       message: parsed.error,
@@ -395,7 +396,7 @@ export const transitionRunningWorkers = async (
     ),
   );
   const worktrees = worktreeResults.flatMap((wt, i) =>
-    wt.ok ? [wt.value] : (ctx.log({
+    wt.isOk() ? [wt.value] : (ctx.log({
       tags: ["error", "orchestrator"],
       message: `Failed to create worktree for worker ${i}: ${wt.error}`,
     }),
@@ -489,7 +490,7 @@ export const transitionRunningWorkers = async (
     const postMerge = await ctx.deps.readProgress();
     const actionableResult = findActionableScenarios(postMerge);
     const stillActionable = new Set(
-      actionableResult.ok ? actionableResult.value : [],
+      actionableResult.isOk() ? actionableResult.value : [],
     );
     results.forEach((wr) => {
       const scenario = uniqueActionable[wr.workerIndex];
@@ -579,7 +580,7 @@ export const transitionCheckingDoneness = async (
   const content = await ctx.deps.readProgress();
   const allVerifiedResult = isAllVerified(content, ctx.expectedScenarioIds);
   if (
-    allVerifiedResult.ok && allVerifiedResult.value &&
+    allVerifiedResult.isOk() && allVerifiedResult.value &&
     !state.validationFailurePath
   ) {
     ctx.log({

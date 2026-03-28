@@ -21,16 +21,16 @@ Deno.test("parseImplementedCount counts WORK_COMPLETE rows", () => {
     "| 1.3 | VERIFIED | yep  |",
   ].join("\n");
   const r = parseImplementedCount(content);
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, 2);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, 2);
 });
 
 Deno.test("parseImplementedCount returns 0 when none implemented", () => {
   const r = parseImplementedCount(
     "| # | Status |\n| -- | -- |\n| 1.1 |          |      |",
   );
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, 0);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, 0);
 });
 
 // parseTotalCount tests
@@ -43,8 +43,8 @@ Deno.test("parseTotalCount counts all scenario rows", () => {
     "| 1.2  |          |",
   ].join("\n");
   const r = parseTotalCount(content);
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, 2);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, 2);
 });
 
 Deno.test("parseTotalCount excludes OBSOLETE rows", () => {
@@ -56,8 +56,8 @@ Deno.test("parseTotalCount excludes OBSOLETE rows", () => {
     "| 1.3 |          |",
   ].join("\n");
   const r = parseTotalCount(content);
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, 2);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, 2);
 });
 
 // getModel tests
@@ -95,14 +95,16 @@ Deno.test("detectScenarioFromProgress without NEEDS_REWORK", () => {
   const result = detectScenarioFromProgress(
     "| # | Status |\n| -- | -- |\n| 1.1 | COMPLETED |",
   );
-  assertEquals(result, { ok: true, value: undefined });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) assertEquals(result.value, undefined);
 });
 
 Deno.test("detectScenarioFromProgress with NEEDS_REWORK", () => {
   const result = detectScenarioFromProgress(
     "| # | Status |\n| -- | -- |\n| 3.1 | NEEDS_REWORK | some notes",
   );
-  assertEquals(result, { ok: true, value: "3.1" });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) assertEquals(result.value, "3.1");
 });
 
 Deno.test("detectScenarioFromProgress finds first NEEDS_REWORK", () => {
@@ -114,11 +116,14 @@ Deno.test("detectScenarioFromProgress finds first NEEDS_REWORK", () => {
     "| 3.1 | NEEDS_REWORK | also fix",
   ].join("\n");
   const result = detectScenarioFromProgress(content);
-  assertEquals(result, { ok: true, value: "2.1" });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) assertEquals(result.value, "2.1");
 });
 
 Deno.test("detectScenarioFromProgress empty content", () => {
-  assertEquals(detectScenarioFromProgress(""), { ok: true, value: undefined });
+  const result = detectScenarioFromProgress("");
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) assertEquals(result.value, undefined);
 });
 
 // findReworkScenarios tests
@@ -133,22 +138,22 @@ Deno.test("findReworkScenarios finds all rework scenario numbers", () => {
     "| 5.1 | NEEDS_REWORK | broken |",
   ].join("\n");
   const r = findReworkScenarios(content);
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, ["2.1", "5.1"]);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, ["2.1", "5.1"]);
 });
 
 Deno.test("findReworkScenarios returns empty for no rework", () => {
   const r = findReworkScenarios(
     "| # | Status |\n| -- | -- |\n| 1.1 | WORK_COMPLETE |",
   );
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, []);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, []);
 });
 
 Deno.test("findReworkScenarios returns empty for empty content", () => {
   const r = findReworkScenarios("");
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, []);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, []);
 });
 
 // updateEscalationState tests
@@ -202,8 +207,8 @@ Deno.test("computeModelSelection claude level 0 coder mode", () => {
     agent: "claude",
     escalationLevel: 0,
   });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.model, "sonnet");
     assertEquals(result.value.mode, "general");
     assertEquals(result.value.effort, "high");
@@ -218,8 +223,8 @@ Deno.test("computeModelSelection claude level 0 verifier mode", () => {
     escalationLevel: 0,
     isVerifierMode: true,
   });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.model, "opus");
     assertEquals(result.value.mode, "general");
     assertEquals(result.value.effort, "low");
@@ -233,8 +238,8 @@ Deno.test("computeModelSelection claude level 1 escalated", () => {
     agent: "claude",
     escalationLevel: 1,
   });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.model, "opus");
     assertEquals(result.value.mode, "strong");
     assertEquals(result.value.effort, "high");
@@ -244,8 +249,8 @@ Deno.test("computeModelSelection claude level 1 escalated", () => {
 Deno.test("computeModelSelection codex below threshold uses general", () => {
   const content = "| # | Status |\n| -- | -- |\n| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "codex" });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.mode, "general");
     assertEquals(result.value.model, "gpt-5.1-codex-max");
     assertEquals(result.value.effort, undefined);
@@ -256,8 +261,8 @@ Deno.test("computeModelSelection codex above threshold uses strong", () => {
   const content =
     "| # | Status |\n| -- | -- |\n| 1.1 | NEEDS_REWORK |\n| 1.2 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "codex" });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.mode, "strong");
     assertEquals(result.value.model, "gpt-5.3-codex");
     assertEquals(result.value.effort, undefined);
@@ -267,8 +272,8 @@ Deno.test("computeModelSelection codex above threshold uses strong", () => {
 Deno.test("computeModelSelection no rework uses fast", () => {
   const content = "| # | Status |\n| -- | -- |\n| 1.1 | COMPLETED |";
   const result = computeModelSelection({ content, agent: "codex" });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.mode, "fast");
     assertEquals(result.value.model, "gpt-5.1-codex");
     assertEquals(result.value.targetScenario, undefined);
@@ -280,8 +285,8 @@ Deno.test("computeModelSelection codex above threshold", () => {
   const content =
     "| # | Status |\n| -- | -- |\n| 5.1 | NEEDS_REWORK |\n| 5.2 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "codex" });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.mode, "strong");
     assertEquals(result.value.model, "gpt-5.3-codex");
     assertEquals(result.value.targetScenario, "5.1");
@@ -302,8 +307,8 @@ Deno.test("validateProgressStatuses returns empty for all valid statuses", () =>
     "| 1.5 | OBSOLETE |",
   ].join("\n");
   const r = validateProgressStatuses(content);
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, []);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, []);
 });
 
 Deno.test("validateProgressStatuses detects invalid statuses", () => {
@@ -315,8 +320,8 @@ Deno.test("validateProgressStatuses detects invalid statuses", () => {
     "| 1.3 | DONE |",
   ].join("\n");
   const r = validateProgressStatuses(content);
-  assertEquals(r.ok, true);
-  if (r.ok) {
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) {
     assertEquals(r.value, [
       { scenario: "1.2", status: "COMPLETE" },
       { scenario: "1.3", status: "DONE" },
@@ -327,15 +332,15 @@ Deno.test("validateProgressStatuses detects invalid statuses", () => {
 Deno.test("validateProgressStatuses ignores rows without status", () => {
   const content = "| # | Status |\n| -- | -- |\n| 1.1 |          |";
   const r = validateProgressStatuses(content);
-  assertEquals(r.ok, true);
-  if (r.ok) assertEquals(r.value, []);
+  assertEquals(r.isOk(), true);
+  if (r.isOk()) assertEquals(r.value, []);
 });
 
 Deno.test("computeModelSelection claude without escalation level falls through to codex path", () => {
   const content = "| # | Status |\n| -- | -- |\n| 1.1 | NEEDS_REWORK |";
   const result = computeModelSelection({ content, agent: "claude" });
-  assertEquals(result.ok, true);
-  if (result.ok) {
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
     assertEquals(result.value.mode, "general");
     assertEquals(result.value.model, "sonnet");
     assertEquals(result.value.effort, undefined);
