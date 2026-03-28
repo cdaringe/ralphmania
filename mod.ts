@@ -54,6 +54,7 @@ import {
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 import { runParallelLoop } from "./src/orchestrator.ts";
+import { resetAllWorktrees } from "./src/git/worktree.ts";
 import { computeExitCode } from "./src/exit.ts";
 import { createEventBus } from "./src/gui/events.ts";
 import { createGuiLogger } from "./src/gui/logger.ts";
@@ -139,7 +140,16 @@ const main = async (): Promise<number> => {
 
   const agent = configHookResult?.agent ?? parsed.value.agent;
   const iterations = configHookResult?.iterations ?? parsed.value.iterations;
-  const { level, parallel, gui, guiPort } = parsed.value;
+  const { level, parallel, gui, guiPort, resetWorktrees } = parsed.value;
+
+  if (resetWorktrees) {
+    const resetResult = await resetAllWorktrees({ log });
+    if (resetResult.isErr()) {
+      log({ tags: ["error"], message: resetResult.error });
+      return 1;
+    }
+  }
+
   const filePaths: FilePaths = {
     specFile: configHookResult?.specFile ?? DEFAULT_FILE_PATHS.specFile,
     progressFile: configHookResult?.progressFile ??
