@@ -13,8 +13,8 @@
  */
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1.0.11";
-import { startGuiServer } from "../src/gui/server.ts";
-import type { StatusProvider } from "../src/gui/server.ts";
+import { startGuiServer } from "../src/gui/server.tsx";
+import type { StatusProvider } from "../src/gui/server.tsx";
 import { createEventBus } from "../src/gui/events.ts";
 import type { GuiEventBus } from "../src/gui/events.ts";
 import { createAgentInputBus } from "../src/gui/input-bus.ts";

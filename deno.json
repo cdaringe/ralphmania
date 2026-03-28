@@ -3,6 +3,10 @@
   "version": "0.42.0",
   "license": "MIT",
   "exports": "./mod.ts",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "hono/jsx"
+  },
   "lint": {
     "exclude": ["src/set-fns.ts"],
     "rules": {
@@ -44,6 +48,10 @@
   "imports": {
     "@cliffy/ansi": "jsr:@cliffy/ansi@^1.0.0",
     "@cliffy/command": "jsr:@cliffy/command@^1.0.0",
+    "hono": "jsr:@hono/hono@^4",
+    "hono/jsx": "jsr:@hono/hono@^4/jsx",
+    "hono/jsx/jsx-runtime": "jsr:@hono/hono@^4/jsx/jsx-runtime",
+    "hono/jsx/jsx-dev-runtime": "jsr:@hono/hono@^4/jsx/jsx-dev-runtime",
     "neverthrow": "npm:neverthrow@^8.2.0"
   }
 }

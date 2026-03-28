@@ -139,19 +139,32 @@ export const linePrefixTransform = (
  *
  * @returns `true` if any chunk contained the optional `marker` string.
  */
-export const pipeStream = async ({ stream, output, marker }: {
+export const pipeStream = async ({ stream, output, marker, onLine }: {
   stream: ReadableStream<Uint8Array>;
   output: { write: (data: Uint8Array) => Promise<number> };
   marker?: string;
+  /** Called with each non-empty line for GUI streaming. */
+  onLine?: (line: string) => void;
 }): Promise<boolean> => {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let found = false;
   let matchIndex = 0;
+  let lineBuffer = "";
   try {
     for await (const chunk of stream) {
       const text = decoder.decode(chunk, { stream: true });
       await output.write(encoder.encode(text));
+      // Emit complete lines to the GUI callback
+      if (onLine) {
+        lineBuffer += text;
+        const lines = lineBuffer.split("\n");
+        lineBuffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trimEnd();
+          if (trimmed.length > 0) onLine(trimmed);
+        }
+      }
       if (marker && !found) {
         for (const ch of text) {
           matchIndex = ch === marker[matchIndex]
@@ -168,6 +181,10 @@ export const pipeStream = async ({ stream, output, marker }: {
     }
   } catch {
     // Stream closed or aborted
+  }
+  // Flush remaining line buffer
+  if (onLine && lineBuffer.trimEnd().length > 0) {
+    onLine(lineBuffer.trimEnd());
   }
   return found;
 };
@@ -239,17 +256,54 @@ export const executeAgent: AgentRunDeps["execute"] = async (
       ? child.stderr.pipeThrough(linePrefixTransform(prefix))
       : child.stderr;
 
+    // Forward worker output lines to the logger for GUI streaming.
+    // The prefix transform has already prepended [W0/sXXX] so the GUI
+    // can filter by worker index.
+    // Also append to a log file so the GUI can replay past output.
+    let workerLogFile: Deno.FsFile | undefined;
+    if (workerIndex !== undefined) {
+      try {
+        const logDir = ".ralph/worker-logs";
+        await Deno.mkdir(logDir, { recursive: true });
+        workerLogFile = await Deno.open(
+          `${logDir}/worker-${workerIndex}.log`,
+          { create: true, truncate: true, write: true },
+        );
+      } catch {
+        // Non-critical: GUI replay won't work but execution continues
+      }
+    }
+    const logEncoder = new TextEncoder();
+    const guiOnLine = workerIndex !== undefined
+      ? (line: string): void => {
+        log({ tags: ["info", "agent-stream"], message: line });
+        try {
+          workerLogFile?.write(logEncoder.encode(line + "\n"));
+        } catch {
+          // Best-effort file write
+        }
+      }
+      : undefined;
+
     const [status, foundAllCompleteSigil] = await Promise.all([
       child.status,
       pipeStream({
         stream: stdoutStream,
         output: Deno.stdout,
         marker: COMPLETION_MARKER,
+        onLine: guiOnLine,
       }),
-      pipeStream({ stream: stderrStream, output: Deno.stderr }),
+      pipeStream({
+        stream: stderrStream,
+        output: Deno.stderr,
+        onLine: guiOnLine,
+      }),
     ]);
 
     if (useInputBus) agentInputBus.unregister(workerIndex);
+    try {
+      workerLogFile?.close();
+    } catch { /* already closed */ }
 
     if (status.code !== 0) {
       log({

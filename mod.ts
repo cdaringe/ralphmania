@@ -61,7 +61,7 @@ import { resetAllWorktrees } from "./src/git/worktree.ts";
 import { computeExitCode } from "./src/exit.ts";
 import { createEventBus } from "./src/gui/events.ts";
 import { createGuiLogger } from "./src/gui/logger.ts";
-import { startGuiServer } from "./src/gui/server.ts";
+import { startGuiServer } from "./src/gui/server.tsx";
 import { createAgentInputBus } from "./src/gui/input-bus.ts";
 
 const printBanner = (

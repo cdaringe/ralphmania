@@ -1,7 +1,7 @@
 // Integration tests for startGuiServer POST /input/:workerId (GUI.d)
 import { assertEquals } from "jsr:@std/assert@^1";
 import { createAgentInputBus } from "./input-bus.ts";
-import { startGuiServer } from "./server.ts";
+import { startGuiServer } from "./server.tsx";
 import { createEventBus } from "./events.ts";
 
 // Ports unlikely to conflict with other test servers in parallel runs

@@ -589,23 +589,31 @@ export const transitionRunningWorkers = async (
 
     // Sequential merge — retry with -X theirs, then reconcile via agent
     for (const wr of results) {
+      const scenario = uniqueActionable[wr.workerIndex] ?? "unknown";
+      ctx.log({
+        tags: ["info", "orchestrator"],
+        message: `Merging worker ${wr.workerIndex} (${scenario})`,
+      });
       const has = await ctx.deps.hasNewCommits({
         worktree: wr.worktree,
         log: ctx.log,
       });
-      if (
-        has &&
-        await ctx.deps.mergeWorktree({
-            worktree: wr.worktree,
-            log: ctx.log,
-          }) === "conflict"
-      ) {
+      if (!has) {
+        ctx.log({
+          tags: ["info", "orchestrator"],
+          message: `Worker ${wr.workerIndex} merge: no-changes`,
+        });
+        continue;
+      }
+      const mergeResult = await ctx.deps.mergeWorktree({
+        worktree: wr.worktree,
+        log: ctx.log,
+      });
+      if (mergeResult === "conflict") {
         ctx.log({
           tags: ["info", "orchestrator"],
           message: yellow(
-            `Worker ${wr.workerIndex} scenario ${
-              uniqueActionable[wr.workerIndex]
-            }: entering agent reconciliation`,
+            `Worker ${wr.workerIndex} scenario ${scenario}: entering agent reconciliation`,
           ),
         });
         await ctx.deps.reconcileMerge({
@@ -613,6 +621,15 @@ export const transitionRunningWorkers = async (
           agent: ctx.agent,
           signal: ctx.signal,
           log: ctx.log,
+        });
+        ctx.log({
+          tags: ["info", "orchestrator"],
+          message: `Worker ${wr.workerIndex} merge: conflict`,
+        });
+      } else {
+        ctx.log({
+          tags: ["info", "orchestrator"],
+          message: `Worker ${wr.workerIndex} merge: merged`,
         });
       }
     }

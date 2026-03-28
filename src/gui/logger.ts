@@ -24,6 +24,12 @@ const WORKER_LAUNCH_RE = /launching \d+ worker\(s\) for scenarios \[([^\]]+)\]/;
 const WORKER_DONE_RE =
   /(?:resolved|still actionable) (?:by|after) worker (\d+)/;
 
+/** Matches "Merging worker N (scenarioId)" */
+const MERGE_START_RE = /^Merging worker (\d+) \((.+)\)$/;
+
+/** Matches "Worker N merge: merged|conflict|no-changes" */
+const MERGE_DONE_RE = /^Worker (\d+) merge: (merged|conflict|no-changes)$/;
+
 /**
  * Returns a Logger that calls `base` for normal output and additionally:
  * - emits a `log` GuiEvent for every message
@@ -72,6 +78,26 @@ export const createGuiLogger =
       bus.emit({
         type: "worker_done",
         workerIndex: parseInt(doneM[1], 10),
+        ts,
+      });
+    }
+    // Emit merge_start when a worker's worktree merge begins.
+    const mergeStartM = opts.message.match(MERGE_START_RE);
+    if (mergeStartM) {
+      bus.emit({
+        type: "merge_start",
+        workerIndex: parseInt(mergeStartM[1], 10),
+        scenario: mergeStartM[2],
+        ts,
+      });
+    }
+    // Emit merge_done when a worker's worktree merge completes.
+    const mergeDoneM = opts.message.match(MERGE_DONE_RE);
+    if (mergeDoneM) {
+      bus.emit({
+        type: "merge_done",
+        workerIndex: parseInt(mergeDoneM[1], 10),
+        outcome: mergeDoneM[2] as "merged" | "conflict" | "no-changes",
         ts,
       });
     }
