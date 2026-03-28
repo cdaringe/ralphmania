@@ -7,6 +7,7 @@
  * deno run -A mod.ts --iterations 10 --agent claude
  * deno run -A mod.ts --iterations 10 --agent codex
  * deno run -A mod.ts --iterations 10 --plugin ./my-plugin.ts
+ * deno run -A mod.ts serve receipts --open
  * ```
  *
  * @module
@@ -36,8 +37,8 @@ export { err, ok, VALID_AGENTS } from "./src/types.ts";
 
 import type { Agent, EscalationLevel } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
-import { parseCliArgsInteractive } from "./src/cli.ts";
-import { parseServeArgs, serveReceipts } from "./src/serve.ts";
+import { createCli, parseCliArgsInteractive } from "./src/cli.ts";
+import { serveReceipts } from "./src/serve.ts";
 import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { loadPlugin } from "./src/plugin.ts";
@@ -62,10 +63,12 @@ const printBanner = (
     level: EscalationLevel | undefined;
     parallel: number;
   },
-) => {
+): void => {
   const line = dim("─".repeat(46));
   const encoder = new TextEncoder();
-  const w = (s: string) => Deno.stdout.writeSync(encoder.encode(s));
+  const w = (s: string): void => {
+    Deno.stdout.writeSync(encoder.encode(s));
+  };
 
   w(`\n${line}\n`);
   w(`  ${bold(magenta("ralphmania"))} ${dim(`v${version}`)}\n`);
@@ -106,7 +109,7 @@ const printBanner = (
 
 const main = async (): Promise<number> => {
   const log = createLogger();
-  const parsed = await parseCliArgsInteractive(Deno.args);
+  const parsed = await parseCliArgsInteractive(Deno.args, version);
 
   if (!parsed.ok) {
     log({ tags: ["error"], message: parsed.error });
@@ -142,7 +145,7 @@ const main = async (): Promise<number> => {
   printBanner({ agent, iterations, level, parallel });
 
   const shutdownController = new AbortController();
-  const onSigint = () => {
+  const onSigint = (): void => {
     log({
       tags: ["error"],
       message: "Interrupted (ctrl+c again to force exit)",
@@ -215,24 +218,35 @@ const main = async (): Promise<number> => {
 };
 
 if (import.meta.main) {
-  // Handle `serve receipts [--open] [--port N]` subcommand
-  if (Deno.args[0] === "serve" && Deno.args[1] === "receipts") {
-    const { open, port } = parseServeArgs(Deno.args.slice(2));
-    serveReceipts({ open, port }).catch((error) => {
-      const log = createLogger();
-      log({ tags: ["error"], message: `Fatal error: ${error}` });
-      Deno.exit(1);
-    });
-  } else {
-    main().then(
-      (code) => {
-        Deno.exitCode = code;
-      },
-      (error) => {
+  const cli = createCli(version);
+
+  // Root command and explicit `run` subcommand: run the agentic loop
+  const runAction = async (): Promise<void> => {
+    Deno.exitCode = await main();
+  };
+  cli.action(runAction);
+  cli.getCommand("run")?.action(runAction);
+
+  // Subcommand: serve receipts
+  const serveCmd = cli.getCommand("serve");
+  const receiptsCmd = serveCmd?.getCommand("receipts");
+  receiptsCmd?.action(
+    // deno-lint-ignore no-explicit-any
+    async (options: any) => {
+      await serveReceipts({
+        open: options.open as boolean,
+        port: options.port as number,
+      }).catch((error) => {
         const log = createLogger();
         log({ tags: ["error"], message: `Fatal error: ${error}` });
         Deno.exit(1);
-      },
-    );
-  }
+      });
+    },
+  );
+
+  await cli.parse(Deno.args).catch((error) => {
+    const log = createLogger();
+    log({ tags: ["error"], message: `Fatal error: ${error}` });
+    Deno.exit(1);
+  });
 }

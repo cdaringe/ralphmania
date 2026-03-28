@@ -1,8 +1,8 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { parseCliArgs } from "../src/cli.ts";
 
-Deno.test("parseCliArgs with valid args", () => {
-  const result = parseCliArgs(["--iterations", "5", "--agent", "claude"]);
+Deno.test("parseCliArgs with valid args", async () => {
+  const result = await parseCliArgs(["--iterations", "5", "--agent", "claude"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.agent, "claude");
@@ -11,8 +11,8 @@ Deno.test("parseCliArgs with valid args", () => {
   }
 });
 
-Deno.test("parseCliArgs with short flags", () => {
-  const result = parseCliArgs(["-i", "3", "-a", "codex"]);
+Deno.test("parseCliArgs with short flags", async () => {
+  const result = await parseCliArgs(["-i", "3", "-a", "codex"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.agent, "codex");
@@ -20,90 +20,106 @@ Deno.test("parseCliArgs with short flags", () => {
   }
 });
 
-Deno.test("parseCliArgs with default agent", () => {
-  const result = parseCliArgs(["--iterations", "1"]);
+Deno.test("parseCliArgs with default agent", async () => {
+  const result = await parseCliArgs(["--iterations", "1"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.agent, "claude");
   }
 });
 
-Deno.test("parseCliArgs with plugin path", () => {
-  const result = parseCliArgs(["-i", "1", "-p", "./my-plugin.ts"]);
+Deno.test("parseCliArgs with plugin path", async () => {
+  const result = await parseCliArgs(["-i", "1", "-p", "./my-plugin.ts"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.pluginPath, "./my-plugin.ts");
   }
 });
 
-Deno.test("parseCliArgs with long plugin flag", () => {
-  const result = parseCliArgs(["-i", "1", "--plugin", "./plugin.ts"]);
+Deno.test("parseCliArgs with long plugin flag", async () => {
+  const result = await parseCliArgs(["-i", "1", "--plugin", "./plugin.ts"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.pluginPath, "./plugin.ts");
   }
 });
 
-Deno.test("parseCliArgs missing iterations", () => {
-  const result = parseCliArgs(["--agent", "claude"]);
+Deno.test("parseCliArgs missing iterations", async () => {
+  const result = await parseCliArgs(["--agent", "claude"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs invalid agent", () => {
-  const result = parseCliArgs(["-i", "5", "-a", "gpt"]);
+Deno.test("parseCliArgs invalid agent", async () => {
+  const result = await parseCliArgs(["-i", "5", "-a", "gpt"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs iterations < 1", () => {
-  const result = parseCliArgs(["-i", "0"]);
+Deno.test("parseCliArgs iterations < 1", async () => {
+  const result = await parseCliArgs(["-i", "0"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs negative iterations", () => {
-  const result = parseCliArgs(["-i", "-1"]);
+Deno.test("parseCliArgs negative iterations", async () => {
+  const result = await parseCliArgs(["-i", "-1"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs with --level", () => {
-  const result = parseCliArgs(["-i", "5", "--level", "1"]);
+Deno.test("parseCliArgs with --level", async () => {
+  const result = await parseCliArgs(["-i", "5", "--level", "1"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.level, 1);
   }
 });
 
-Deno.test("parseCliArgs with -l shorthand", () => {
-  const result = parseCliArgs(["-i", "5", "-l", "0"]);
+Deno.test("parseCliArgs with -l shorthand", async () => {
+  const result = await parseCliArgs(["-i", "5", "-l", "0"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.level, 0);
   }
 });
 
-Deno.test("parseCliArgs level defaults to undefined", () => {
-  const result = parseCliArgs(["-i", "5"]);
+Deno.test("parseCliArgs level defaults to undefined", async () => {
+  const result = await parseCliArgs(["-i", "5"]);
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.value.level, undefined);
   }
 });
 
-Deno.test("parseCliArgs invalid level returns error", () => {
-  const result = parseCliArgs(["-i", "5", "-l", "9"]);
+Deno.test("parseCliArgs invalid level returns error", async () => {
+  const result = await parseCliArgs(["-i", "5", "-l", "9"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs level 4 returns error", () => {
-  const result = parseCliArgs(["-i", "5", "-l", "4"]);
+Deno.test("parseCliArgs level 4 returns error", async () => {
+  const result = await parseCliArgs(["-i", "5", "-l", "4"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs --help returns usage", () => {
-  const result = parseCliArgs(["--help"]);
+Deno.test("parseCliArgs --help returns error", async () => {
+  const result = await parseCliArgs(["--help"]);
   assertEquals(result.ok, false);
 });
 
-Deno.test("parseCliArgs -h returns usage", () => {
-  const result = parseCliArgs(["-h"]);
+Deno.test("parseCliArgs -h returns error", async () => {
+  const result = await parseCliArgs(["-h"]);
   assertEquals(result.ok, false);
+});
+
+Deno.test("parseCliArgs default parallel is 2", async () => {
+  const result = await parseCliArgs(["-i", "5"]);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.parallel, 2);
+  }
+});
+
+Deno.test("parseCliArgs custom parallel", async () => {
+  const result = await parseCliArgs(["-i", "5", "-P", "4"]);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.value.parallel, 4);
+  }
 });

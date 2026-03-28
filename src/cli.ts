@@ -1,5 +1,5 @@
 // coverage:ignore — CLI entry point with process-level orchestration and interactive prompts
-import { parseArgs } from "jsr:@std/cli@1/parse-args";
+import { Command, EnumType, ValidationError } from "@cliffy/command";
 import {
   type Agent,
   err,
@@ -8,10 +8,7 @@ import {
   type Result,
   VALID_AGENTS,
 } from "./types.ts";
-import { USAGE } from "./constants.ts";
 import { bold, cyan, dim, green, yellow } from "./colors.ts";
-
-const isAgent = (s: string): s is Agent => VALID_AGENTS.some((a) => a === s);
 
 export type CliConfig = {
   agent: Agent;
@@ -21,112 +18,170 @@ export type CliConfig = {
   parallel: number;
 };
 
-const parseLevel = (
-  raw: unknown,
-): Result<EscalationLevel | undefined, string> => {
-  if (raw === undefined || raw === "") return ok(undefined);
-  const n = parseInt(String(raw), 10);
-  return n >= 0 && n <= 1
-    ? ok(n as EscalationLevel)
-    : err(`Invalid --level: ${raw} (must be 0-1)`);
+const agentType = new EnumType(VALID_AGENTS);
+
+const isAgent = (s: string): s is Agent => VALID_AGENTS.some((a) => a === s);
+
+const validateLevel = (v: number): number => {
+  if (v < 0 || v > 1) throw new ValidationError("level must be 0 or 1");
+  return v;
 };
 
-export const parseCliArgs = (
-  rawArgs: string[],
-): Result<CliConfig, string> => {
-  const args = parseArgs(rawArgs, {
-    boolean: ["help"],
-    string: ["agent", "iterations", "plugin", "level", "parallel"],
-    alias: {
-      a: "agent",
-      i: "iterations",
-      p: "plugin",
-      l: "level",
-      h: "help",
-      P: "parallel",
-    },
-    default: { agent: "claude" },
-  });
-
-  if (args.help) return err(USAGE);
-
-  const agent = String(args.agent).toLowerCase();
-  const iterations = parseInt(String(args.iterations ?? ""), 10);
-  const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
-  const levelResult = parseLevel(args.level);
-  const parallel = parseInt(String(args.parallel ?? "1"), 10);
-
-  return !levelResult.ok
-    ? levelResult
-    : !isAgent(agent) || !iterations || isNaN(iterations) || iterations < 1
-    ? err(USAGE)
-    : isNaN(parallel) || parallel < 1
-    ? err(`Invalid --parallel: ${args.parallel} (must be >= 1)`)
-    : ok({
-      agent,
-      iterations,
-      pluginPath,
-      level: levelResult.value,
-      parallel,
+/** Apply the shared run-command options to a Command. */
+const withRunOptions = <T extends Command>(cmd: T) =>
+  cmd
+    .type("agent", agentType)
+    .option(
+      "-i, --iterations <count:integer>",
+      "Number of agentic loop iterations.",
+    )
+    .option("-a, --agent <name:agent>", "Agent backend.", {
+      default: "claude" as const,
+    })
+    .option("-p, --plugin <path:string>", "Path to a plugin module.")
+    .option(
+      "-l, --level <level:integer>",
+      "Starting escalation level (0=coder/verifier, 1=escalated).",
+      { value: validateLevel },
+    )
+    .option("-P, --parallel <count:integer>", "Number of parallel workers.", {
+      default: 2,
     });
+
+/** Build the CLI command tree. Version is injected to avoid circular imports. */
+// deno-lint-ignore explicit-module-boundary-types
+export const createCli = (version: string) =>
+  withRunOptions(
+    new Command()
+      .name("ralphmania")
+      .version(version)
+      .description(
+        "Run an AI agent in a loop until a specification is complete.",
+      ),
+  )
+    .command(
+      "run",
+      withRunOptions(
+        new Command()
+          .description("Run the agentic loop (default command)."),
+      ),
+    )
+    .command(
+      "serve",
+      new Command()
+        .description("Serve generated artifacts.")
+        .command(
+          "receipts",
+          new Command()
+            .description(
+              "Serve evidence receipts as a static HTTP site.",
+            )
+            .option("-o, --open [open:boolean]", "Open in browser.", {
+              default: false,
+            })
+            .option("--port <port:integer>", "Server port.", {
+              default: 8421,
+            }),
+        ),
+    );
+
+// deno-lint-ignore no-explicit-any
+type ParsedOptions = Record<string, any>;
+
+const toCliConfig = (options: ParsedOptions): Result<CliConfig, string> => {
+  const agent = String(options.agent ?? "claude").toLowerCase();
+  if (!isAgent(agent)) return err("invalid agent");
+
+  const iterations = options.iterations as number | undefined;
+  if (!iterations || iterations < 1) return err("iterations required");
+
+  return ok({
+    agent,
+    iterations,
+    pluginPath: options.plugin as string | undefined,
+    level: options.level as EscalationLevel | undefined,
+    parallel: (options.parallel as number | undefined) ?? 2,
+  });
+};
+
+/**
+ * Parse CLI args non-interactively. Returns a Result.
+ * --help and --version cause cliffy to throw (via throwErrors), yielding err.
+ */
+export const parseCliArgs = async (
+  rawArgs: string[],
+  version = "0.0.0",
+): Promise<Result<CliConfig, string>> => {
+  const prevExitCode = Deno.exitCode;
+  try {
+    const { options, cmd } = await createCli(version)
+      .noExit()
+      .throwErrors()
+      .parse(rawArgs);
+
+    const name = cmd.getName();
+    if (name !== "ralphmania" && name !== "run") {
+      return err("subcommand matched");
+    }
+    return toCliConfig(options);
+  } catch {
+    return err("parse error");
+  } finally {
+    Deno.exitCode = prevExitCode;
+  }
 };
 
 /** Parse CLI args, prompting interactively for missing values when running in a TTY. */
 export const parseCliArgsInteractive = async (
   rawArgs: string[],
+  version = "0.0.0",
 ): Promise<Result<CliConfig, string>> => {
-  const args = parseArgs(rawArgs, {
-    boolean: ["help"],
-    string: ["agent", "iterations", "plugin", "level", "parallel"],
-    alias: {
-      a: "agent",
-      i: "iterations",
-      p: "plugin",
-      l: "level",
-      h: "help",
-      P: "parallel",
-    },
-  });
+  const prevExitCode = Deno.exitCode;
+  try {
+    const { options } = await createCli(version)
+      .noExit()
+      .throwErrors()
+      .parse(rawArgs);
 
-  if (args.help) return err(USAGE);
+    const isTTY = Deno.stdin.isTerminal();
+    const pluginPath = options.plugin as string | undefined;
+    const level = options.level as EscalationLevel | undefined;
+    const parallel = (options.parallel as number | undefined) ?? 2;
 
-  const pluginPath = typeof args.plugin === "string" ? args.plugin : undefined;
-  const levelResult = parseLevel(args.level);
-  if (!levelResult.ok) return levelResult;
-  const level = levelResult.value;
-  const parallel = parseInt(String(args.parallel ?? "2"), 10);
-  if (isNaN(parallel) || parallel < 1) {
-    return err(`Invalid --parallel: ${args.parallel} (must be >= 1)`);
+    // Resolve agent
+    let agent: string = String(options.agent ?? "").toLowerCase();
+    if (!isAgent(agent)) {
+      if (!isTTY) return err("agent required");
+      agent = await promptSelect({
+        message: "Select agent backend",
+        options: [...VALID_AGENTS],
+        defaultValue: "claude",
+      });
+    }
+    if (!isAgent(agent)) return err("invalid agent");
+
+    // Resolve iterations
+    let iterations = options.iterations as number | undefined;
+    if (!iterations || iterations < 1) {
+      if (!isTTY) return err("iterations required");
+      iterations = await promptNumber({
+        message: "Number of iterations",
+        defaultValue: 10,
+        min: 1,
+      });
+    }
+
+    return ok({ agent, iterations, pluginPath, level, parallel });
+  } catch {
+    return err("parse error");
+  } finally {
+    Deno.exitCode = prevExitCode;
   }
-  const isTTY = Deno.stdin.isTerminal();
-
-  // Resolve agent
-  let agent: string = String(args.agent ?? "").toLowerCase();
-  if (!isAgent(agent)) {
-    if (!isTTY) return err(USAGE);
-    agent = await promptSelect({
-      message: "Select agent backend",
-      options: [...VALID_AGENTS],
-      defaultValue: "claude",
-    });
-  }
-  if (!isAgent(agent)) return err(USAGE);
-
-  // Resolve iterations
-  let iterations = parseInt(String(args.iterations ?? ""), 10);
-  if (!iterations || isNaN(iterations) || iterations < 1) {
-    if (!isTTY) return err(USAGE);
-    iterations = await promptNumber({
-      message: "Number of iterations",
-      defaultValue: 10,
-      min: 1,
-    });
-  }
-
-  return ok({ agent, iterations, pluginPath, level, parallel });
 };
 
-const write = (s: string) => Deno.stdout.writeSync(new TextEncoder().encode(s));
+const write = (s: string): void => {
+  Deno.stdout.writeSync(new TextEncoder().encode(s));
+};
 
 const readLine = async (): Promise<string> => {
   const buf = new Uint8Array(1024);

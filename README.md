@@ -8,6 +8,7 @@ verified."
 deno run -A jsr:@cdaringe/ralphmania -i 10
 deno run -A jsr:@cdaringe/ralphmania -i 10 [-a claude|codex]
 deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
+deno run -A jsr:@cdaringe/ralphmania serve receipts [--open] [--port 8421]
 ```
 
 - ✅ Good for projects where the specifications are evolving or not fully baked.

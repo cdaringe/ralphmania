@@ -1,36 +1,49 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
-import { parseServeArgs, serveReceipts } from "../src/serve.ts";
+import { serveReceipts } from "../src/serve.ts";
+import { createCli } from "../src/cli.ts";
 
-Deno.test("parseServeArgs defaults", () => {
-  const result = parseServeArgs([]);
-  assertEquals(result.open, false);
-  assertEquals(result.port, 8421);
+Deno.test("createCli parses serve receipts defaults", async () => {
+  const { options, cmd } = await createCli("0.0.0")
+    .noExit()
+    .throwErrors()
+    .parse(["serve", "receipts"]);
+  assertEquals(cmd.getName(), "receipts");
+  assertEquals(options.open, false);
+  assertEquals(options.port, 8421);
 });
 
-Deno.test("parseServeArgs --open flag", () => {
-  const result = parseServeArgs(["--open"]);
-  assertEquals(result.open, true);
+Deno.test("createCli parses serve receipts --open", async () => {
+  const { options, cmd } = await createCli("0.0.0")
+    .noExit()
+    .throwErrors()
+    .parse(["serve", "receipts", "--open"]);
+  assertEquals(cmd.getName(), "receipts");
+  assertEquals(options.open, true);
 });
 
-Deno.test("parseServeArgs -o short flag", () => {
-  const result = parseServeArgs(["-o"]);
-  assertEquals(result.open, true);
+Deno.test("createCli parses serve receipts -o short flag", async () => {
+  const { options } = await createCli("0.0.0")
+    .noExit()
+    .throwErrors()
+    .parse(["serve", "receipts", "-o"]);
+  assertEquals(options.open, true);
 });
 
-Deno.test("parseServeArgs --port flag", () => {
-  const result = parseServeArgs(["--port", "9000"]);
-  assertEquals(result.port, 9000);
+Deno.test("createCli parses serve receipts --port", async () => {
+  const { options } = await createCli("0.0.0")
+    .noExit()
+    .throwErrors()
+    .parse(["serve", "receipts", "--port", "9000"]);
+  assertEquals(options.port, 9000);
 });
 
-Deno.test("parseServeArgs --open and --port together", () => {
-  const result = parseServeArgs(["--open", "--port", "3000"]);
-  assertEquals(result.open, true);
-  assertEquals(result.port, 3000);
-});
-
-Deno.test("parseServeArgs invalid port falls back to default", () => {
-  const result = parseServeArgs(["--port", "abc"]);
-  assertEquals(result.port, 8421);
+Deno.test("createCli parses serve receipts --open and --port", async () => {
+  const { options } = await createCli("0.0.0")
+    .noExit()
+    .throwErrors()
+    .parse(["serve", "receipts", "--open", "--port", "3000"]);
+  assertEquals(options.open, true);
+  assertEquals(options.port, 3000);
 });
 
 Deno.test("serveReceipts serves files from receiptsDir", async () => {

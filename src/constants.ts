@@ -41,16 +41,6 @@ export type ScenarioStatus = (typeof VALID_STATUSES)[number];
 export const WORKTREE_BASE_DIR = ".ralph/worktrees";
 export const RECONCILE_TIMEOUT_MS = 10 * 60 * 1000;
 
-export const USAGE =
-  `Usage: deno run mod.ts --iterations <n> [--agent claude|codex] [--plugin <path>] [--level 0-1] [--parallel <n>]
-
-Options:
-  -i, --iterations <n>       Number of agentic loop iterations (required)
-  -a, --agent <name>         Agent backend: claude (default) or codex
-  -p, --plugin <path>        Path to a plugin module
-  -l, --level <0-1>          Starting escalation level for the Claude model ladder
-                             (0=coder/verifier, 1=escalated)
-  -P, --parallel <n>         Number of parallel workers (default: 1)`;
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";
 export const VALIDATE_SCRIPT = "specification.validate.sh";
 export const VALIDATE_OUTPUT_DIR = ".ralph/validation";

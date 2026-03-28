@@ -1,5 +1,4 @@
 // coverage:ignore — Network server and OS browser-open requiring system integration
-import { parseArgs } from "jsr:@std/cli@1/parse-args";
 import { extname } from "jsr:@std/path@1";
 import { RALPH_RECEIPTS_DIRNAME } from "./constants.ts";
 import type { Logger } from "./types.ts";
@@ -29,20 +28,6 @@ export type ServeOptions = {
   log?: Logger;
   /** If provided, server runs until aborted (useful for tests) */
   signal?: AbortSignal;
-};
-
-/** Parse serve-subcommand args (everything after "serve receipts"). */
-export const parseServeArgs = (
-  rawArgs: string[],
-): { open: boolean; port: number } => {
-  const args = parseArgs(rawArgs, {
-    boolean: ["open"],
-    string: ["port"],
-    alias: { o: "open" },
-    default: { open: false, port: "8421" },
-  });
-  const port = parseInt(String(args.port), 10);
-  return { open: args.open as boolean, port: isNaN(port) ? 8421 : port };
 };
 
 /** Serve the receipts directory as a static HTTP site. */
