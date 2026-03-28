@@ -48,42 +48,53 @@ const withRunOptions = <T extends Command>(cmd: T) =>
       default: 2,
     });
 
-/** Build the CLI command tree. Version is injected to avoid circular imports. */
+export type CliActions = {
+  // deno-lint-ignore no-explicit-any
+  onRun?: (...args: any[]) => void | Promise<void>;
+  // deno-lint-ignore no-explicit-any
+  onServeReceipts?: (...args: any[]) => void | Promise<void>;
+};
+
+/**
+ * Build the CLI command tree. Version is injected to avoid circular imports.
+ * Actions must be provided here because cliffy requires `.action()` before `.command()`.
+ */
 // deno-lint-ignore explicit-module-boundary-types
-export const createCli = (version: string) =>
-  withRunOptions(
+export const createCli = (version: string, actions: CliActions = {}) => {
+  const runCmd = withRunOptions(
+    new Command().description("Run the agentic loop (default command)."),
+  );
+  if (actions.onRun) runCmd.action(actions.onRun);
+
+  const receiptsCmd = new Command()
+    .description("Serve evidence receipts as a static HTTP site.")
+    .option("-o, --open [open:boolean]", "Open in browser.", {
+      default: false,
+    })
+    .option("--port <port:integer>", "Server port.", {
+      default: 8421,
+    });
+  if (actions.onServeReceipts) receiptsCmd.action(actions.onServeReceipts);
+
+  const root = withRunOptions(
     new Command()
       .name("ralphmania")
       .version(version)
       .description(
         "Run an AI agent in a loop until a specification is complete.",
       ),
-  )
-    .command(
-      "run",
-      withRunOptions(
-        new Command()
-          .description("Run the agentic loop (default command)."),
-      ),
-    )
+  );
+  if (actions.onRun) root.action(actions.onRun);
+
+  return root
+    .command("run", runCmd)
     .command(
       "serve",
       new Command()
         .description("Serve generated artifacts.")
-        .command(
-          "receipts",
-          new Command()
-            .description(
-              "Serve evidence receipts as a static HTTP site.",
-            )
-            .option("-o, --open [open:boolean]", "Open in browser.", {
-              default: false,
-            })
-            .option("--port <port:integer>", "Server port.", {
-              default: 8421,
-            }),
-        ),
+        .command("receipts", receiptsCmd),
     );
+};
 
 // deno-lint-ignore no-explicit-any
 type ParsedOptions = Record<string, any>;

@@ -218,21 +218,12 @@ const main = async (): Promise<number> => {
 };
 
 if (import.meta.main) {
-  const cli = createCli(version);
-
-  // Root command and explicit `run` subcommand: run the agentic loop
-  const runAction = async (): Promise<void> => {
-    Deno.exitCode = await main();
-  };
-  cli.action(runAction);
-  cli.getCommand("run")?.action(runAction);
-
-  // Subcommand: serve receipts
-  const serveCmd = cli.getCommand("serve");
-  const receiptsCmd = serveCmd?.getCommand("receipts");
-  receiptsCmd?.action(
+  const cli = createCli(version, {
+    onRun: async () => {
+      Deno.exitCode = await main();
+    },
     // deno-lint-ignore no-explicit-any
-    async (options: any) => {
+    onServeReceipts: async (options: any) => {
       await serveReceipts({
         open: options.open as boolean,
         port: options.port as number,
@@ -242,7 +233,7 @@ if (import.meta.main) {
         Deno.exit(1);
       });
     },
-  );
+  });
 
   await cli.parse(Deno.args).catch((error) => {
     const log = createLogger();
