@@ -1,4 +1,3 @@
-// coverage:ignore — Defensive .catch branches for file I/O unreachable in test environment
 import type { Logger } from "./types.ts";
 import { parseProgressRows } from "./parsers/progress-rows.ts";
 
@@ -45,13 +44,34 @@ export const DEFAULT_FILE_PATHS: FilePaths = {
   progressFile: PROGRESS_FILE,
 };
 
+/**
+ * File I/O port for progress file operations.
+ * Inject a custom implementation in tests to avoid real filesystem access
+ * and keep domain logic portable (hexagonal architecture).
+ */
+export type ProgressFileDeps = {
+  readonly readTextFile: (path: string) => Promise<string>;
+  readonly writeTextFile: (path: string, content: string) => Promise<void>;
+  /** Resolves if file exists, rejects if not. Return value is unused. */
+  readonly stat: (path: string) => Promise<unknown>;
+};
+
+/* c8 ignore start — thin Deno I/O wiring */
+const defaultProgressFileDeps: ProgressFileDeps = {
+  readTextFile: (path) => Deno.readTextFile(path),
+  writeTextFile: (path, content) => Deno.writeTextFile(path, content),
+  stat: (path) => Deno.stat(path),
+};
+/* c8 ignore stop */
+
 const writeProgressTemplate = async (
   log: Logger,
   paths: FilePaths,
+  io: ProgressFileDeps,
 ): Promise<void> => {
-  const specContent = await Deno.readTextFile(paths.specFile).catch(() => "");
+  const specContent = await io.readTextFile(paths.specFile).catch(() => "");
   const count = parseScenarioCount(specContent) || 10;
-  await Deno.writeTextFile(paths.progressFile, generateProgressTemplate(count));
+  await io.writeTextFile(paths.progressFile, generateProgressTemplate(count));
   log({
     tags: ["info", "progress"],
     message:
@@ -62,12 +82,13 @@ const writeProgressTemplate = async (
 const syncProgressWithSpec = async (
   log: Logger,
   paths: FilePaths,
+  io: ProgressFileDeps,
 ): Promise<void> => {
-  const specContent = await Deno.readTextFile(paths.specFile).catch(() => "");
+  const specContent = await io.readTextFile(paths.specFile).catch(() => "");
   const specCount = parseScenarioCount(specContent);
   if (specCount === 0) return;
 
-  const progressContent = await Deno.readTextFile(paths.progressFile).catch(
+  const progressContent = await io.readTextFile(paths.progressFile).catch(
     () => "",
   );
   const progressCount = parseScenarioCount(progressContent);
@@ -83,7 +104,7 @@ const syncProgressWithSpec = async (
       } |          |                                                                                                        |              |`;
     },
   ).join("\n");
-  await Deno.writeTextFile(
+  await io.writeTextFile(
     paths.progressFile,
     progressContent.trimEnd() + "\n" + newRows + "\n",
   );
@@ -103,11 +124,12 @@ const syncProgressWithSpec = async (
 export const ensureProgressFile = async (
   log: Logger,
   paths: FilePaths = DEFAULT_FILE_PATHS,
+  io: ProgressFileDeps = defaultProgressFileDeps,
 ): Promise<void> => {
   try {
-    await Deno.stat(paths.progressFile);
-    await syncProgressWithSpec(log, paths);
+    await io.stat(paths.progressFile);
+    await syncProgressWithSpec(log, paths, io);
   } catch {
-    await writeProgressTemplate(log, paths);
+    await writeProgressTemplate(log, paths, io);
   }
 };
