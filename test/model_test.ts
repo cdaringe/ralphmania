@@ -1,9 +1,11 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import {
+  computeEffectiveLevel,
   computeModelSelection,
   detectScenarioFromProgress,
   findReworkScenarios,
   getModel,
+  orderActionableScenarios,
   parseImplementedCount,
   parseTotalCount,
   updateEscalationState,
@@ -600,4 +602,77 @@ Deno.test("resolveModelSelection codex logs status for no rework", async () => {
     messages.some((m) => m.includes("implemented")),
     true,
   );
+});
+
+// ---------------------------------------------------------------------------
+// orderActionableScenarios
+// ---------------------------------------------------------------------------
+
+Deno.test("orderActionableScenarios: NEEDS_REWORK scenarios sort first", () => {
+  const rows = [
+    { scenario: "1", status: "NEEDS_REWORK", summary: "", reworkNotes: "" },
+    { scenario: "2", status: "", summary: "", reworkNotes: "" },
+    { scenario: "3", status: "VERIFIED", summary: "", reworkNotes: "" },
+  ];
+  const result = orderActionableScenarios(rows, ["1", "2", "3"]);
+  assertEquals(result, ["1", "2"]);
+});
+
+Deno.test("orderActionableScenarios: excludes VERIFIED and OBSOLETE", () => {
+  const rows = [
+    { scenario: "1", status: "VERIFIED", summary: "", reworkNotes: "" },
+    { scenario: "2", status: "OBSOLETE", summary: "", reworkNotes: "" },
+    { scenario: "3", status: "", summary: "", reworkNotes: "" },
+  ];
+  const result = orderActionableScenarios(rows, ["1", "2", "3"]);
+  assertEquals(result, ["3"]);
+});
+
+Deno.test("orderActionableScenarios: preserves spec order within each priority group", () => {
+  const rows = [
+    { scenario: "b", status: "NEEDS_REWORK", summary: "", reworkNotes: "" },
+    { scenario: "a", status: "NEEDS_REWORK", summary: "", reworkNotes: "" },
+    { scenario: "d", status: "", summary: "", reworkNotes: "" },
+    { scenario: "c", status: "", summary: "", reworkNotes: "" },
+  ];
+  const result = orderActionableScenarios(rows, ["a", "b", "c", "d"]);
+  // rework-first: a and b first (in specIds order), then c and d
+  assertEquals(result, ["a", "b", "c", "d"]);
+});
+
+Deno.test("orderActionableScenarios: returns empty when all done", () => {
+  const rows = [
+    { scenario: "1", status: "VERIFIED", summary: "", reworkNotes: "" },
+    { scenario: "2", status: "OBSOLETE", summary: "", reworkNotes: "" },
+  ];
+  const result = orderActionableScenarios(rows, ["1", "2"]);
+  assertEquals(result, []);
+});
+
+// ---------------------------------------------------------------------------
+// computeEffectiveLevel
+// ---------------------------------------------------------------------------
+
+Deno.test("computeEffectiveLevel: returns 0 when both minLevel and scenario level are 0", () => {
+  assertEquals(computeEffectiveLevel("1", { "1": 0 }, 0), 0);
+});
+
+Deno.test("computeEffectiveLevel: scenario level 1 overrides minLevel 0", () => {
+  assertEquals(computeEffectiveLevel("1", { "1": 1 }, 0), 1);
+});
+
+Deno.test("computeEffectiveLevel: minLevel 1 overrides scenario level 0", () => {
+  assertEquals(computeEffectiveLevel("1", { "1": 0 }, 1), 1);
+});
+
+Deno.test("computeEffectiveLevel: undefined scenario returns 0 when minLevel is 0", () => {
+  assertEquals(computeEffectiveLevel(undefined, {}, 0), 0);
+});
+
+Deno.test("computeEffectiveLevel: undefined scenario uses minLevel", () => {
+  assertEquals(computeEffectiveLevel(undefined, {}, 1), 1);
+});
+
+Deno.test("computeEffectiveLevel: missing scenario in state defaults to 0", () => {
+  assertEquals(computeEffectiveLevel("99", {}, undefined), 0);
 });

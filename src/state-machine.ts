@@ -19,8 +19,10 @@ import type {
 import type { WorktreeInfo } from "./worktree.ts";
 import type { Plugin } from "./plugin.ts";
 import {
+  computeEffectiveLevel,
   findActionableScenarios,
   isAllVerified,
+  orderActionableScenarios,
   parseProgressRows,
   updateEscalationState,
   validateProgressStatuses,
@@ -296,18 +298,7 @@ export const transitionFindingActionable = async (
     });
   }
 
-  const doneIds = rows
-    .filter((r) => r.status === Status.VERIFIED || r.status === Status.OBSOLETE)
-    .map((r) => r.scenario);
-  const reworkIds = new Set(
-    rows.filter((r) => r.status === Status.NEEDS_REWORK).map((r) => r.scenario),
-  );
-  const actionable = [...difference(specIds, doneIds)];
-  // Rework scenarios first, then the rest
-  const uniqueActionable = [
-    ...actionable.filter((s) => reworkIds.has(s)),
-    ...actionable.filter((s) => !reworkIds.has(s)),
-  ];
+  const uniqueActionable = orderActionableScenarios(rows, specIds);
 
   if (uniqueActionable.length === 0 && !state.validationFailurePath) {
     ctx.log({
@@ -347,9 +338,12 @@ export const transitionFindingActionable = async (
   }
 
   const currentEscalation = await ctx.deps.readEscalationState(ctx.log);
+  const reworkScenarios = rows
+    .filter((r) => r.status === Status.NEEDS_REWORK)
+    .map((r) => r.scenario);
   const newEscalation = updateEscalationState({
     current: currentEscalation,
-    reworkScenarios: [...reworkIds],
+    reworkScenarios,
   });
   await ctx.deps.writeEscalationState(newEscalation, ctx.log);
 
@@ -422,13 +416,11 @@ export const transitionRunningWorkers = async (
     results = await Promise.all(
       worktrees.map((wt, i) => {
         const scenario = uniqueActionable[i];
-        const scenarioEscalation = scenario !== undefined
-          ? escalation[String(scenario)] ?? 0
-          : 0;
-        const effectiveLevel = Math.max(
-          ctx.level ?? 0,
-          scenarioEscalation,
-        ) as EscalationLevel;
+        const effectiveLevel = computeEffectiveLevel(
+          scenario,
+          escalation,
+          ctx.level,
+        );
         const wLog = prefixLog(ctx.log, i);
         return ctx.deps.runIteration({
           iterationNum: iterationsUsed,

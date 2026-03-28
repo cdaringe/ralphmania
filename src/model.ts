@@ -19,6 +19,7 @@ import {
 } from "./constants.ts";
 export { parseProgressRows } from "./parsers/progress-rows.ts";
 export type { ProgressRow } from "./parsers/progress-rows.ts";
+import type { ProgressRow } from "./parsers/progress-rows.ts";
 import { parseProgressRows } from "./parsers/progress-rows.ts";
 
 /** Injectable I/O deps for model resolution functions. */
@@ -94,6 +95,49 @@ export const updateEscalationState = (
       clampLevel(current[key] !== undefined ? current[key] + 1 : 1),
     ]),
   );
+
+/**
+ * Derive the ordered actionable scenario list from parsed progress rows.
+ * NEEDS_REWORK scenarios sort first so rework work is prioritised.
+ * Pure derivation — no I/O.
+ */
+export const orderActionableScenarios = (
+  rows: ProgressRow[],
+  specIds: readonly string[],
+): string[] => {
+  const doneSet = new Set(
+    rows
+      .filter((r) =>
+        r.status === Status.VERIFIED || r.status === Status.OBSOLETE
+      )
+      .map((r) => r.scenario),
+  );
+  const reworkIds = new Set(
+    rows.filter((r) => r.status === Status.NEEDS_REWORK).map((r) => r.scenario),
+  );
+  const actionable = specIds.filter((id) => !doneSet.has(id));
+  return [
+    ...actionable.filter((s) => reworkIds.has(s)),
+    ...actionable.filter((s) => !reworkIds.has(s)),
+  ];
+};
+
+/**
+ * Compute the effective escalation level for a given scenario by combining
+ * the per-scenario state from `.ralph/escalation.json` with the operator's
+ * floor (`minLevel`). Result is clamped to the binary {@link EscalationLevel}
+ * range (0 | 1). Pure derivation — no I/O.
+ */
+export const computeEffectiveLevel = (
+  scenario: string | undefined,
+  escalation: EscalationState,
+  minLevel: EscalationLevel | undefined,
+): EscalationLevel => {
+  const scenarioLevel = scenario !== undefined
+    ? (escalation[scenario] ?? 0)
+    : 0;
+  return clampLevel(Math.max(minLevel ?? 0, scenarioLevel));
+};
 
 export const computeModelSelection = (
   { content, agent, escalationLevel, isVerifierMode }: {

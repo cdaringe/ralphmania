@@ -40,6 +40,9 @@ See `docs/scenarios/` for all scenario write-ups. Scenario status tracked in
 
 Notable implementations:
 
+- ARCH.2: `src/model.ts` owns all derivations — `orderActionableScenarios`
+  (rework-first ordering) and `computeEffectiveLevel` (escalation merge);
+  pipeline stages in `state-machine.ts` are thin orchestrators only
 - Scenario 33: `src/runner.ts` `workerPrefix`/`linePrefixTransform` — per-line
   colored terminal prefix
 - Scenario 27: parallel workers prescribed distinct scenarios by orchestrator
