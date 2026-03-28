@@ -349,6 +349,71 @@ Deno.test("transitionRunningWorkers writes agent checkpoint", async () => {
   assertEquals(checkpoints[0]?.step, "agent");
 });
 
+Deno.test("transitionRunningWorkers worker validation failure persists escalation state", async () => {
+  let writtenEscalation: EscalationState = {};
+  const rerunLevels: (number | undefined)[] = [];
+  let callCount = 0;
+  const ctx = makeCtx({
+    deps: stubDeps({
+      runIteration: (opts) => {
+        callCount++;
+        // Second call is the re-run after validation failure
+        if (callCount === 2) rerunLevels.push(opts.level);
+        return Promise.resolve({ status: "continue" });
+      },
+      runValidation: () =>
+        Promise.resolve({
+          status: "failed" as const,
+          outputPath: "/tmp/wt-fail.log",
+        }),
+      writeEscalationState: (s) => {
+        writtenEscalation = s;
+        return Promise.resolve();
+      },
+    }),
+  });
+  const state: RunningWorkersState = {
+    tag: "running_workers",
+    iterationsUsed: 0,
+    validationFailurePath: undefined,
+    uniqueActionable: ["1.1"],
+    escalation: {},
+  };
+  await transitionRunningWorkers(state, ctx);
+  // Escalation should include the failed scenario at level 1
+  assertEquals(writtenEscalation["1.1"], 1);
+  // Re-run should use the escalated level
+  assertEquals(rerunLevels, [1]);
+});
+
+Deno.test("transitionRunningWorkers worker validation failure re-run receives validationFailurePath", async () => {
+  let rerunFailurePath: string | undefined;
+  let callCount = 0;
+  const ctx = makeCtx({
+    deps: stubDeps({
+      runIteration: (opts) => {
+        callCount++;
+        if (callCount === 2) rerunFailurePath = opts.validationFailurePath;
+        return Promise.resolve({ status: "continue" });
+      },
+      runValidation: () =>
+        Promise.resolve({
+          status: "failed" as const,
+          outputPath: "/tmp/wt-fail.log",
+        }),
+    }),
+  });
+  const state: RunningWorkersState = {
+    tag: "running_workers",
+    iterationsUsed: 0,
+    validationFailurePath: undefined,
+    uniqueActionable: ["1.1"],
+    escalation: {},
+  };
+  await transitionRunningWorkers(state, ctx);
+  assertEquals(rerunFailurePath, "/tmp/wt-fail.log");
+});
+
 // ---------------------------------------------------------------------------
 // transitionValidating
 // ---------------------------------------------------------------------------

@@ -406,10 +406,26 @@ export const transitionFindingActionable = async (
   const reworkScenarios = rows
     .filter((r) => r.status === Status.NEEDS_REWORK)
     .map((r) => r.scenario);
-  const newEscalation = updateEscalationState({
+  const reworkUpdated = updateEscalationState({
     current: currentEscalation,
     reworkScenarios,
   });
+  // Preserve escalation from worker validation failures for scenarios
+  // that haven't been resolved — only clear resolved (VERIFIED/OBSOLETE).
+  const resolvedScenarios = new Set(
+    rows
+      .filter((r) =>
+        r.status === Status.VERIFIED || r.status === Status.OBSOLETE
+      )
+      .map((r) => r.scenario),
+  );
+  const newEscalation: EscalationState = {
+    ...Object.fromEntries(
+      Object.entries(currentEscalation)
+        .filter(([k]) => !resolvedScenarios.has(k)),
+    ),
+    ...reworkUpdated,
+  };
   await ctx.deps.writeEscalationState(newEscalation, ctx.log);
 
   const batchScenarios = await ctx.deps.selectScenarioBatch({
@@ -525,6 +541,20 @@ export const transitionRunningWorkers = async (
             cwd: wt.path,
           });
           if (validation.status === "failed") {
+            // Persist escalation for the failed scenario so it survives
+            // a mid-re-run exit (the user may Ctrl-C during the fix
+            // iteration below). Without this write the escalation is lost
+            // on resume — the orchestrator would see an empty state file.
+            const updatedEscalation = scenario !== undefined
+              ? { ...escalation, [scenario]: 1 as EscalationLevel }
+              : escalation;
+            await ctx.deps.writeEscalationState(updatedEscalation, wLog);
+            const escalatedLevel = computeEffectiveLevel(
+              scenario,
+              updatedEscalation,
+              ctx.level,
+            );
+
             wLog({
               tags: ["info", "orchestrator"],
               message: yellow(
@@ -539,7 +569,7 @@ export const transitionRunningWorkers = async (
               log: wLog,
               validationFailurePath: validation.outputPath,
               plugin: ctx.plugin,
-              level: effectiveLevel,
+              level: escalatedLevel,
               cwd: wt.path,
               specFile: ctx.specFile,
               progressFile: ctx.progressFile,

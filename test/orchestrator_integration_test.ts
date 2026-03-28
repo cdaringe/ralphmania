@@ -799,3 +799,109 @@ Deno.test("integration(ARCH.4): escalation state survives simulated restart", as
     "escalation level from prior run persists into resumed run",
   );
 });
+
+Deno.test("integration(ARCH.4): worker validation failure persists escalation for resume", async () => {
+  // Simulate: round 1 worker validation fails → escalation persisted →
+  // program exits → round 2 resumes with escalation intact.
+  const progress = createProgressStore("| 1.1 |          |      |");
+  const escalation = createEscalationStore();
+  const levelsPerRound: (EscalationLevel | undefined)[] = [];
+  let iterationCall = 0;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 2,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: {
+      ...integrationDeps({
+        progress,
+        escalation,
+        onIteration: ({ level }) => {
+          iterationCall++;
+          levelsPerRound.push(level);
+        },
+        // Worker-level validation fails on round 1; passes on round 2+
+        onValidation: ({ cwd, iterationNum }) =>
+          cwd !== undefined && iterationNum === 0
+            ? { status: "failed" as const, outputPath: "/tmp/wt-fail.log" }
+            : { status: "passed" as const },
+      }),
+    },
+  });
+
+  // Round 1: initial run at level 0, then re-run at level 1 (escalated)
+  assertEquals(levelsPerRound[0], 0, "round 1 initial run: base level");
+  assertEquals(
+    levelsPerRound[1],
+    1,
+    "round 1 re-run: escalated after validation failure",
+  );
+
+  // Escalation store should reflect the failure
+  assertEquals(
+    escalation.state["1.1"],
+    1,
+    "escalation state persists scenario 1.1 at level 1",
+  );
+});
+
+Deno.test("integration(ARCH.4): escalation from worker validation failure carries into next round", async () => {
+  // Verify that if worker validation fails in round 1, the escalation
+  // level is visible in round 2's initial run (simulating resume).
+  const progress = createProgressStore("| 1.1 |          |      |");
+  const escalation = createEscalationStore();
+  const iterationRecords: {
+    round: number;
+    level: EscalationLevel | undefined;
+    validationFailurePath: string | undefined;
+  }[] = [];
+  let iterationCall = 0;
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 2,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: {
+      ...integrationDeps({
+        progress,
+        escalation,
+        onIteration: ({ level, validationFailurePath }) => {
+          iterationCall++;
+          // Round 1: calls 1 (initial) + 2 (re-run); Round 2: call 3
+          const round = iterationCall <= 2 ? 1 : 2;
+          iterationRecords.push({ round, level, validationFailurePath });
+        },
+        onValidation: ({ cwd, iterationNum }) =>
+          // Worker validation fails only in round 1 (iterationNum 0)
+          cwd !== undefined && iterationNum === 0
+            ? { status: "failed" as const, outputPath: "/tmp/wt-fail.log" }
+            : { status: "passed" as const },
+      }),
+    },
+  });
+
+  // Round 1 re-run should receive the worker validation failure path
+  assertEquals(
+    iterationRecords[1]?.validationFailurePath,
+    "/tmp/wt-fail.log",
+    "round 1 re-run receives worker validation failure path",
+  );
+
+  // Round 2's initial run should see the escalated level from round 1
+  const round2Entries = iterationRecords.filter((e) => e.round === 2);
+  assertEquals(
+    round2Entries[0]?.level,
+    1,
+    "round 2 should inherit escalation from round 1 worker validation failure",
+  );
+});
