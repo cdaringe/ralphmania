@@ -94,11 +94,29 @@ export const GUI_HTML: string = `<!DOCTYPE html>
       return '<div class="wcard"><span class="wid">W'+e[0]+'</span> <span class="wscen">\u2192 '+esc(e[1].scenario)+'</span></div>';
     }).join('');
   }
+  // Parse worker launches: "Round N: launching N worker(s) for scenarios [s1, s2]"
+  var launchRe=/launching \\d+ worker\\(s\\) for scenarios \\[([^\\]]+)\\]/;
+  // Parse worker resolution: "Scenario X: resolved by worker N" / "still actionable after worker N"
+  var workerEndRe=/(?:resolved|still actionable) (?:by|after) worker (\\d+)/;
+  function handleLog(ev){
+    appendLog(ev);
+    var m=ev.message.match(/Round (\\d+):/);
+    if(m)iterEl.textContent='iteration '+m[1];
+    // Parse worker launches (clear old workers, add new)
+    var wm=ev.message.match(launchRe);
+    if(wm){
+      workers.clear();
+      var scens=wm[1].split(', ');
+      for(var i=0;i<scens.length;i++)workers.set(i,{scenario:scens[i]});
+      renderWorkers();
+    }
+    // Parse worker completions
+    var rm=ev.message.match(workerEndRe);
+    if(rm){workers.delete(parseInt(rm[1],10));renderWorkers();}
+  }
   function handle(ev){
     if(ev.type==='log'){
-      appendLog(ev);
-      var m=ev.message.match(/Round (\\d+):/);
-      if(m)iterEl.textContent='iteration '+m[1];
+      handleLog(ev);
     }else if(ev.type==='state'){
       stateEl.textContent=ev.to;
       if(ev.to==='done'||ev.to==='aborted'){workers.clear();renderWorkers();}

@@ -119,4 +119,6 @@ Deno.test("GUI_HTML contains expected UI elements", () => {
   assert(GUI_HTML.includes("EventSource")); // SSE client code
   assert(GUI_HTML.includes("Orchestrator")); // state display
   assert(GUI_HTML.includes("Workers")); // workers panel
+  assert(GUI_HTML.includes("state-val")); // state panel element
+  assert(GUI_HTML.includes("launching")); // worker launch parsing
 });
