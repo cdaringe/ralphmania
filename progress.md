@@ -4,7 +4,7 @@
 
 | #      | Status   | Summary                                                                                                                       | Rework Notes |
 | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| ARCH.1 | WIP      | [Hexagonal architecture adherence via ports and adapters](docs/scenarios/ARCH.1-hexagonal-architecture.md)                    |              |
+| ARCH.1 | VERIFIED | [Hexagonal architecture adherence via ports and adapters](docs/scenarios/ARCH.1-hexagonal-architecture.md)                    |              |
 | 1      | VERIFIED | [Interactive prompting for missing agent/iterations input](docs/scenarios/01-interactive-prompting.md)                        |              |
 | 2      | VERIFIED | [CLI accepts --agent/-a, --iterations/-i, --plugin/-p flags](docs/scenarios/02-cli-flags.md)                                  |              |
 | 3      | VERIFIED | [Startup banner shows agent, iterations, model ladder](docs/scenarios/03-startup-banner.md)                                   |              |
