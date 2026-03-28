@@ -4,6 +4,8 @@ import {
   type GuiEvent,
   type GuiLogEvent,
   type GuiStateEvent,
+  type GuiWorkerActiveEvent,
+  type GuiWorkerDoneEvent,
 } from "../src/gui/events.ts";
 import { createGuiLogger } from "../src/gui/logger.ts";
 import type { Logger } from "../src/types.ts";
@@ -113,4 +115,81 @@ Deno.test("createGuiLogger emits both log and state events for transitions", () 
   assertEquals(events[0].type, "log");
   assertEquals(events[1].type, "state");
   assertEquals((events[1] as GuiStateEvent).to, "reading_progress");
+});
+
+Deno.test("createGuiLogger emits worker_active events on launch message", () => {
+  const bus = createEventBus();
+  const events: GuiEvent[] = [];
+  bus.subscribe((e) => events.push(e));
+
+  const logger = createGuiLogger(() => {}, bus);
+  logger({
+    tags: ["info", "orchestrator"],
+    message: "Round 1: launching 2 worker(s) for scenarios [GUI.c, GUI.d]",
+  });
+
+  const workerEvents = events.filter((e) =>
+    e.type === "worker_active"
+  ) as GuiWorkerActiveEvent[];
+  assertEquals(workerEvents.length, 2);
+  assertEquals(workerEvents[0].workerIndex, 0);
+  assertEquals(workerEvents[0].scenario, "GUI.c");
+  assertEquals(workerEvents[1].workerIndex, 1);
+  assertEquals(workerEvents[1].scenario, "GUI.d");
+  assert(workerEvents[0].ts > 0);
+});
+
+Deno.test("createGuiLogger emits worker_done on resolved message", () => {
+  const bus = createEventBus();
+  const events: GuiEvent[] = [];
+  bus.subscribe((e) => events.push(e));
+
+  const logger = createGuiLogger(() => {}, bus);
+  logger({
+    tags: ["info", "orchestrator"],
+    message: "Scenario GUI.c: resolved by worker 0",
+  });
+
+  const doneEvents = events.filter((e) =>
+    e.type === "worker_done"
+  ) as GuiWorkerDoneEvent[];
+  assertEquals(doneEvents.length, 1);
+  assertEquals(doneEvents[0].workerIndex, 0);
+});
+
+Deno.test("createGuiLogger emits worker_done on still actionable message", () => {
+  const bus = createEventBus();
+  const events: GuiEvent[] = [];
+  bus.subscribe((e) => events.push(e));
+
+  const logger = createGuiLogger(() => {}, bus);
+  logger({
+    tags: ["info", "orchestrator"],
+    message: "Scenario 5: still actionable after worker 2",
+  });
+
+  const doneEvents = events.filter((e) =>
+    e.type === "worker_done"
+  ) as GuiWorkerDoneEvent[];
+  assertEquals(doneEvents.length, 1);
+  assertEquals(doneEvents[0].workerIndex, 2);
+});
+
+Deno.test("createGuiLogger emits worker_active for single worker launch", () => {
+  const bus = createEventBus();
+  const events: GuiEvent[] = [];
+  bus.subscribe((e) => events.push(e));
+
+  const logger = createGuiLogger(() => {}, bus);
+  logger({
+    tags: ["info", "orchestrator"],
+    message: "Round 3: launching 1 worker(s) for scenarios [29]",
+  });
+
+  const workerEvents = events.filter((e) =>
+    e.type === "worker_active"
+  ) as GuiWorkerActiveEvent[];
+  assertEquals(workerEvents.length, 1);
+  assertEquals(workerEvents[0].workerIndex, 0);
+  assertEquals(workerEvents[0].scenario, "29");
 });
