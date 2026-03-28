@@ -63,8 +63,10 @@ The embedded page (`src/gui/html.ts`) provides:
 
 - **Live connection badge** — green "live" / red "disconnected"
 - **Orchestrator state panel** — updates on every `state` event
-- **Active Workers panel** — shows per-worker scenario via
-  `worker_active`/`worker_done`
+- **Active Workers panel** — shows per-worker scenario parsed from log messages
+  (`launching N worker(s) for scenarios [...]` / `resolved by worker N`);
+  `worker_active`/`worker_done` structured events are defined and handled but
+  worker tracking is driven by log parsing today
 - **Live log panel** — color-coded by tag (`info`, `error`, `debug`,
   `orchestrator`, `validate`, `transition`), with auto-scroll and debug-toggle
   controls
@@ -77,12 +79,14 @@ Key files:
 - `src/gui/logger.ts` — `createGuiLogger()` wrapper
 - `src/gui/server.ts` — `startGuiServer()` SSE + HTML server
 - `src/gui/html.ts` — embedded SPA with `EventSource` connection to `/events`
-- `test/gui_events_test.ts` — 6 tests: emit, multi-subscribe, unsubscribe, all
-  event types
-- `test/gui_logger_test.ts` — 4 tests: base delegation, bus emission, ordering,
-  error level
-- `test/gui_server_test.ts` — 5 integration tests: HTML serving, SSE
-  content-type, SSE event delivery, HTML content
-- `test/cli_test.ts` — 4 new tests: `--gui` flag, `--gui-port` flag, defaults
+- `test/gui_events_test.ts` — 6 tests: emit, multi-subscribe, unsubscribe,
+  worker event types, double-unsubscribe no-op, no-subscriber emit
+- `test/gui_logger_test.ts` — 7 tests: base delegation, bus emission, ordering,
+  error level, state transition detection, non-transition no-state-event,
+  combined log+state events
+- `test/gui_server_test.ts` — 5 integration tests: HTML at `/`, fallback HTML,
+  SSE content-type, SSE event delivery, HTML element assertions
+- `test/cli_test.ts` — `--gui` defaults false, `--gui` enables, `--gui-port`
+  default 8420, `--gui-port` custom value
 
 Invocation: `deno run -A mod.ts --iterations 10 --gui --gui-port 8420`
