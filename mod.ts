@@ -58,6 +58,7 @@ import { computeExitCode } from "./src/exit.ts";
 import { createEventBus } from "./src/gui/events.ts";
 import { createGuiLogger } from "./src/gui/logger.ts";
 import { startGuiServer } from "./src/gui/server.ts";
+import { createAgentInputBus } from "./src/gui/input-bus.ts";
 
 const printBanner = (
   { agent, iterations, level, parallel }: {
@@ -148,11 +149,18 @@ const main = async (): Promise<number> => {
   printBanner({ agent, iterations, level, parallel });
 
   const guiController = new AbortController();
+  let agentInputBus: import("./src/gui/input-bus.ts").AgentInputBus | undefined;
   if (gui) {
     const bus = createEventBus();
+    agentInputBus = createAgentInputBus();
     log = createGuiLogger(log, bus);
-    startGuiServer({ port: guiPort, bus, log, signal: guiController.signal })
-      .catch((): void => {});
+    startGuiServer({
+      port: guiPort,
+      bus,
+      log,
+      signal: guiController.signal,
+      agentInputBus,
+    }).catch((): void => {});
   }
 
   const shutdownController = new AbortController();
@@ -192,6 +200,7 @@ const main = async (): Promise<number> => {
       level,
       specFile: filePaths.specFile,
       progressFile: filePaths.progressFile,
+      agentInputBus,
     });
 
     if (iterationsUsed === 130) return 130;

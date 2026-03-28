@@ -26,6 +26,7 @@ import type { HookContext, Plugin } from "../plugin.ts";
 import { getModel, resolveModelSelection } from "../model.ts";
 import { CLAUDE_CODER, CLAUDE_ESCALATED } from "../constants.ts";
 import { buildCommandSpec, buildPrompt } from "../command.ts";
+import type { AgentInputBus } from "../gui/input-bus.ts";
 
 // ---------------------------------------------------------------------------
 // Model resolution
@@ -262,6 +263,8 @@ export type AgentRunDeps = {
     cwd: string | undefined;
     /** Worker index used to build a colored per-line stdio prefix. */
     workerIndex?: number;
+    /** When provided, the agent subprocess stdin is piped and registered here. */
+    agentInputBus?: AgentInputBus;
   }) => Promise<IterationResult>;
 };
 
@@ -283,6 +286,7 @@ export const transitionRunningAgent = async (
   signal: AbortSignal,
   cwd: string | undefined,
   workerIndex?: number,
+  agentInputBus?: AgentInputBus,
 ): Promise<DoneState> => {
   const ctx: HookContext = {
     agent: state.agent,
@@ -306,6 +310,7 @@ export const transitionRunningAgent = async (
     log,
     cwd,
     workerIndex,
+    agentInputBus,
   });
 
   await plugin.onIterationEnd?.({ result, ctx });
@@ -328,6 +333,8 @@ export const workerTransition = async (
     agentDeps: AgentRunDeps;
     /** Passed to execute so it can build a colored per-line stdio prefix. */
     workerIndex?: number;
+    /** When provided, routes GUI text input to the agent subprocess stdin. */
+    agentInputBus?: AgentInputBus;
   },
 ): Promise<WorkerState> => {
   const from = state.tag;
@@ -354,6 +361,7 @@ export const workerTransition = async (
         opts.signal,
         opts.cwd,
         opts.workerIndex,
+        opts.agentInputBus,
       );
       break;
     case "done":

@@ -1,4 +1,5 @@
 import type { EscalationLevel, Logger } from "./types.ts";
+import type { AgentInputBus } from "./gui/input-bus.ts";
 import { runIteration as runIterationImpl } from "./runner.ts";
 import { runValidation as runValidationImpl } from "./validation.ts";
 import {
@@ -65,6 +66,7 @@ export const runParallelLoop = async (
     level,
     specFile,
     progressFile,
+    agentInputBus,
     deps: depsOverride,
   }: {
     agent: string;
@@ -77,12 +79,15 @@ export const runParallelLoop = async (
     level: EscalationLevel | undefined;
     specFile?: string;
     progressFile?: string;
+    /** When provided, routes GUI text input to active agent subprocess stdin. */
+    agentInputBus?: AgentInputBus;
     deps?: Partial<ParallelDeps>;
   },
 ): Promise<number> => {
   const deps: ParallelDeps = {
     ...defaultDeps,
     readProgress: () => readProgressContent(progressFile),
+    runIteration: (opts) => runIterationImpl({ ...opts, agentInputBus }),
     ...depsOverride,
   };
 

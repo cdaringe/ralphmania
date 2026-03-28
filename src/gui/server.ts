@@ -2,11 +2,13 @@
 /**
  * GUI HTTP server. Serves the interactive page at `/` and a
  * Server-Sent Events stream at `/events` for realtime workflow updates.
+ * Accepts POST `/input/:workerId` to route text to a worker's agent stdin.
  *
  * @module
  */
 import { GUI_HTML, WORKER_PAGE_HTML } from "./html.ts";
 import type { GuiEventBus } from "./events.ts";
+import type { AgentInputBus } from "./input-bus.ts";
 import type { Logger } from "../types.ts";
 import { createLogger } from "../logger.ts";
 
@@ -15,15 +17,31 @@ export type GuiServerOptions = {
   readonly bus: GuiEventBus;
   readonly log?: Logger;
   readonly signal?: AbortSignal;
+  /** When provided, POST /input/:workerId routes text to agent subprocess stdin. */
+  readonly agentInputBus?: AgentInputBus;
 };
 
 /** Start the GUI HTTP server. Resolves when the server closes. */
 export const startGuiServer = async (opts: GuiServerOptions): Promise<void> => {
-  const { port, bus, signal } = opts;
+  const { port, bus, signal, agentInputBus } = opts;
   const log = opts.log ?? createLogger();
 
-  const handler = (req: Request): Response => {
+  const handler = async (req: Request): Promise<Response> => {
     const path = new URL(req.url).pathname;
+
+    // POST /input/:workerId — send text to an active agent's stdin
+    const inputMatch = path.match(/^\/input\/(\d+)$/);
+    if (inputMatch && req.method === "POST") {
+      const workerIndex = parseInt(inputMatch[1], 10);
+      const text = await req.text();
+      if (!agentInputBus) {
+        return new Response("No input bus configured", { status: 503 });
+      }
+      const sent = await agentInputBus.send(workerIndex, text + "\n");
+      return new Response(sent ? "ok" : "no active worker", {
+        status: sent ? 200 : 404,
+      });
+    }
 
     if (path === "/events") {
       let unsub: (() => void) | undefined;

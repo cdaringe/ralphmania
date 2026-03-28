@@ -6,6 +6,7 @@ import type {
   ModelSelection,
   Result,
 } from "./types.ts";
+import type { AgentInputBus } from "./gui/input-bus.ts";
 import { err, ok } from "./types.ts";
 import { extractSDKText } from "./agents/claude/sdk-text.ts";
 import {
@@ -180,10 +181,19 @@ export { resolveWorkerModelSelection } from "./machines/worker-machine.ts";
  * This is the default {@link AgentRunDeps.execute} implementation.
  */
 export const executeAgent: AgentRunDeps["execute"] = async (
-  { spec, agent, selection, iterationNum, signal, log, cwd, workerIndex }:
-    Parameters<
-      AgentRunDeps["execute"]
-    >[0],
+  {
+    spec,
+    agent,
+    selection,
+    iterationNum,
+    signal,
+    log,
+    cwd,
+    workerIndex,
+    agentInputBus,
+  }: Parameters<
+    AgentRunDeps["execute"]
+  >[0],
 ): Promise<IterationResult> => {
   const combinedSignal = AbortSignal.any([
     signal,
@@ -191,9 +201,11 @@ export const executeAgent: AgentRunDeps["execute"] = async (
   ]);
 
   try {
+    const useInputBus = agentInputBus !== undefined &&
+      workerIndex !== undefined;
     const child = new Deno.Command(spec.command, {
       args: spec.args,
-      stdin: "null",
+      stdin: useInputBus ? "piped" : "null",
       stdout: "piped",
       stderr: "piped",
       cwd,
@@ -205,6 +217,10 @@ export const executeAgent: AgentRunDeps["execute"] = async (
       },
       signal: combinedSignal,
     }).spawn();
+
+    if (useInputBus) {
+      agentInputBus.register(workerIndex, child.stdin);
+    }
 
     const prefix = workerIndex !== undefined
       ? workerPrefix(workerIndex, selection.targetScenario)
@@ -232,6 +248,8 @@ export const executeAgent: AgentRunDeps["execute"] = async (
       }),
       pipeStream({ stream: stderrStream, output: Deno.stderr }),
     ]);
+
+    if (useInputBus) agentInputBus.unregister(workerIndex);
 
     if (status.code !== 0) {
       log({
@@ -287,6 +305,7 @@ export const runIteration = async (
     specFile,
     progressFile,
     workerIndex,
+    agentInputBus,
   }: {
     iterationNum: number;
     agent: Agent;
@@ -300,6 +319,7 @@ export const runIteration = async (
     specFile?: string;
     progressFile?: string;
     workerIndex?: number;
+    agentInputBus?: AgentInputBus;
   },
 ): Promise<IterationResult> => {
   let current: import("./machines/worker-machine.ts").WorkerState =
@@ -321,6 +341,7 @@ export const runIteration = async (
       cwd,
       workerIndex,
       agentDeps: defaultAgentDeps,
+      agentInputBus,
     });
   }
 

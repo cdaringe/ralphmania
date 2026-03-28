@@ -187,6 +187,19 @@ export const WORKER_PAGE_HTML: string = `<!DOCTYPE html>
     .t-info{color:#22d3ee}.t-error{color:#f87171;font-weight:700}
     .t-debug{color:#52525b}.t-orch{color:#4ade80}
     .t-validate{color:#fbbf24}
+    #input-bar{background:var(--surface);border-top:1px solid var(--border);
+      padding:6px 12px;display:flex;gap:6px;align-items:center;flex-shrink:0}
+    #input-bar textarea{flex:1;font-family:var(--mono);font-size:12px;resize:none;
+      padding:4px 8px;border:1px solid var(--border);border-radius:4px;
+      background:#18181b;color:#d4d4d8;height:40px}
+    #input-bar textarea:focus{outline:none;border-color:var(--accent)}
+    #input-bar textarea:disabled{opacity:0.4;cursor:not-allowed}
+    #send-btn{font-size:12px;padding:4px 12px;cursor:pointer;white-space:nowrap;
+      border:1px solid var(--accent);border-radius:4px;
+      background:var(--abg);color:var(--accent);font-family:var(--mono)}
+    #send-btn:disabled{border-color:var(--border);color:var(--muted);
+      background:var(--bg);cursor:not-allowed}
+    #send-status{font-size:11px;color:var(--muted);white-space:nowrap}
   </style>
 </head>
 <body>
@@ -218,6 +231,11 @@ export const WORKER_PAGE_HTML: string = `<!DOCTYPE html>
       <button id="clrbtn">clear</button>
     </div>
     <div id="log"></div>
+    <div id="input-bar">
+      <textarea id="input-text" placeholder="Send input to agent (Enter to send, Shift+Enter for newline)" disabled></textarea>
+      <button id="send-btn" disabled>Send</button>
+      <span id="send-status"></span>
+    </div>
   </section>
 </main>
 <script>
@@ -238,9 +256,40 @@ export const WORKER_PAGE_HTML: string = `<!DOCTYPE html>
     stateEl=document.getElementById('state-val'),
     scenEl=document.getElementById('scenario-val'),
     autoscroll=document.getElementById('autoscroll'),
-    showdebug=document.getElementById('showdebug');
+    showdebug=document.getElementById('showdebug'),
+    inputText=document.getElementById('input-text'),
+    sendBtn=document.getElementById('send-btn'),
+    sendStatus=document.getElementById('send-status');
 
   document.getElementById('clrbtn').onclick=function(){logEl.innerHTML='';};
+
+  var isRunning=false;
+  function setInputEnabled(enabled){
+    isRunning=enabled;
+    inputText.disabled=!enabled;
+    sendBtn.disabled=!enabled;
+  }
+
+  function sendInput(){
+    var text=inputText.value.trim();
+    if(!text||!isRunning)return;
+    inputText.value='';
+    sendStatus.textContent='sending…';
+    fetch('/input/'+workerIndex,{method:'POST',body:text,headers:{'Content-Type':'text/plain'}})
+      .then(function(r){
+        sendStatus.textContent=r.ok?'sent':'no active worker';
+        setTimeout(function(){sendStatus.textContent='';},2000);
+      })
+      .catch(function(){
+        sendStatus.textContent='error';
+        setTimeout(function(){sendStatus.textContent='';},2000);
+      });
+  }
+
+  sendBtn.onclick=sendInput;
+  inputText.addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendInput();}
+  });
 
   function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function fmt(ts){return new Date(ts).toTimeString().slice(0,8);}
@@ -261,9 +310,9 @@ export const WORKER_PAGE_HTML: string = `<!DOCTYPE html>
   function setState(s){
     stateEl.textContent=s;
     stateEl.className='info-val neutral';
-    if(s==='running')stateEl.className='info-val state-running';
-    else if(s==='done')stateEl.className='info-val state-done';
-    else if(s==='failed')stateEl.className='info-val state-failed';
+    if(s==='running'){stateEl.className='info-val state-running';setInputEnabled(true);}
+    else if(s==='done'){stateEl.className='info-val state-done';setInputEnabled(false);}
+    else if(s==='failed'){stateEl.className='info-val state-failed';setInputEnabled(false);}
   }
 
   function handle(ev){
