@@ -126,6 +126,10 @@ Deno.test("ARCH.1: ProgressFileDeps in-memory adapter runs ensureProgressFile wi
         : Promise.reject(new Error(`not found: ${p}`)),
   };
   const log = () => {};
-  await ensureProgressFile(log, { specFile: "spec.md", progressFile: "out.md" }, io);
+  await ensureProgressFile(
+    log,
+    { specFile: "spec.md", progressFile: "out.md" },
+    io,
+  );
   assert("out.md" in files, "progress file written via in-memory adapter");
 });

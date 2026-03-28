@@ -4,7 +4,7 @@
 
 | #       | Status   | Summary                                                                                                                       | Rework Notes |
 | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| ARCH.1  | WIP      | [Hexagonal architecture via ports, adapters, and pure domain modules](docs/scenarios/ARCH.1-hexagonal-architecture.md) |              |
+| ARCH.1  | VERIFIED | [Hexagonal architecture via ports, adapters, and pure domain modules](docs/scenarios/ARCH.1-hexagonal-architecture.md)        |              |
 | ARCH.2  | VERIFIED | [Pipeline architecture with domain-module offloading](docs/scenarios/ARCH.2-pipeline-architecture.md)                         |              |
 | ARCH.2a | VERIFIED | [Domain-specific folder organization reduces src/ noise](docs/scenarios/ARCH.2a-domain-folders.md)                            |              |
 | 1       | VERIFIED | [Interactive prompting for missing agent/iterations input](docs/scenarios/01-interactive-prompting.md)                        |              |
