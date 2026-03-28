@@ -56,11 +56,16 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
 
 - **`src/serve.ts`**: HTTP server (`serveReceipts`), used by `serve receipts`
   CLI command. Serves `.ralph/receipts/` as static site AND provides a dynamic
-  `/status` endpoint (GUI.b).
+  `/status` endpoint.
 - **`src/status-diff.ts`**: pure `computeStatusDiff` + `generateStatusHtml`;
   computes spec-vs-progress set differences (specOnly/progressOnly/shared) and
   renders a self-contained HTML status page. 100% test coverage in
   `test/status_diff_test.ts`.
+- **GUI.b status in live GUI**: `gui/server.ts` accepts a `StatusProvider` DI
+  function, serves `/api/status` (JSON) and `/status` (HTML). Main page
+  (`gui/html.ts`) has a Progress sidebar that fetches `/api/status` on load and
+  on every state/worker_done SSE event. E2E tests in
+  `test/gui_status_e2e_test.ts` (10 tests, DI adapters, no real file I/O).
 
 ## Scenarios Index
 

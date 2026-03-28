@@ -7,71 +7,65 @@ specifications and the progress.
 
 ## Implementation
 
+### Live GUI integration
+
+The main GUI page at `/` includes a **Progress** sidebar section that:
+
+- Fetches `/api/status` on page load and re-fetches on every orchestrator state
+  transition (`state` SSE event) and worker completion (`worker_done` event)
+- Displays a summary line: `N/M verified · K rework · J wip · L not started`
+- Renders a compact per-scenario status list with color-coded statuses
+- Links to `/status` for the full standalone HTML status page
+
+### Endpoints on the GUI server (`src/gui/server.ts`)
+
+| Route         | Response                                               |
+| ------------- | ------------------------------------------------------ |
+| `/api/status` | JSON `StatusDiff` (specOnly, progressOnly, shared)     |
+| `/status`     | Self-contained HTML page via `generateStatusHtml`      |
+
+Both endpoints use a `StatusProvider` function injected via `GuiServerOptions`,
+keeping the server testable with DI (no real file I/O in tests).
+
 ### Core logic: `src/status-diff.ts`
 
-Two pure, fully-tested functions:
+Two pure functions compute the set-theoretic diff:
 
-**`computeStatusDiff(specIds, progressRows): StatusDiff`**
+- **`computeStatusDiff(specIds, progressRows)`** → `{ specOnly, progressOnly, shared }`
+- **`generateStatusHtml(diff)`** → full HTML page with color-coded status table
 
-Computes three set-theoretic partitions:
+### Wiring: `mod.ts`
 
-| Field          | Meaning                                                                      |
-| -------------- | ---------------------------------------------------------------------------- |
-| `specOnly`     | IDs in `specification.md` but absent from `progress.md` (not yet started)    |
-| `progressOnly` | IDs in `progress.md` but absent from `specification.md` (orphaned / removed) |
-| `shared`       | IDs in both; carries `status` and `summary` from progress                    |
-
-**`generateStatusHtml(diff): string`**
-
-Renders a self-contained HTML page showing:
-
-- `N / total verified` summary line, with `· K orphaned` appended when orphaned
-  entries exist
-- A single table with all three partitions (shared, specOnly as `NOT_STARTED`,
-  progressOnly as `ORPHANED`)
-- Color-coded status cells via CSS classes (`verified`, `needs-rework`, `wip`,
-  `work-complete`, `obsolete`, `not-started`, `orphaned`)
-
-### HTTP endpoint: `src/serve.ts` — `/status` route
-
-The existing `serveReceipts` server now handles `GET /status` dynamically:
-
-1. Reads `specFile` + `progressFile` (defaults: `specification.md` /
-   `progress.md`; overridable via `ServeOptions.specFile` and `.progressFile`)
-2. Parses spec IDs with `parseScenarioIds` and progress rows with
-   `parseProgressRows`
-3. Computes diff via `computeStatusDiff` and renders via `generateStatusHtml`
-4. Returns `200 text/html`; returns `500` with an error message if files are
-   unreadable
-
-The status page is accessible at `http://localhost:<port>/status` when running
-`deno run -A mod.ts serve receipts`.
+The `statusProvider` reads `specification.md` and `progress.md` via
+`Deno.readTextFile`, parses them with `parseScenarioIds` and
+`parseProgressRows`, and computes the diff with `computeStatusDiff`.
 
 ## Evidence
 
-### Tests: `test/status_diff_test.ts` (10 tests, 100% coverage)
+### E2E tests: `test/gui_status_e2e_test.ts` (10 tests)
 
-| Test                                        | Covers                                                |
-| ------------------------------------------- | ----------------------------------------------------- |
-| empty inputs                                | base case                                             |
-| specIds only                                | specOnly branch (all IDs untracked)                   |
-| progressRows only                           | progressOnly branch (all rows orphaned)               |
-| fully shared set                            | shared branch, status/summary preservation            |
-| mixed set                                   | all three partitions simultaneously                   |
-| `generateStatusHtml` verified count         | summary line math                                     |
-| `generateStatusHtml` NOT_STARTED rows       | specOnly rendering                                    |
-| `generateStatusHtml` ORPHANED rows + note   | progressOnly rendering + `orphanedNote` truthy branch |
-| `generateStatusHtml` no orphaned note       | `orphanedNote` falsy branch                           |
-| `generateStatusHtml` NEEDS_REWORK CSS class | underscore→hyphen CSS class transform                 |
+| Test                                               | Covers                                       |
+| -------------------------------------------------- | -------------------------------------------- |
+| GET /api/status returns JSON diff (provider)       | JSON endpoint with configured provider       |
+| GET /api/status returns empty diff (no provider)   | Graceful fallback when no provider            |
+| GET /api/status returns 500 (provider throws)      | Error handling                               |
+| GET /status returns HTML (provider)                | Full HTML status page rendering              |
+| GET /status returns fallback (no provider)         | No-provider graceful response                |
+| GET /status returns 500 (provider throws)          | Error handling                               |
+| GET / HTML contains status section + fetchStatus   | Main page includes Progress sidebar + JS     |
+| SSE delivers worker_active and worker_done events  | SSE event delivery for worker lifecycle      |
+| Status reflects updated data on re-fetch           | Dynamic status updates across requests       |
+| GuiLogger → SSE worker_active integration          | Full stack: logger → bus → SSE → client      |
 
-`src/status-diff.ts` reports **100% line and branch coverage**.
+### Unit tests: `test/status_diff_test.ts` (10 tests)
+
+All `computeStatusDiff` and `generateStatusHtml` branches covered at 100%.
 
 ### Key design decisions
 
-- **Pure functions only** in `src/status-diff.ts`: no I/O, fully unit-testable
-- `serve.ts` (already coverage-ignored) handles all I/O for the HTTP endpoint
-- `ServeOptions` extended non-breakingly: `specFile?` / `progressFile?` optional
-  with defaults from `DEFAULT_FILE_PATHS`
-- Status order in the table: shared (tracked) → specOnly (unstarted) →
-  progressOnly (orphaned), matching the most-to-least-relevant priority for a
-  reviewer
+- **DI via `StatusProvider`**: server receives a `() => Promise<StatusDiff>`
+  function, enabling tests to inject canned data without file I/O
+- **Polling on state change**: main page JS re-fetches `/api/status` on every
+  `state` and `worker_done` SSE event, providing realtime status updates
+- **No new SSE event type**: status is fetched via HTTP on demand rather than
+  pushed via SSE, keeping the event bus simple
