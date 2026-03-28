@@ -44,6 +44,16 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   with `// coverage:ignore` at top
 - **Lint exclusions**: `deno.json` `lint.exclude` for vendored files
 
+## GUI / Web Interface
+
+- **`src/serve.ts`**: HTTP server (`serveReceipts`), used by `serve receipts`
+  CLI command. Serves `.ralph/receipts/` as static site AND provides a dynamic
+  `/status` endpoint (GUI.b).
+- **`src/status-diff.ts`**: pure `computeStatusDiff` + `generateStatusHtml`;
+  computes spec-vs-progress set differences (specOnly/progressOnly/shared) and
+  renders a self-contained HTML status page. 100% test coverage in
+  `test/status_diff_test.ts`.
+
 ## Scenarios Index
 
 See `docs/scenarios/` for all scenario write-ups. Scenario status tracked in
