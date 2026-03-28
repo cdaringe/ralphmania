@@ -2,8 +2,9 @@
 
 # Progress
 
-| #  | Status   | Summary                                                                                                                       | Rework Notes |
-| -- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| #      | Status   | Summary                                                                                                                       | Rework Notes |
+| ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| ARCH.2 | VERIFIED | [Pipeline architecture with domain-module offloading](docs/scenarios/ARCH.2-pipeline-architecture.md)                        |              |
 | 1  | VERIFIED | [Interactive prompting for missing agent/iterations input](docs/scenarios/01-interactive-prompting.md)                        |              |
 | 2  | VERIFIED | [CLI accepts --agent/-a, --iterations/-i, --plugin/-p flags](docs/scenarios/02-cli-flags.md)                                  |              |
 | 3  | VERIFIED | [Startup banner shows agent, iterations, model ladder](docs/scenarios/03-startup-banner.md)                                   |              |
