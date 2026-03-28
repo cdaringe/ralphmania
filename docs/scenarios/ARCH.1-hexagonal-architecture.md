@@ -119,7 +119,6 @@ The orchestrator is tested the same way via `stubDeps` in
 
 ## Architecture Consistency
 
-The `ARCHITECTURE.md` and `ARCHITECTURE.md` plugin diagram document the
-port/adapter boundaries. The `test/fixtures.ts` provides `stubDeps` and
-`makeMemFS`-style patterns for injecting in-memory adapters across all state
-machine tests.
+The `ARCHITECTURE.md` plugin diagram and file map document the port/adapter
+boundaries. The `test/fixtures.ts` provides `stubDeps` and `makeMemFS`-style
+patterns for injecting in-memory adapters across all state machine tests.
