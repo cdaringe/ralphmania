@@ -1,6 +1,8 @@
 import { assertEquals, assertExists } from "jsr:@std/assert@^1";
 import type { Plugin } from "../plugin.ts";
 import type { IterationResult } from "../types.ts";
+import type { AgentInputBus } from "../gui/input-bus.ts";
+import { createAgentInputBus } from "../gui/input-bus.ts";
 import {
   initialWorkerState,
   isWorkerTerminal,
@@ -369,6 +371,43 @@ Deno.test("transitionRunningAgent: calls plugin.onIterationEnd", async () => {
     undefined,
   );
   assertEquals(hookFired, true);
+});
+
+Deno.test("transitionRunningAgent: passes agentInputBus to deps.execute", async () => {
+  const state = {
+    tag: "running_agent" as const,
+    iterationNum: 1,
+    agent: "claude" as const,
+    selection: {
+      model: "sonnet",
+      mode: "general" as const,
+      targetScenario: "GUI.d",
+      effort: "high" as const,
+      actionableScenarios: ["GUI.d"],
+    },
+    spec: { command: "claude", args: [] },
+  };
+  const mockBus: AgentInputBus = createAgentInputBus();
+  let capturedBus: AgentInputBus | undefined;
+  const deps = {
+    execute: (
+      opts: { agentInputBus?: AgentInputBus },
+    ): Promise<IterationResult> => {
+      capturedBus = opts.agentInputBus;
+      return Promise.resolve({ status: "complete" });
+    },
+  };
+  await transitionRunningAgent(
+    state,
+    deps,
+    noop,
+    log,
+    new AbortController().signal,
+    undefined,
+    0,
+    mockBus,
+  );
+  assertEquals(capturedBus, mockBus);
 });
 
 // ---------------------------------------------------------------------------

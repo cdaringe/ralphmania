@@ -44,4 +44,5 @@
 | GUI.a   | VERIFIED | [Realtime interactive web GUI via SSE](docs/scenarios/GUI.a-interactive-web-gui.md)                                           |              |
 | GUI.b   | VERIFIED | [Overall status page showing spec/progress set differences at /status](docs/scenarios/GUI.b-status-diff.md)                   |              |
 | GUI.c   | VERIFIED | [Dedicated worker page at /worker/:id showing task, state, and stream](docs/scenarios/GUI.c-worker-page.md)                   |              |
+| GUI.d   | VERIFIED | [Text input form routes to active agent stdin via AgentInputBus](docs/scenarios/GUI.d-agent-input.md)                         |              |
 | CLI.1   | VERIFIED | [--reset-worktrees flag clears worker worktrees and state on boot](docs/scenarios/CLI.1-reset-worktrees.md)                   |              |

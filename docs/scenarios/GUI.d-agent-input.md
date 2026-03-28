@@ -75,12 +75,14 @@ identical to before (subprocess stdin remains `"null"`).
 
 ## Evidence
 
-| Artifact                    | Detail                                                  |
-| --------------------------- | ------------------------------------------------------- |
-| `src/gui/input-bus.ts`      | Domain registry; 100% line + branch coverage            |
-| `src/gui/input-bus.test.ts` | 6 unit tests covering all paths                         |
-| `src/gui/server.ts:34-44`   | POST `/input/:workerId` handler                         |
-| `src/gui/html.ts`           | `#input-bar` textarea + send button in WORKER_PAGE_HTML |
-| `src/runner.ts:204-223`     | `stdin: "piped"`, register/unregister calls             |
-| `src/orchestrator.ts:90`    | `agentInputBus` closed over in `runIteration` dep       |
-| `mod.ts:151-159`            | `createAgentInputBus()` wired on `--gui` startup        |
+| Artifact                              | Detail                                                            |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `src/gui/input-bus.ts`                | Domain registry; 100% line + branch coverage                      |
+| `src/gui/input-bus.test.ts`           | 6 unit tests covering all paths                                   |
+| `src/gui/server.ts:34-44`             | POST `/input/:workerId` handler                                   |
+| `src/gui/server.test.ts`              | 3 integration tests: 200/404/503 paths via real HTTP              |
+| `src/gui/html.ts`                     | `#input-bar` textarea + send button in WORKER_PAGE_HTML           |
+| `src/machines/worker-machine.test.ts` | `transitionRunningAgent: passes agentInputBus to deps.execute`    |
+| `src/runner.ts:204-223`               | `stdin: "piped"`, register/unregister calls                       |
+| `src/orchestrator.ts:90`              | `agentInputBus` closed over in `runIteration` dep                 |
+| `mod.ts:151-159`                      | `createAgentInputBus()` wired on `--gui` startup                  |
