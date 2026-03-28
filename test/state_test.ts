@@ -75,21 +75,11 @@ Deno.test("readLoopCheckpoint returns undefined for missing fields", async () =>
   await clearLoopCheckpoint();
 });
 
-Deno.test("readLoopCheckpoint ignores malformed JSON", async () => {
+Deno.test("readLoopCheckpoint returns undefined for malformed JSON", async () => {
   await Deno.mkdir(".ralph", { recursive: true });
   await Deno.writeTextFile(".ralph/loop-state.json", "not json");
-  let result: unknown;
-  try {
-    result = await readLoopCheckpoint();
-  } catch {
-    result = "threw";
-  }
-  // parseCheckpoint calls JSON.parse which throws on invalid JSON
-  // readLoopCheckpoint should catch this gracefully
-  // If it threw, that's a bug worth noting but not blocking
+  const result = await readLoopCheckpoint();
   await Deno.remove(".ralph/loop-state.json").catch(() => {});
-  // Accept either undefined (graceful) or threw (current behavior)
-  if (result !== undefined && result !== "threw") {
-    throw new Error(`Unexpected result: ${result}`);
-  }
+  // .catch(() => undefined) in readLoopCheckpoint swallows JSON.parse errors
+  assertEquals(result, undefined);
 });

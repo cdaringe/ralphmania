@@ -5,6 +5,7 @@
 | #       | Status   | Summary                                                                                                                       | Rework Notes |
 | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | ARCH.3  | VERIFIED | [Three FSMs govern orchestrator, worker, and scenario lifecycle via tagged states](docs/scenarios/ARCH.3-state-machines.md)   |              |
+| ARCH.4  | VERIFIED | [Checkpoint + escalation persistence restores valid state on crash or restart](docs/scenarios/ARCH.4-recovery.md)             |              |
 | ARCH.2  | VERIFIED | [Pipeline architecture with domain-module offloading](docs/scenarios/ARCH.2-pipeline-architecture.md)                         |              |
 | ARCH.2a | VERIFIED | [Domain-specific folder organization reduces src/ noise](docs/scenarios/ARCH.2a-domain-folders.md)                            |              |
 | 1       | VERIFIED | [Interactive prompting for missing agent/iterations input](docs/scenarios/01-interactive-prompting.md)                        |              |
