@@ -5,7 +5,7 @@
 | #       | Status   | Summary                                                                                                                       | Rework Notes |
 | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | ARCH.2  | VERIFIED | [Pipeline architecture with domain-module offloading](docs/scenarios/ARCH.2-pipeline-architecture.md)                         |              |
-| ARCH.2a | WIP      | [Domain-specific folder organization reduces src/ noise](docs/scenarios/ARCH.2a-domain-folders.md)                            |              |
+| ARCH.2a | VERIFIED | [Domain-specific folder organization reduces src/ noise](docs/scenarios/ARCH.2a-domain-folders.md)                            |              |
 | 1       | VERIFIED | [Interactive prompting for missing agent/iterations input](docs/scenarios/01-interactive-prompting.md)                        |              |
 | 2       | VERIFIED | [CLI accepts --agent/-a, --iterations/-i, --plugin/-p flags](docs/scenarios/02-cli-flags.md)                                  |              |
 | 3       | VERIFIED | [Startup banner shows agent, iterations, model ladder](docs/scenarios/03-startup-banner.md)                                   |              |
