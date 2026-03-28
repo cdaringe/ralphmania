@@ -40,6 +40,11 @@ See `docs/scenarios/` for all scenario write-ups. Scenario status tracked in
 
 Notable implementations:
 
+- ARCH.1: Hexagonal arch via ports (`MachineDeps`, `AgentRunDeps`,
+  `ValidationHookDeps`, `ModelIODeps`, `ProgressFileDeps`) + pure domain modules
+  (`state-machine.ts`, `worker-machine.ts`, `model.ts`, `command.ts`) + adapters
+  wired by `orchestrator.ts`. In-memory fakes in `test/fixtures.ts` (`stubDeps`,
+  `createProgressStore`).
 - ARCH.2: `src/model.ts` owns all derivations — `orderActionableScenarios`
   (rework-first ordering) and `computeEffectiveLevel` (escalation merge);
   pipeline stages in `state-machine.ts` are thin orchestrators only
