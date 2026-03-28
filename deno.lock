@@ -7,6 +7,7 @@
     "jsr:@cliffy/internal@1.0.0": "1.0.0",
     "jsr:@cliffy/table@1.0.0": "1.0.0",
     "jsr:@std/assert@*": "1.0.11",
+    "jsr:@std/assert@1": "1.0.11",
     "jsr:@std/assert@^1.0.11": "1.0.11",
     "jsr:@std/cli@1": "1.0.12",
     "jsr:@std/encoding@^1.0.10": "1.0.10",
