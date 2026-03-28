@@ -18,6 +18,7 @@ export type CliConfig = {
   parallel: number;
   gui: boolean;
   guiPort: number;
+  resetWorktrees: boolean;
 };
 
 const agentType = new EnumType(VALID_AGENTS);
@@ -54,7 +55,12 @@ const withRunOptions = <T extends Command>(cmd: T) =>
     })
     .option("--gui-port <port:integer>", "Port for the GUI server.", {
       default: 8420,
-    });
+    })
+    .option(
+      "--reset-worktrees",
+      "Clear all existing ralph worker worktrees and state on boot.",
+      { default: false },
+    );
 
 export type CliActions = {
   // deno-lint-ignore no-explicit-any
@@ -122,6 +128,7 @@ const toCliConfig = (options: ParsedOptions): Result<CliConfig, string> => {
     parallel: (options.parallel as number | undefined) ?? 2,
     gui: (options.gui as boolean | undefined) ?? false,
     guiPort: (options.guiPort as number | undefined) ?? 8420,
+    resetWorktrees: (options.resetWorktrees as boolean | undefined) ?? false,
   });
 };
 
@@ -194,7 +201,18 @@ export const parseCliArgsInteractive = async (
 
     const gui = (options.gui as boolean | undefined) ?? false;
     const guiPort = (options.guiPort as number | undefined) ?? 8420;
-    return ok({ agent, iterations, pluginPath, level, parallel, gui, guiPort });
+    const resetWorktrees = (options.resetWorktrees as boolean | undefined) ??
+      false;
+    return ok({
+      agent,
+      iterations,
+      pluginPath,
+      level,
+      parallel,
+      gui,
+      guiPort,
+      resetWorktrees,
+    });
   } catch {
     return err("parse error");
   } finally {

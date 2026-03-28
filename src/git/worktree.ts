@@ -1,7 +1,11 @@
 // coverage:ignore — Git subprocess operations requiring real repository state
 import type { Logger, Result } from "../types.ts";
 import { err, ok } from "../types.ts";
-import { WORKTREE_BASE_DIR } from "../constants.ts";
+import {
+  ESCALATION_FILE,
+  LOOP_STATE_FILE,
+  WORKTREE_BASE_DIR,
+} from "../constants.ts";
 
 export type WorktreeInfo = {
   readonly path: string;
@@ -162,6 +166,71 @@ export const resetWorkingTree = async (
       message: "Reset working tree (discarded uncommitted changes)",
     }),
       ok(undefined));
+};
+
+/**
+ * Remove all ralph worker worktrees, prune git refs, delete ralph/worker-*
+ * branches, and clear tool state files (escalation.json, loop-state.json).
+ * Called on boot when --reset-worktrees is passed.
+ */
+export const resetAllWorktrees = async (
+  { log }: { log: Logger },
+): Promise<Result<void, string>> => {
+  log({
+    tags: ["info", "worktree"],
+    message: "Resetting all ralph worktrees...",
+  });
+
+  // Remove each subdirectory in WORKTREE_BASE_DIR via git worktree remove
+  try {
+    for await (const entry of Deno.readDir(WORKTREE_BASE_DIR)) {
+      if (!entry.isDirectory) continue;
+      const path = `${WORKTREE_BASE_DIR}/${entry.name}`;
+      const removeResult = await run(["worktree", "remove", "--force", path]);
+      if (removeResult.code !== 0) {
+        log({
+          tags: ["debug", "worktree"],
+          message:
+            `git worktree remove failed for ${path}: ${removeResult.stderr}`,
+        });
+        await Deno.remove(path, { recursive: true }).catch(() => {});
+      }
+      log({
+        tags: ["info", "worktree"],
+        message: `Removed worktree at ${path}`,
+      });
+    }
+  } catch {
+    // WORKTREE_BASE_DIR does not exist — nothing to clean
+  }
+
+  // Prune stale git worktree refs
+  await run(["worktree", "prune"]);
+
+  // Delete local ralph/worker-* branches
+  const branchList = await run(["branch", "--list", "ralph/worker-*"]);
+  if (branchList.code === 0 && branchList.stdout) {
+    const branches = branchList.stdout.split("\n").map((b) => b.trim()).filter(
+      Boolean,
+    );
+    for (const branch of branches) {
+      const delResult = await run(["branch", "-D", branch]);
+      delResult.code !== 0 && log({
+        tags: ["debug", "worktree"],
+        message: `Failed to delete branch ${branch}: ${delResult.stderr}`,
+      });
+    }
+  }
+
+  // Clear tool state files
+  await Deno.remove(ESCALATION_FILE).catch(() => {});
+  await Deno.remove(LOOP_STATE_FILE).catch(() => {});
+
+  log({
+    tags: ["info", "worktree"],
+    message: "All ralph worktrees and state cleared.",
+  });
+  return ok(undefined);
 };
 
 export const cleanupWorktree = async (

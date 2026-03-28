@@ -155,3 +155,19 @@ Deno.test("parseCliArgs --gui-port sets custom port", async () => {
     assertEquals(result.value.guiPort, 9999);
   }
 });
+
+Deno.test("parseCliArgs resetWorktrees defaults to false", async () => {
+  const result = await parseCliArgs(["-i", "5"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.resetWorktrees, false);
+  }
+});
+
+Deno.test("parseCliArgs --reset-worktrees sets resetWorktrees to true", async () => {
+  const result = await parseCliArgs(["-i", "5", "--reset-worktrees"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.resetWorktrees, true);
+  }
+});
