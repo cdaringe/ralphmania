@@ -16,6 +16,8 @@ export type CliConfig = {
   pluginPath: string | undefined;
   level: EscalationLevel | undefined;
   parallel: number;
+  gui: boolean;
+  guiPort: number;
 };
 
 const agentType = new EnumType(VALID_AGENTS);
@@ -46,6 +48,12 @@ const withRunOptions = <T extends Command>(cmd: T) =>
     )
     .option("-P, --parallel <count:integer>", "Number of parallel workers.", {
       default: 2,
+    })
+    .option("--gui", "Start the live GUI server alongside the loop.", {
+      default: false,
+    })
+    .option("--gui-port <port:integer>", "Port for the GUI server.", {
+      default: 8420,
     });
 
 export type CliActions = {
@@ -112,6 +120,8 @@ const toCliConfig = (options: ParsedOptions): Result<CliConfig, string> => {
     pluginPath: options.plugin as string | undefined,
     level: options.level as EscalationLevel | undefined,
     parallel: (options.parallel as number | undefined) ?? 2,
+    gui: (options.gui as boolean | undefined) ?? false,
+    guiPort: (options.guiPort as number | undefined) ?? 8420,
   });
 };
 
@@ -182,7 +192,9 @@ export const parseCliArgsInteractive = async (
       });
     }
 
-    return ok({ agent, iterations, pluginPath, level, parallel });
+    const gui = (options.gui as boolean | undefined) ?? false;
+    const guiPort = (options.guiPort as number | undefined) ?? 8420;
+    return ok({ agent, iterations, pluginPath, level, parallel, gui, guiPort });
   } catch {
     return err("parse error");
   } finally {

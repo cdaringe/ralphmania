@@ -55,6 +55,9 @@ import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 import { runParallelLoop } from "./src/orchestrator.ts";
 import { computeExitCode } from "./src/exit.ts";
+import { createEventBus } from "./src/gui/events.ts";
+import { createGuiLogger } from "./src/gui/logger.ts";
+import { startGuiServer } from "./src/gui/server.ts";
 
 const printBanner = (
   { agent, iterations, level, parallel }: {
@@ -108,7 +111,7 @@ const printBanner = (
 };
 
 const main = async (): Promise<number> => {
-  const log = createLogger();
+  let log = createLogger();
   const parsed = await parseCliArgsInteractive(Deno.args, version);
 
   if (parsed.isErr()) {
@@ -135,7 +138,7 @@ const main = async (): Promise<number> => {
 
   const agent = configHookResult?.agent ?? parsed.value.agent;
   const iterations = configHookResult?.iterations ?? parsed.value.iterations;
-  const { level, parallel } = parsed.value;
+  const { level, parallel, gui, guiPort } = parsed.value;
   const filePaths: FilePaths = {
     specFile: configHookResult?.specFile ?? DEFAULT_FILE_PATHS.specFile,
     progressFile: configHookResult?.progressFile ??
@@ -143,6 +146,14 @@ const main = async (): Promise<number> => {
   };
 
   printBanner({ agent, iterations, level, parallel });
+
+  const guiController = new AbortController();
+  if (gui) {
+    const bus = createEventBus();
+    log = createGuiLogger(log, bus);
+    startGuiServer({ port: guiPort, bus, log, signal: guiController.signal })
+      .catch((): void => {});
+  }
 
   const shutdownController = new AbortController();
   const onSigint = (): void => {
@@ -158,64 +169,68 @@ const main = async (): Promise<number> => {
 
   await ensureProgressFile(log, filePaths);
 
-  const hookResult = await ensureValidationHook(log);
-  if (hookResult.isErr()) {
-    log({ tags: ["error"], message: hookResult.error });
-    return 1;
-  }
+  try {
+    const hookResult = await ensureValidationHook(log);
+    if (hookResult.isErr()) {
+      log({ tags: ["error"], message: hookResult.error });
+      return 1;
+    }
 
-  const specContent = await Deno.readTextFile(filePaths.specFile).catch(
-    () => "",
-  );
-  const expectedScenarioIds = parseScenarioIds(specContent);
+    const specContent = await Deno.readTextFile(filePaths.specFile).catch(
+      () => "",
+    );
+    const expectedScenarioIds = parseScenarioIds(specContent);
 
-  const iterationsUsed = await runParallelLoop({
-    agent,
-    iterations,
-    parallelism: parallel,
-    expectedScenarioIds,
-    signal: shutdownController.signal,
-    log,
-    plugin,
-    level,
-    specFile: filePaths.specFile,
-    progressFile: filePaths.progressFile,
-  });
-
-  if (iterationsUsed === 130) return 130;
-
-  const finalContent = await Deno.readTextFile(filePaths.progressFile).catch(
-    () => "",
-  );
-  const finalSection = finalContent.split("END_DEMO")[1] ?? "";
-  const allDoneResult = isAllVerified(finalSection, expectedScenarioIds);
-  const allDone = allDoneResult.isOk() && allDoneResult.value;
-
-  await plugin.onLoopEnd?.({
-    finalState: {
-      validationFailurePath: undefined,
-      task: allDone ? "complete" : "build",
-    },
-    iterationNum: iterationsUsed,
-    log,
-  });
-
-  const receiptsResult = allDone
-    ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
-      await updateReceipts({ agent, plugin, log }))
-    : undefined;
-
-  receiptsResult && receiptsResult.isErr() &&
-    log({ tags: ["error"], message: receiptsResult.error });
-
-  !allDone &&
-    log({
-      tags: ["info"],
-      message:
-        `${iterationsUsed} iterations completed without completion marker.`,
+    const iterationsUsed = await runParallelLoop({
+      agent,
+      iterations,
+      parallelism: parallel,
+      expectedScenarioIds,
+      signal: shutdownController.signal,
+      log,
+      plugin,
+      level,
+      specFile: filePaths.specFile,
+      progressFile: filePaths.progressFile,
     });
 
-  return computeExitCode(allDone);
+    if (iterationsUsed === 130) return 130;
+
+    const finalContent = await Deno.readTextFile(filePaths.progressFile).catch(
+      () => "",
+    );
+    const finalSection = finalContent.split("END_DEMO")[1] ?? "";
+    const allDoneResult = isAllVerified(finalSection, expectedScenarioIds);
+    const allDone = allDoneResult.isOk() && allDoneResult.value;
+
+    await plugin.onLoopEnd?.({
+      finalState: {
+        validationFailurePath: undefined,
+        task: allDone ? "complete" : "build",
+      },
+      iterationNum: iterationsUsed,
+      log,
+    });
+
+    const receiptsResult = allDone
+      ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
+        await updateReceipts({ agent, plugin, log }))
+      : undefined;
+
+    receiptsResult && receiptsResult.isErr() &&
+      log({ tags: ["error"], message: receiptsResult.error });
+
+    !allDone &&
+      log({
+        tags: ["info"],
+        message:
+          `${iterationsUsed} iterations completed without completion marker.`,
+      });
+
+    return computeExitCode(allDone);
+  } finally {
+    guiController.abort();
+  }
 };
 
 if (import.meta.main) {

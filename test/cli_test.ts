@@ -123,3 +123,35 @@ Deno.test("parseCliArgs custom parallel", async () => {
     assertEquals(result.value.parallel, 4);
   }
 });
+
+Deno.test("parseCliArgs gui defaults to false", async () => {
+  const result = await parseCliArgs(["-i", "5"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.gui, false);
+  }
+});
+
+Deno.test("parseCliArgs --gui enables gui", async () => {
+  const result = await parseCliArgs(["-i", "5", "--gui"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.gui, true);
+  }
+});
+
+Deno.test("parseCliArgs guiPort defaults to 8420", async () => {
+  const result = await parseCliArgs(["-i", "5"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.guiPort, 8420);
+  }
+});
+
+Deno.test("parseCliArgs --gui-port sets custom port", async () => {
+  const result = await parseCliArgs(["-i", "5", "--gui-port", "9999"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.guiPort, 9999);
+  }
+});

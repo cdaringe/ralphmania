@@ -30,6 +30,16 @@ const EXCLUDED_FILES: ReadonlyMap<string, string> = new Map([
     "src/set-fns.ts",
     "Vendored set-theory utility; user marked DO NOT CHANGE; unused exports have no coverage",
   ],
+  // GUI server uses Deno.serve — requires network and system integration
+  [
+    "src/gui/server.ts",
+    "Network server requiring system integration",
+  ],
+  // GUI HTML is a static string export — no executable logic to cover
+  [
+    "src/gui/html.ts",
+    "Static HTML/JS UI content; no executable logic to test",
+  ],
 ]);
 
 const input = await new Response(Deno.stdin.readable).text();

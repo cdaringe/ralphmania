@@ -4,7 +4,7 @@
 
 | #       | Status   | Summary                                                                                                                       | Rework Notes |
 | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| ARCH.1  | VERIFIED | [Hexagonal architecture via ports/adapters; pure domain, injectable deps](docs/scenarios/ARCH.1-hexagonal-architecture.md) |              |
+| ARCH.1  | VERIFIED | [Hexagonal architecture via ports/adapters; pure domain, injectable deps](docs/scenarios/ARCH.1-hexagonal-architecture.md)    |              |
 | ARCH.3  | VERIFIED | [Three FSMs govern orchestrator, worker, and scenario lifecycle via tagged states](docs/scenarios/ARCH.3-state-machines.md)   |              |
 | ARCH.4  | VERIFIED | [Checkpoint + escalation persistence restores valid state on crash or restart](docs/scenarios/ARCH.4-recovery.md)             |              |
 | ARCH.2  | VERIFIED | [Pipeline architecture with domain-module offloading](docs/scenarios/ARCH.2-pipeline-architecture.md)                         |              |
@@ -41,3 +41,4 @@
 | 30      | VERIFIED | [Strict Deno lint enforcement as quality gate](docs/scenarios/30-lint-enforcement.md)                                         |              |
 | 32      | VERIFIED | [Non-zero exit code when iterations exhausted without completion](docs/scenarios/32-non-zero-exit-on-incomplete.md)           |              |
 | 33      | VERIFIED | [Worker stdio per-line colored prefix for terminal output](docs/scenarios/33-worker-stdio-prefix.md)                          |              |
+| GUI.a   | WIP      | [Interactive web GUI with SSE realtime updates](docs/scenarios/GUI.a-interactive-web-gui.md)                                  |              |
