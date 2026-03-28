@@ -3,7 +3,7 @@ import {
   cleanupWorktree,
   createWorktree,
   hasNewCommits,
-} from "../src/worktree.ts";
+} from "../src/git/worktree.ts";
 import { noopLog } from "./fixtures.ts";
 
 Deno.test("createWorktree creates and cleanupWorktree removes", async () => {

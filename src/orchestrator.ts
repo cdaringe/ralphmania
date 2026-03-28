@@ -7,8 +7,8 @@ import {
   hasNewCommits as hasNewCommitsImpl,
   mergeWorktree as mergeWorktreeImpl,
   resetWorkingTree as resetWorkingTreeImpl,
-} from "./worktree.ts";
-import { reconcileMerge as reconcileMergeImpl } from "./reconcile.ts";
+} from "./git/worktree.ts";
+import { reconcileMerge as reconcileMergeImpl } from "./git/reconcile.ts";
 import {
   readEscalationState as readEscalationStateImpl,
   writeEscalationState as writeEscalationStateImpl,
@@ -19,10 +19,10 @@ import {
   readLoopCheckpoint,
   writeLoopCheckpoint,
 } from "./state.ts";
-import type { MachineContext, MachineDeps } from "./state-machine.ts";
-import { isTerminal, transition } from "./state-machine.ts";
-import type { OrchestratorState } from "./state-machine.ts";
-export type { WorkerResult } from "./state-machine.ts";
+import type { MachineContext, MachineDeps } from "./machines/state-machine.ts";
+import { isTerminal, transition } from "./machines/state-machine.ts";
+import type { OrchestratorState } from "./machines/state-machine.ts";
+export type { WorkerResult } from "./machines/state-machine.ts";
 
 /** Dependencies injectable for testing. Alias for {@link MachineDeps}. */
 export type ParallelDeps = MachineDeps;

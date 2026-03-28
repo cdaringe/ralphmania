@@ -1,7 +1,7 @@
 // coverage:ignore — Git subprocess operations requiring real repository state
-import type { Logger, Result } from "./types.ts";
-import { err, ok } from "./types.ts";
-import { WORKTREE_BASE_DIR } from "./constants.ts";
+import type { Logger, Result } from "../types.ts";
+import { err, ok } from "../types.ts";
+import { WORKTREE_BASE_DIR } from "../constants.ts";
 
 export type WorktreeInfo = {
   readonly path: string;

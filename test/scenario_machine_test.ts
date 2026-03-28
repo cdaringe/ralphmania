@@ -5,8 +5,8 @@ import {
   statusToState,
   validateProgressTransitions,
   validateTransition,
-} from "../src/scenario-machine.ts";
-import type { ScenarioState } from "../src/scenario-machine.ts";
+} from "../src/machines/scenario-machine.ts";
+import type { ScenarioState } from "../src/machines/scenario-machine.ts";
 
 // ---------------------------------------------------------------------------
 // statusToState

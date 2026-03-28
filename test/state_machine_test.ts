@@ -9,7 +9,7 @@ import {
   transitionReadingProgress,
   transitionRunningWorkers,
   transitionValidating,
-} from "../src/state-machine.ts";
+} from "../src/machines/state-machine.ts";
 import type {
   CheckingDonenessState,
   FindingActionableState,
@@ -17,7 +17,7 @@ import type {
   ReadingProgressState,
   RunningWorkersState,
   ValidatingState,
-} from "../src/state-machine.ts";
+} from "../src/machines/state-machine.ts";
 import type { EscalationState } from "../src/types.ts";
 import { makeCtx, stubDeps } from "./fixtures.ts";
 
