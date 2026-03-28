@@ -2,7 +2,11 @@ import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { runParallelLoop } from "../src/orchestrator.ts";
 import type { ParallelDeps } from "../src/orchestrator.ts";
 import { resolveWorkerModelSelection } from "../src/runner.ts";
-import type { EscalationLevel, ValidationResult } from "../src/types.ts";
+import type {
+  EscalationLevel,
+  LoopCheckpoint,
+  ValidationResult,
+} from "../src/types.ts";
 import { ok } from "../src/types.ts";
 import type { Plugin } from "../src/plugin.ts";
 import {
@@ -625,5 +629,169 @@ Deno.test("integration: full lifecycle — implement, rework, fix, verify", asyn
     validationPaths[2],
     "/tmp/validation-fail.log",
     "round 3: receives round 2 failure",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// ARCH.4 – Recoverability integration tests
+// ---------------------------------------------------------------------------
+
+Deno.test("integration(ARCH.4): crash recovery — resumes from persisted checkpoint", async () => {
+  const progress = createProgressStore("| 1.1 |          |      |");
+  let checkpoint: LoopCheckpoint | undefined = {
+    iterationsUsed: 2,
+    step: "done" as const,
+    validationFailurePath: undefined,
+  };
+  let agentRuns = 0;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 4,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: {
+      ...integrationDeps({ progress }),
+      runIteration: () => {
+        agentRuns++;
+        return Promise.resolve({ status: "continue" as const });
+      },
+      readCheckpoint: () => Promise.resolve(checkpoint),
+      writeCheckpoint: (cp) => {
+        checkpoint = cp;
+        return Promise.resolve();
+      },
+      clearCheckpoint: () => {
+        checkpoint = undefined;
+        return Promise.resolve();
+      },
+    },
+  });
+
+  // Resumed from iterationsUsed=2, only 2 more agent runs (iterations 3 and 4)
+  assertEquals(agentRuns, 2, "should only run 2 more agent iterations");
+  assertEquals(iterationsUsed, 4, "should report total 4 iterations used");
+  // Checkpoint cleared on clean exit (ARCH.4: no stale state left behind)
+  assertEquals(checkpoint, undefined, "checkpoint cleared after clean exit");
+});
+
+Deno.test("integration(ARCH.4): crash at validate step — agent skipped, validation reruns", async () => {
+  const progress = createProgressStore("| 1.1 |          |      |");
+  let checkpoint: LoopCheckpoint | undefined = {
+    iterationsUsed: 1,
+    step: "validate" as const,
+    validationFailurePath: undefined,
+  };
+  let agentRuns = 0;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 3,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: {
+      ...integrationDeps({ progress }),
+      runIteration: () => {
+        agentRuns++;
+        return Promise.resolve({ status: "continue" as const });
+      },
+      readCheckpoint: () => Promise.resolve(checkpoint),
+      writeCheckpoint: (cp) => {
+        checkpoint = cp;
+        return Promise.resolve();
+      },
+      clearCheckpoint: () => {
+        checkpoint = undefined;
+        return Promise.resolve();
+      },
+    },
+  });
+
+  // Iteration 1 resumed at "validate" (agent skipped); only iteration 2 ran agent
+  assertEquals(
+    agentRuns,
+    1,
+    "agent should not re-run for the resumed iteration",
+  );
+  assertEquals(iterationsUsed, 3);
+});
+
+Deno.test("integration(ARCH.4): validationFailurePath restored from checkpoint across restart", async () => {
+  const progress = createProgressStore("| 1.1 |          |      |");
+  const checkpoint: LoopCheckpoint = {
+    iterationsUsed: 1,
+    step: "done" as const,
+    validationFailurePath: "/tmp/pre-crash-fail.log",
+  };
+  const receivedPaths: (string | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 2,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: {
+      ...integrationDeps({ progress }),
+      runIteration: (opts) => {
+        receivedPaths.push(opts.validationFailurePath);
+        return Promise.resolve({ status: "continue" as const });
+      },
+      readCheckpoint: () => Promise.resolve(checkpoint),
+      writeCheckpoint: () => Promise.resolve(),
+      clearCheckpoint: () => Promise.resolve(),
+    },
+  });
+
+  // The persisted failure path must be fed to the agent on the resumed run
+  assertEquals(
+    receivedPaths[0],
+    "/tmp/pre-crash-fail.log",
+    "restored validationFailurePath should flow into the resumed agent run",
+  );
+});
+
+Deno.test("integration(ARCH.4): escalation state survives simulated restart", async () => {
+  const progress = createProgressStore(
+    "| 1.1 | NEEDS_REWORK | fix me |",
+  );
+  // Pre-seed escalation as if a prior run already escalated scenario 1.1
+  const escalation = createEscalationStore({ "1.1": 1 });
+  const levelsReceived: (EscalationLevel | undefined)[] = [];
+
+  await runParallelLoop({
+    agent: "claude",
+    iterations: 1,
+    parallelism: 1,
+    expectedScenarioIds: ["1.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: integrationDeps({
+      progress,
+      escalation,
+      onIteration: ({ level }) => {
+        levelsReceived.push(level);
+      },
+    }),
+  });
+
+  // Worker should receive the escalation level carried over from the prior run
+  assertEquals(
+    levelsReceived[0],
+    1,
+    "escalation level from prior run persists into resumed run",
   );
 });

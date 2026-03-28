@@ -53,10 +53,11 @@ Notable implementations:
 
 - ARCH.1: Hexagonal arch via ports (`MachineDeps`, `AgentRunDeps`,
   `ValidationHookDeps`, `ModelIODeps`, `ProgressFileDeps`) + pure domain modules
-  in `src/machines/`, `src/parsers/`, `src/model.ts`, `src/command.ts` + adapters
-  wired by `orchestrator.ts`. Structural enforcement in `test/arch_1_test.ts`
-  (Deno-call purity checks + port shape + in-memory adapter). In-memory fakes in
-  `test/fixtures.ts` (`stubDeps`, `createProgressStore`).
+  in `src/machines/`, `src/parsers/`, `src/model.ts`, `src/command.ts` +
+  adapters wired by `orchestrator.ts`. Structural enforcement in
+  `test/arch_1_test.ts` (Deno-call purity checks + port shape + in-memory
+  adapter). In-memory fakes in `test/fixtures.ts` (`stubDeps`,
+  `createProgressStore`).
 - ARCH.2: `src/model.ts` owns all derivations — `orderActionableScenarios`
   (rework-first ordering) and `computeEffectiveLevel` (escalation merge);
   pipeline stages in `src/machines/state-machine.ts` are thin orchestrators only
@@ -65,6 +66,9 @@ Notable implementations:
 - Scenario 33: `src/runner.ts` `workerPrefix`/`linePrefixTransform` — per-line
   colored terminal prefix
 - Scenario 27: parallel workers prescribed distinct scenarios by orchestrator
+- ARCH.4: recovery via `src/state.ts` checkpoint (`.ralph/loop-state.json`) +
+  `src/model.ts` escalation state (`.ralph/escalation.json`) + `transitionInit`
+  resume routing. See `docs/scenarios/ARCH.4-recovery.md`
 - Scenario 22: `src/state.ts` checkpoint serialization
   (`.ralph/loop-state.json`)
 - Scenario 8/19: escalation ladder in `src/model.ts` + `.ralph/escalation.json`
