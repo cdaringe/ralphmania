@@ -1,15 +1,13 @@
 import { assert, assertEquals } from "jsr:@std/assert@^1.0.11";
-import { createEventBus } from "../src/gui/events.ts";
 import { startGuiServer } from "../src/gui/server.tsx";
-import { GUI_HTML, WORKER_PAGE_HTML } from "../src/gui/html.ts";
+import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 
 Deno.test("startGuiServer serves HTML page at /", async () => {
-  const bus = createEventBus();
   const ctrl = new AbortController();
   const serverPromise = startGuiServer({
     port: 18440,
-    bus,
     signal: ctrl.signal,
+    skipBuild: true,
   });
 
   await new Promise<void>((r) => setTimeout(r, 50));
@@ -27,12 +25,11 @@ Deno.test("startGuiServer serves HTML page at /", async () => {
 });
 
 Deno.test("startGuiServer returns 404 for unknown paths", async () => {
-  const bus = createEventBus();
   const ctrl = new AbortController();
   const serverPromise = startGuiServer({
     port: 18441,
-    bus,
     signal: ctrl.signal,
+    skipBuild: true,
   });
 
   await new Promise<void>((r) => setTimeout(r, 50));
@@ -45,42 +42,46 @@ Deno.test("startGuiServer returns 404 for unknown paths", async () => {
   await serverPromise.catch((): void => {});
 });
 
-Deno.test("startGuiServer SSE endpoint has correct content-type", async () => {
-  const bus = createEventBus();
-  const ctrl = new AbortController();
-  const serverPromise = startGuiServer({
-    port: 18442,
-    bus,
-    signal: ctrl.signal,
-  });
+Deno.test({
+  name: "startGuiServer SSE endpoint has correct content-type",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const ctrl = new AbortController();
+    const serverPromise = startGuiServer({
+      port: 18442,
+      signal: ctrl.signal,
+      skipBuild: true,
+    });
 
-  await new Promise<void>((r) => setTimeout(r, 50));
+    await new Promise<void>((r) => setTimeout(r, 50));
 
-  const reqCtrl = new AbortController();
-  const res = await fetch("http://localhost:18442/events", {
-    signal: reqCtrl.signal,
-  });
-  assertEquals(res.status, 200);
-  assertEquals(res.headers.get("content-type"), "text/event-stream");
+    const reqCtrl = new AbortController();
+    const res = await fetch("http://localhost:18442/events", {
+      signal: reqCtrl.signal,
+    });
+    assertEquals(res.status, 200);
+    assertEquals(res.headers.get("content-type"), "text/event-stream");
 
-  reqCtrl.abort();
-  await res.body?.cancel().catch((): void => {});
+    reqCtrl.abort();
+    await res.body?.cancel().catch((): void => {});
 
-  ctrl.abort();
-  await serverPromise.catch((): void => {});
+    ctrl.abort();
+    await serverPromise.catch((): void => {});
+  },
 });
 
 Deno.test({
-  name: "startGuiServer SSE stream delivers emitted events",
+  name: "startGuiServer SSE stream delivers events written to log files",
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const bus = createEventBus();
+    await initLogDir();
     const ctrl = new AbortController();
     const serverPromise = startGuiServer({
       port: 18443,
-      bus,
       signal: ctrl.signal,
+      skipBuild: true,
     });
 
     await new Promise<void>((r) => setTimeout(r, 50));
@@ -96,20 +97,28 @@ Deno.test({
     const reader = body.getReader();
     const dec = new TextDecoder();
 
-    // Emit an event and read it back
-    const expected = {
-      type: "log" as const,
-      level: "info",
-      tags: ["info"],
-      message: "workflow started",
-      ts: 42,
-    };
-    bus.emit(expected);
+    setTimeout(async () => {
+      await writeOrchestratorEvent({
+        type: "log" as const,
+        level: "info",
+        tags: ["info"] as readonly string[],
+        message: "workflow started",
+        ts: 42,
+      });
+    }, 200);
 
-    const { value } = await reader.read();
-    assert(value !== undefined);
-    const text = dec.decode(value);
-    assert(text.includes(JSON.stringify(expected)));
+    const deadline = Date.now() + 3000;
+    let text = "";
+    while (!text.includes("workflow started") && Date.now() < deadline) {
+      const race = await Promise.race([
+        reader.read(),
+        new Promise<{ value: undefined; done: true }>((r) =>
+          setTimeout(() => r({ value: undefined, done: true }), 500)
+        ),
+      ]);
+      if (race.value) text += dec.decode(race.value);
+    }
+    assert(text.includes('"workflow started"'), `Expected event, got: ${text}`);
 
     reqCtrl.abort();
     await reader.cancel().catch((): void => {});
@@ -119,24 +128,12 @@ Deno.test({
   },
 });
 
-Deno.test("GUI_HTML contains expected UI elements", () => {
-  assert(GUI_HTML.includes("ralphmania"));
-  assert(GUI_HTML.includes("/events")); // SSE endpoint reference
-  assert(GUI_HTML.includes("EventSource")); // SSE client code
-  assert(GUI_HTML.includes("Orchestrator")); // state display
-  assert(GUI_HTML.includes("Workers")); // workers panel
-  assert(GUI_HTML.includes("state-val")); // state panel element
-  assert(GUI_HTML.includes("launching")); // worker launch parsing
-  assert(GUI_HTML.includes("/worker/")); // worker detail page links
-});
-
-Deno.test("startGuiServer serves WORKER_PAGE_HTML at /worker/:id", async () => {
-  const bus = createEventBus();
+Deno.test("startGuiServer serves worker page at /worker/:id", async () => {
   const ctrl = new AbortController();
   const serverPromise = startGuiServer({
     port: 18445,
-    bus,
     signal: ctrl.signal,
+    skipBuild: true,
   });
 
   await new Promise<void>((r) => setTimeout(r, 50));
@@ -148,45 +145,7 @@ Deno.test("startGuiServer serves WORKER_PAGE_HTML at /worker/:id", async () => {
   );
   const text = await res.text();
   assert(text.includes("ralphmania"));
-  assert(text.includes("worker-title")); // worker header element
-  assert(text.includes("scenario-val")); // scenario display element
-  assert(text.includes("state-val")); // state display element
-  assert(text.includes("/events")); // connects to SSE stream
 
   ctrl.abort();
   await serverPromise.catch((): void => {});
-});
-
-Deno.test("startGuiServer serves WORKER_PAGE_HTML for any worker id", async () => {
-  const bus = createEventBus();
-  const ctrl = new AbortController();
-  const serverPromise = startGuiServer({
-    port: 18446,
-    bus,
-    signal: ctrl.signal,
-  });
-
-  await new Promise<void>((r) => setTimeout(r, 50));
-
-  const res = await fetch("http://localhost:18446/worker/3");
-  assertEquals(res.status, 200);
-  const text = await res.text();
-  // Hono-rendered HTML may differ slightly from pre-rendered string
-  assert(text.includes("ralphmania"));
-  assert(text.includes("worker-title"));
-
-  ctrl.abort();
-  await serverPromise.catch((): void => {});
-});
-
-Deno.test("WORKER_PAGE_HTML contains required worker page elements", () => {
-  assert(WORKER_PAGE_HTML.includes("ralphmania")); // brand
-  assert(WORKER_PAGE_HTML.includes("worker-title")); // worker index display
-  assert(WORKER_PAGE_HTML.includes("scenario-val")); // scenario display
-  assert(WORKER_PAGE_HTML.includes("state-val")); // state display
-  assert(WORKER_PAGE_HTML.includes("/events")); // SSE stream connection
-  assert(WORKER_PAGE_HTML.includes("worker_active")); // handles worker_active event
-  assert(WORKER_PAGE_HTML.includes("worker_done")); // handles worker_done event
-  assert(WORKER_PAGE_HTML.includes("overview")); // back link to main page
-  assert(WORKER_PAGE_HTML.includes("workerIndex")); // filters by worker index
 });

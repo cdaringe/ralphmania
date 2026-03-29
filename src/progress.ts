@@ -16,13 +16,11 @@ export const parseScenarioIds = (specContent: string): string[] => {
   return parsed.isOk() ? parsed.value.map((r) => r.scenario) : [];
 };
 
-const generateProgressTemplate = (scenarioCount: number): string => {
-  const rows = Array.from(
-    { length: scenarioCount },
-    (_, i) =>
-      `| ${
-        String(i + 1).padEnd(2)
-      } |          |                                                                                                        |              |`,
+const generateProgressTemplate = (scenarioIds: string[]): string => {
+  const rows = scenarioIds.map((id) =>
+    `| ${
+      id.padEnd(2)
+    } |          |                                                                                                        |              |`
   ).join("\n");
   return `<!-- END_DEMO -->
 
@@ -70,12 +68,18 @@ const writeProgressTemplate = async (
   io: ProgressFileDeps,
 ): Promise<void> => {
   const specContent = await io.readTextFile(paths.specFile).catch(() => "");
-  const count = parseScenarioCount(specContent) || 10;
-  await io.writeTextFile(paths.progressFile, generateProgressTemplate(count));
+  const ids = parseScenarioIds(specContent);
+  const fallbackIds = ids.length > 0
+    ? ids
+    : Array.from({ length: 10 }, (_, i) => String(i + 1));
+  await io.writeTextFile(
+    paths.progressFile,
+    generateProgressTemplate(fallbackIds),
+  );
   log({
     tags: ["info", "progress"],
     message:
-      `Created ${paths.progressFile} with ${count} scenario rows — fill it in as you implement scenarios.`,
+      `Created ${paths.progressFile} with ${fallbackIds.length} scenario rows — fill it in as you implement scenarios.`,
   });
 };
 
@@ -85,24 +89,21 @@ const syncProgressWithSpec = async (
   io: ProgressFileDeps,
 ): Promise<void> => {
   const specContent = await io.readTextFile(paths.specFile).catch(() => "");
-  const specCount = parseScenarioCount(specContent);
-  if (specCount === 0) return;
+  const specIds = parseScenarioIds(specContent);
+  if (specIds.length === 0) return;
 
   const progressContent = await io.readTextFile(paths.progressFile).catch(
     () => "",
   );
-  const progressCount = parseScenarioCount(progressContent);
+  const progressIds = new Set(parseScenarioIds(progressContent));
+  const missingIds = specIds.filter((id) => !progressIds.has(id));
 
-  if (specCount <= progressCount) return;
+  if (missingIds.length === 0) return;
 
-  const newRows = Array.from(
-    { length: specCount - progressCount },
-    (_, i) => {
-      const num = progressCount + i + 1;
-      return `| ${
-        String(num).padEnd(2)
-      } |          |                                                                                                        |              |`;
-    },
+  const newRows = missingIds.map((id) =>
+    `| ${
+      id.padEnd(2)
+    } |          |                                                                                                        |              |`
   ).join("\n");
   await io.writeTextFile(
     paths.progressFile,
@@ -110,9 +111,8 @@ const syncProgressWithSpec = async (
   );
   log({
     tags: ["info", "progress"],
-    message: `Appended ${
-      specCount - progressCount
-    } new scenario(s) to ${paths.progressFile}`,
+    message:
+      `Appended ${missingIds.length} new scenario(s) to ${paths.progressFile}`,
   });
 };
 

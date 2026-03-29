@@ -1,11 +1,10 @@
-import { assertEquals } from "jsr:@std/assert@^1";
+import { assert, assertEquals } from "jsr:@std/assert@^1";
 import { createAgentInputBus } from "./input-bus.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Create a WritableStream backed by a byte collector for testing. */
 const makeCollector = (): {
   stream: WritableStream<Uint8Array>;
   collected: () => Uint8Array;
@@ -35,23 +34,24 @@ const makeCollector = (): {
 // send — no worker registered
 // ---------------------------------------------------------------------------
 
-Deno.test("AgentInputBus: send to unregistered worker returns false", async () => {
+Deno.test("AgentInputBus: send to unregistered worker returns err", async () => {
   const bus = createAgentInputBus();
-  const sent = await bus.send(0, "hello");
-  assertEquals(sent, false);
+  const result = await bus.send("w0", "hello");
+  assert(result.isErr());
+  assert(result.error.failureMessage.includes("No active worker"));
 });
 
 // ---------------------------------------------------------------------------
 // register + send
 // ---------------------------------------------------------------------------
 
-Deno.test("AgentInputBus: send to registered worker writes bytes", async () => {
+Deno.test("AgentInputBus: send to registered worker returns ok", async () => {
   const bus = createAgentInputBus();
   const { stream, collected } = makeCollector();
-  bus.register(0, stream);
+  bus.register("w0", stream);
 
-  const sent = await bus.send(0, "hello\n");
-  assertEquals(sent, true);
+  const result = await bus.send("w0", "hello\n");
+  assert(result.isOk());
   assertEquals(new TextDecoder().decode(collected()), "hello\n");
 });
 
@@ -59,11 +59,11 @@ Deno.test("AgentInputBus: multiple workers are independent", async () => {
   const bus = createAgentInputBus();
   const a = makeCollector();
   const b = makeCollector();
-  bus.register(0, a.stream);
-  bus.register(1, b.stream);
+  bus.register("w0", a.stream);
+  bus.register("w1", b.stream);
 
-  await bus.send(0, "to-zero\n");
-  await bus.send(1, "to-one\n");
+  await bus.send("w0", "to-zero\n");
+  await bus.send("w1", "to-one\n");
 
   assertEquals(new TextDecoder().decode(a.collected()), "to-zero\n");
   assertEquals(new TextDecoder().decode(b.collected()), "to-one\n");
@@ -73,33 +73,66 @@ Deno.test("AgentInputBus: multiple workers are independent", async () => {
 // unregister
 // ---------------------------------------------------------------------------
 
-Deno.test("AgentInputBus: send after unregister returns false", async () => {
+Deno.test("AgentInputBus: send after unregister returns err", async () => {
   const bus = createAgentInputBus();
   const { stream } = makeCollector();
-  bus.register(0, stream);
-  bus.unregister(0);
-  const sent = await bus.send(0, "nope");
-  assertEquals(sent, false);
+  bus.register("w0", stream);
+  bus.unregister("w0");
+  const result = await bus.send("w0", "nope");
+  assert(result.isErr());
 });
 
 Deno.test("AgentInputBus: unregister of unknown worker is a no-op", () => {
   const bus = createAgentInputBus();
-  bus.unregister(99); // must not throw
+  bus.unregister("nonexistent");
 });
 
 // ---------------------------------------------------------------------------
 // send on errored/closed stream
 // ---------------------------------------------------------------------------
 
-Deno.test("AgentInputBus: send on errored stream returns false gracefully", async () => {
+Deno.test("AgentInputBus: send on errored stream returns err with message", async () => {
   const bus = createAgentInputBus();
-  // Create a stream whose write callback throws so writer.write() rejects
   const stream = new WritableStream<Uint8Array>({
     write(): void {
       throw new Error("pipe broken");
     },
   });
-  bus.register(0, stream);
-  const sent = await bus.send(0, "data");
-  assertEquals(sent, false);
+  bus.register("w0", stream);
+  const result = await bus.send("w0", "data");
+  assert(result.isErr());
+  assert(result.error.failureMessage.includes("pipe broken"));
+});
+
+// ---------------------------------------------------------------------------
+// registerSession — SDK session mode
+// ---------------------------------------------------------------------------
+
+Deno.test("AgentInputBus: registerSession sends via session sender", async () => {
+  const bus = createAgentInputBus();
+  const received: string[] = [];
+  bus.registerSession("SC.1", async (text) => {
+    received.push(text);
+  });
+  const result = await bus.send("SC.1", "feedback\n");
+  assert(result.isOk());
+  assertEquals(received, ["feedback\n"]);
+});
+
+Deno.test("AgentInputBus: session sender error returns err with message", async () => {
+  const bus = createAgentInputBus();
+  bus.registerSession("SC.1", async () => {
+    throw new Error("session closed");
+  });
+  const result = await bus.send("SC.1", "msg");
+  assert(result.isErr());
+  assert(result.error.failureMessage.includes("session closed"));
+});
+
+Deno.test("AgentInputBus: unregister session clears entry", async () => {
+  const bus = createAgentInputBus();
+  bus.registerSession("SC.1", async () => {});
+  bus.unregister("SC.1");
+  const result = await bus.send("SC.1", "msg");
+  assert(result.isErr());
 });

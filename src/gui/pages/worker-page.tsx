@@ -1,13 +1,12 @@
 // coverage:ignore — JSX UI component; tested via e2e
 /**
- * Per-worker detail page component with streaming logs and agent input.
+ * Per-worker detail page. HTML shell + mount point. The worker-boot
+ * island loads the full worker page app.
  * @module
  */
 import { BASE_CSS, LOG_CSS, SIDEBAR_CSS } from "../styles.ts";
-import { WORKER_PAGE_SCRIPT } from "../client/worker-script.ts";
 
 const WORKER_EXTRA_CSS = `
-#iter{font-size:12px;color:var(--muted);margin-left:auto}
 .back{font-size:12px;color:var(--muted);text-decoration:none;padding:2px 8px;
   border:1px solid var(--border);border-radius:4px}
 .back:hover{color:var(--accent);border-color:var(--accent)}
@@ -30,9 +29,11 @@ const WORKER_EXTRA_CSS = `
 #send-btn:disabled{border-color:var(--border);color:var(--muted);
   background:var(--bg);cursor:not-allowed}
 #send-status{font-size:11px;color:var(--muted);white-space:nowrap}
+.t-user{color:#f472b6}.t-input{color:#f472b6}
+.le:has(.t-user),.le-user{border-left:3px solid #f472b6;padding-left:5px}
+.le:has(.t-user) .le-msg,.le-user .le-msg{color:#f9a8d4}
 `;
 
-/** Renders the per-worker detail page HTML. */
 // deno-lint-ignore no-explicit-any
 export const WorkerPage = (): any => (
   <html lang="en">
@@ -40,6 +41,19 @@ export const WorkerPage = (): any => (
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width,initial-scale=1" />
       <title>ralphmania · worker</title>
+      <script
+        type="importmap"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            imports: {
+              "preact": "https://esm.sh/preact@10",
+              "preact/": "https://esm.sh/preact@10/",
+              "preact/hooks": "https://esm.sh/preact@10/hooks",
+              "preact/jsx-runtime": "https://esm.sh/preact@10/jsx-runtime",
+            },
+          }),
+        }}
+      />
       <style
         dangerouslySetInnerHTML={{
           __html: BASE_CSS + SIDEBAR_CSS + LOG_CSS + WORKER_EXTRA_CSS,
@@ -47,58 +61,8 @@ export const WorkerPage = (): any => (
       />
     </head>
     <body>
-      <header>
-        <h1>ralphmania</h1>
-        <a class="back" href="/">{"\u2190" as string} overview</a>
-        <span id="worker-title" style="font-size:13px;color:var(--muted)">
-          worker {"\u2014" as string}
-        </span>
-        <span class="badge off" id="badge">connecting</span>
-      </header>
-      <main>
-        <aside>
-          <div>
-            <div class="pt">Worker</div>
-            <div class="info-val neutral" id="worker-id">
-              {"\u2014" as string}
-            </div>
-          </div>
-          <div>
-            <div class="pt">Scenario</div>
-            <div class="info-val" id="scenario-val">{"\u2014" as string}</div>
-          </div>
-          <div>
-            <div class="pt">State</div>
-            <div class="info-val neutral" id="state-val">waiting</div>
-          </div>
-        </aside>
-        <section
-          id="log-wrap"
-          style="display:flex;flex-direction:column;overflow:hidden"
-        >
-          <div id="log-bar">
-            <label>
-              <input type="checkbox" id="autoscroll" checked /> auto-scroll
-            </label>
-            <label>
-              <input type="checkbox" id="showdebug" /> debug
-            </label>
-            <button type="button" id="clrbtn">clear</button>
-          </div>
-          <div id="log"></div>
-          <div id="input-bar">
-            <textarea
-              id="input-text"
-              placeholder="Send input to agent (Enter to send, Shift+Enter for newline)"
-              disabled
-            >
-            </textarea>
-            <button type="button" id="send-btn" disabled>Send</button>
-            <span id="send-status"></span>
-          </div>
-        </section>
-      </main>
-      <script dangerouslySetInnerHTML={{ __html: WORKER_PAGE_SCRIPT }} />
+      <div id="app-root" />
+      <script type="module" src="/islands/worker-boot.js" />
     </body>
   </html>
 );

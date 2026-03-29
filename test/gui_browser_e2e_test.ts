@@ -18,9 +18,8 @@
 import { assert, assertEquals } from "jsr:@std/assert@^1.0.11";
 import puppeteer from "npm:puppeteer-core@23";
 import { startGuiServer } from "../src/gui/server.tsx";
-import { createEventBus } from "../src/gui/events.ts";
-import type { GuiEventBus } from "../src/gui/events.ts";
 import { createAgentInputBus } from "../src/gui/input-bus.ts";
+import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 
 const CHROME_PATH = `${
   Deno.env.get("HOME")
@@ -33,7 +32,6 @@ const nextPort = (): number => BASE_PORT + portCounter++;
 interface TestContext {
   ac: AbortController;
   done: Promise<void>;
-  bus: GuiEventBus;
   port: number;
   browser: Awaited<ReturnType<typeof puppeteer.launch>>;
   page: Awaited<
@@ -43,15 +41,15 @@ interface TestContext {
 
 async function setup(): Promise<TestContext> {
   const port = nextPort();
+  await initLogDir();
   const ac = new AbortController();
-  const bus = createEventBus();
   const done = startGuiServer({
     port,
-    bus,
     signal: ac.signal,
     agentInputBus: createAgentInputBus(),
   });
-  await new Promise<void>((r) => setTimeout(r, 150));
+  // Builder esbuild compilation + server startup needs time.
+  await new Promise<void>((r) => setTimeout(r, 10000));
 
   const browser = await puppeteer.launch({
     executablePath: CHROME_PATH,
@@ -59,10 +57,16 @@ async function setup(): Promise<TestContext> {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
+  page.on("console", (msg: { type: () => string; text: () => string }) =>
+    console.log(`[browser:${msg.type()}] ${msg.text()}`)
+  );
+  page.on("pageerror", (err: { message: string }) =>
+    console.log(`[browser:error] ${err.message}`)
+  );
   // Use 'load' not 'networkidle0' — SSE keeps the connection alive forever
   await page.goto(`http://localhost:${port}/`, { waitUntil: "load" });
 
-  return { ac, done, bus, port, browser, page };
+  return { ac, done, port, browser, page };
 }
 
 async function teardown(ctx: TestContext): Promise<void> {
@@ -70,8 +74,8 @@ async function teardown(ctx: TestContext): Promise<void> {
   await ctx.browser.close();
   ctx.ac.abort();
   await ctx.done.catch(() => {});
-  // Wait for port to be released
-  await new Promise<void>((r) => setTimeout(r, 100));
+  // Wait for port + file watcher cleanup
+  await new Promise<void>((r) => setTimeout(r, 200));
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +253,7 @@ Deno.test({
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
       // Emit a state transition
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "state",
         from: "init",
         to: "reading_progress",
@@ -316,7 +320,7 @@ Deno.test({
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
       // Transition to running_workers
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "state",
         from: "finding_actionable",
         to: "running_workers",
@@ -325,13 +329,13 @@ Deno.test({
       await new Promise<void>((r) => setTimeout(r, 200));
 
       // Emit worker_active events
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 0,
         scenario: "GUI.a",
         ts: Date.now(),
       });
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 1,
         scenario: "GUI.b",
@@ -375,7 +379,7 @@ Deno.test({
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
       // Set up workers
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "state",
         from: "finding_actionable",
         to: "running_workers",
@@ -383,7 +387,7 @@ Deno.test({
       });
       await new Promise<void>((r) => setTimeout(r, 200));
 
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 0,
         scenario: "TEST.1",
@@ -392,7 +396,11 @@ Deno.test({
       await new Promise<void>((r) => setTimeout(r, 500));
 
       // Complete the worker
-      ctx.bus.emit({ type: "worker_done", workerIndex: 0, ts: Date.now() });
+      await writeOrchestratorEvent({
+        type: "worker_done",
+        workerIndex: 0,
+        ts: Date.now(),
+      });
       await new Promise<void>((r) => setTimeout(r, 500));
 
       // Worker node should have done styling (green background)
@@ -432,7 +440,7 @@ Deno.test({
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
       // Set up workers
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "state",
         from: "finding_actionable",
         to: "running_workers",
@@ -440,7 +448,7 @@ Deno.test({
       });
       await new Promise<void>((r) => setTimeout(r, 200));
 
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 0,
         scenario: "M.1",
@@ -449,7 +457,7 @@ Deno.test({
       await new Promise<void>((r) => setTimeout(r, 500));
 
       // Start merge
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "merge_start",
         workerIndex: 0,
         scenario: "M.1",
@@ -493,7 +501,7 @@ Deno.test({
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
       // Set up a worker
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "state",
         from: "finding_actionable",
         to: "running_workers",
@@ -501,7 +509,7 @@ Deno.test({
       });
       await new Promise<void>((r) => setTimeout(r, 200));
 
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 0,
         scenario: "MODAL.1",
@@ -555,7 +563,7 @@ Deno.test({
     try {
       await ctx.page.waitForSelector("#state-val", { timeout: 5000 });
 
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "state",
         from: "init",
         to: "finding_actionable",
@@ -583,7 +591,7 @@ Deno.test({
     try {
       await ctx.page.waitForSelector("#workers", { timeout: 5000 });
 
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 0,
         scenario: "SIDE.1",
@@ -622,7 +630,7 @@ Deno.test({
       await new Promise<void>((r) => setTimeout(r, 100));
 
       // Emit a log event
-      ctx.bus.emit({
+      await writeOrchestratorEvent({
         type: "log",
         level: "info",
         tags: ["info", "orchestrator"],

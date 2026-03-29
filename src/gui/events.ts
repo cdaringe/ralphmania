@@ -11,6 +11,8 @@ export type GuiLogEvent = {
   readonly tags: readonly string[];
   readonly message: string;
   readonly ts: number;
+  /** Scenario ID — present on worker-originated log lines; absent for orchestrator logs. */
+  readonly workerId?: string;
 };
 
 export type GuiStateEvent = {
@@ -30,6 +32,7 @@ export type GuiWorkerActiveEvent = {
 export type GuiWorkerDoneEvent = {
   readonly type: "worker_done";
   readonly workerIndex: number;
+  readonly scenario?: string;
   readonly ts: number;
 };
 

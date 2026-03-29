@@ -1,52 +1,81 @@
 /**
- * Agent input bus: routes text from the GUI to active agent subprocess stdin.
- * Pure domain module — no I/O dependencies.
+ * Agent input bus: routes text from the GUI to active agent workers.
+ *
+ * Two delivery mechanisms:
+ * - **stdin pipe**: for agents that read stdin mid-session (e.g., codex)
+ * - **session send**: for claude SDK sessions that accept multi-turn input
  *
  * @module
  */
+import type { Result } from "../types.ts";
+import { err, ok } from "../types.ts";
 
-/** Registry mapping worker indices to their subprocess stdin writers. */
+/** Async function that delivers a message into an ongoing agent session. */
+export type SessionSender = (text: string) => Promise<void>;
+
+/** Per-worker state for routing input. */
+type WorkerEntry =
+  | { mode: "stdin"; writer: WritableStreamDefaultWriter<Uint8Array> }
+  | { mode: "session"; send: SessionSender };
+
+/** Failure detail returned when input delivery fails. */
+export type SendFailure = { readonly failureMessage: string };
+
+/** Registry mapping worker IDs (scenario names) to their input context. */
 export type AgentInputBus = {
-  /** Register a worker's subprocess stdin stream when the agent starts. */
   readonly register: (
-    workerIndex: number,
+    workerId: string,
     stdin: WritableStream<Uint8Array>,
   ) => void;
-  /** Release and deregister the writer when the agent subprocess exits. */
-  readonly unregister: (workerIndex: number) => void;
-  /**
-   * Write `text` to the given worker's stdin.
-   * Returns `true` if the text was written, `false` if no worker is registered
-   * or the write failed (e.g. process already exited).
-   */
-  readonly send: (workerIndex: number, text: string) => Promise<boolean>;
+  readonly registerSession: (
+    workerId: string,
+    send: SessionSender,
+  ) => void;
+  readonly unregister: (workerId: string) => void;
+  readonly send: (
+    workerId: string,
+    text: string,
+  ) => Promise<Result<true, SendFailure>>;
 };
 
 /** Create a new in-process agent input bus. */
 export const createAgentInputBus = (): AgentInputBus => {
-  const writers = new Map<number, WritableStreamDefaultWriter<Uint8Array>>();
+  const workers = new Map<string, WorkerEntry>();
   const enc = new TextEncoder();
 
   return {
-    register(workerIndex, stdin): void {
-      writers.set(workerIndex, stdin.getWriter());
+    register(workerId, stdin): void {
+      workers.set(workerId, { mode: "stdin", writer: stdin.getWriter() });
     },
-    unregister(workerIndex): void {
-      const writer = writers.get(workerIndex);
-      if (writer) {
-        writer.releaseLock();
-        writers.delete(workerIndex);
+    registerSession(workerId, send): void {
+      workers.set(workerId, { mode: "session", send });
+    },
+    unregister(workerId): void {
+      const entry = workers.get(workerId);
+      if (entry?.mode === "stdin") entry.writer.releaseLock();
+      workers.delete(workerId);
+    },
+    async send(workerId, text): Promise<Result<true, SendFailure>> {
+      const entry = workers.get(workerId);
+      if (!entry) {
+        return err({
+          failureMessage:
+            `No active worker "${workerId}". The agent may have finished or not started yet.`,
+        });
       }
-    },
-    async send(workerIndex, text): Promise<boolean> {
-      const writer = writers.get(workerIndex);
-      if (!writer) return false;
       try {
-        await writer.write(enc.encode(text));
-        return true;
-      } catch {
-        // process exited or pipe broken
-        return false;
+        entry.mode === "stdin"
+          ? await entry.writer.write(enc.encode(text))
+          : await entry.send(text);
+        return ok(true);
+      } catch (e) {
+        return err({
+          failureMessage: entry.mode === "stdin"
+            ? `Stdin pipe broken: ${e instanceof Error ? e.message : String(e)}`
+            : `Session delivery failed: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+        });
       }
     },
   };

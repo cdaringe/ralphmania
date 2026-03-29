@@ -1,7 +1,7 @@
 // coverage:ignore — JSX UI component; tested via e2e
 /**
- * Main GUI page component with tabbed Graph/Log view.
- * The graph panel uses React Flow (loaded from esm.sh at runtime).
+ * Main GUI page. HTML shell with mount point. The boot island loads
+ * all other islands as ES modules from `/islands/boot.js`.
  * @module
  */
 import {
@@ -11,14 +11,9 @@ import {
   SIDEBAR_CSS,
   TAB_CSS,
 } from "../styles.ts";
-import {
-  GRAPH_MODULE_SCRIPT,
-  IMPORT_MAP,
-  MAIN_PAGE_VANILLA_SCRIPT,
-  XYFLOW_CSS_URL,
-} from "../client/main-script.ts";
 
-/** Extra CSS for the graph panel (host container for React Flow). */
+const XYFLOW_CSS_URL = "https://esm.sh/@xyflow/react@12/dist/style.css";
+
 const GRAPH_PANEL_CSS = `
 #graph-panel{background:var(--bg);flex:1;overflow:hidden;position:relative}
 #graph-root{position:absolute;inset:0}
@@ -28,7 +23,6 @@ const GRAPH_PANEL_CSS = `
 }
 `;
 
-/** Renders the full main GUI page HTML. */
 // deno-lint-ignore no-explicit-any
 export const MainPage = (): any => (
   <html lang="en">
@@ -37,87 +31,33 @@ export const MainPage = (): any => (
       <meta name="viewport" content="width=device-width,initial-scale=1" />
       <title>ralphmania · live</title>
       <link rel="stylesheet" href={XYFLOW_CSS_URL} />
-      <style
-        dangerouslySetInnerHTML={{
-          __html: BASE_CSS + SIDEBAR_CSS + TAB_CSS + LOG_CSS + GRAPH_PANEL_CSS +
-            MODAL_CSS,
-        }}
-      />
       <script
         type="importmap"
-        dangerouslySetInnerHTML={{ __html: IMPORT_MAP }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            imports: {
+              "preact": "https://esm.sh/preact@10",
+              "preact/": "https://esm.sh/preact@10/",
+              "preact/hooks": "https://esm.sh/preact@10/hooks",
+              "preact/jsx-runtime": "https://esm.sh/preact@10/jsx-runtime",
+              "react": "https://esm.sh/react@19",
+              "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime",
+              "react-dom": "https://esm.sh/react-dom@19",
+              "react-dom/client": "https://esm.sh/react-dom@19/client",
+            },
+          }),
+        }}
+      />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: BASE_CSS + SIDEBAR_CSS + TAB_CSS + LOG_CSS +
+            GRAPH_PANEL_CSS + MODAL_CSS,
+        }}
       />
     </head>
     <body>
-      <header>
-        <h1>ralphmania</h1>
-        <span class="badge off" id="badge">connecting</span>
-        <span id="iter"></span>
-      </header>
-      <main>
-        <aside>
-          <div>
-            <div class="pt">Orchestrator</div>
-            <div id="state-val">{"\u2014" as string}</div>
-          </div>
-          <div>
-            <div class="pt">
-              Progress{" "}
-              <a
-                href="/status"
-                target="_blank"
-                style="font-size:9px;color:var(--muted);text-decoration:none;float:right"
-              >
-                {`[full \u2192]`}
-              </a>
-            </div>
-            <div id="status-summary" style="font-size:11px;color:var(--muted)">
-              {"\u2014" as string}
-            </div>
-            <div id="status-list"></div>
-          </div>
-          <div>
-            <div class="pt">Workers</div>
-            <div id="workers">
-              <span style="color:var(--muted);font-size:11px">none</span>
-            </div>
-          </div>
-        </aside>
-        <section
-          id="content-area"
-          style="display:flex;flex-direction:column;overflow:hidden"
-        >
-          <div id="tab-bar">
-            <button type="button" class="tab active" data-tab="graph">
-              Graph
-            </button>
-            <button type="button" class="tab" data-tab="log">Log</button>
-          </div>
-          <div id="graph-panel" class="panel active">
-            <div id="graph-root"></div>
-          </div>
-          <div id="log-panel" class="panel">
-            <div id="log-bar">
-              <label>
-                <input type="checkbox" id="autoscroll" checked /> auto-scroll
-              </label>
-              <label>
-                <input type="checkbox" id="showdebug" /> debug
-              </label>
-              <button type="button" id="clrbtn">clear</button>
-            </div>
-            <div id="log"></div>
-          </div>
-        </section>
-      </main>
-      <div id="worker-modal" style="display:none"></div>
-      {/* Vanilla JS: sidebar, tabs, log, SSE, modal */}
-      <script dangerouslySetInnerHTML={{ __html: MAIN_PAGE_VANILLA_SCRIPT }} />
-      {/* React Flow graph module (loaded after vanilla JS sets up the bridge) */}
-      <script
-        type="module"
-        dangerouslySetInnerHTML={{ __html: GRAPH_MODULE_SCRIPT }}
-      />
+      <div id="app-root" />
+      <script type="module" src="/islands/boot.js" />
     </body>
   </html>
 );

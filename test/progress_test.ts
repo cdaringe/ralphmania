@@ -237,6 +237,38 @@ Deno.test("ensureProgressFile sync skips when spec has no scenarios", async () =
   await Deno.remove(dir, { recursive: true });
 });
 
+Deno.test("[ARCH.1] ensureProgressFile syncs non-integer spec IDs via in-memory fs", async () => {
+  const { files, io } = makeMemFS({
+    "spec.md":
+      "| ARCH.1 | Architecture | hex |\n| GUI.a | GUI | web |\n| 1 | CLI | foo |",
+    "progress.md":
+      "<!-- END_DEMO -->\n# Progress\n| # | Status | Summary | Rework Notes |\n| - | ------ | ------- | ------------ |\n| ARCH.1 | VERIFIED | done | |\n",
+  });
+  await ensureProgressFile(noop, {
+    specFile: "spec.md",
+    progressFile: "progress.md",
+  }, io);
+  assertStringIncludes(files["progress.md"], "| GUI.a");
+  assertStringIncludes(files["progress.md"], "| 1 ");
+  // Must NOT contain fabricated sequential IDs
+  assertEquals(files["progress.md"].includes("| 2 "), false);
+  assertEquals(files["progress.md"].includes("| 3 "), false);
+});
+
+Deno.test("[ARCH.1] generateProgressTemplate uses real spec IDs via in-memory fs", async () => {
+  const { files, io } = makeMemFS({
+    "spec.md": "| GUI.a | GUI | web |\n| CLI.1 | CLI | flag |",
+  });
+  await ensureProgressFile(noop, {
+    specFile: "spec.md",
+    progressFile: "progress.md",
+  }, io);
+  assertStringIncludes(files["progress.md"], "| GUI.a");
+  assertStringIncludes(files["progress.md"], "| CLI.1");
+  assertEquals(files["progress.md"].includes("| 1 "), false);
+  assertEquals(files["progress.md"].includes("| 2 "), false);
+});
+
 Deno.test("ensureProgressFile appends new rows to custom progress path", async () => {
   const dir = await Deno.makeTempDir();
   const specFile = `${dir}/spec.md`;

@@ -7,6 +7,7 @@ import type {
   Result,
 } from "./types.ts";
 import type { AgentInputBus } from "./gui/input-bus.ts";
+import { resetWorkerLog, writeWorkerLine } from "./gui/log-dir.ts";
 import { err, ok } from "./types.ts";
 import { extractSDKText } from "./agents/claude/sdk-text.ts";
 import {
@@ -194,8 +195,11 @@ export { resolveWorkerModelSelection } from "./machines/worker-machine.ts";
 
 /* c8 ignore start — real subprocess execution, tested via integration */
 /**
- * Execute an agent subprocess — the I/O boundary of the worker pipeline.
+ * Execute an agent — the I/O boundary of the worker pipeline.
  * This is the default {@link AgentRunDeps.execute} implementation.
+ *
+ * For claude: uses the Agent SDK session API for interactive multi-turn input.
+ * For other agents: uses a subprocess with stdin piping.
  */
 export const executeAgent: AgentRunDeps["execute"] = async (
   {
@@ -212,6 +216,135 @@ export const executeAgent: AgentRunDeps["execute"] = async (
     AgentRunDeps["execute"]
   >[0],
 ): Promise<IterationResult> => {
+  const workerId = selection.targetScenario;
+
+  // Reset GUI log file for this worker.
+  if (workerId !== undefined) {
+    await resetWorkerLog(workerId).catch(() => {});
+  }
+
+  // Claude uses the Agent SDK for interactive multi-turn sessions.
+  if (agent === "claude") {
+    const { executeClaudeSession } = await import(
+      "./agents/claude/sdk-session.ts"
+    );
+    const { query } = await import("@anthropic-ai/claude-agent-sdk");
+
+    const prefix = workerIndex !== undefined
+      ? workerPrefix(workerIndex, workerId)
+      : undefined;
+    const enc = new TextEncoder();
+
+    return executeClaudeSession({
+      prompt: spec.args[spec.args.length - 1],
+      model: selection.model,
+      effort: selection.effort,
+      iterationNum,
+      signal,
+      log,
+      cwd: cwd ?? Deno.cwd(),
+      workerId,
+      agentInputBus,
+      deps: {
+        query: (qOpts) => {
+          const ac = new AbortController();
+          qOpts.signal.addEventListener("abort", () => ac.abort(), {
+            once: true,
+          });
+          // Merge initial prompt + follow-up input into a single async
+          // iterable that the SDK's V1 query consumes as multi-turn input.
+          const userMsg = (text: string) => ({
+            type: "user" as const,
+            message: {
+              role: "user" as const,
+              content: [{ type: "text" as const, text }],
+            },
+            parent_tool_use_id: null,
+          });
+          async function* promptStream() {
+            yield userMsg(qOpts.prompt);
+            for await (const text of qOpts.inputMessages) {
+              yield userMsg(text);
+            }
+          }
+          return query({
+            prompt: promptStream(),
+            options: {
+              model: qOpts.model,
+              cwd: qOpts.cwd,
+              // deno-lint-ignore no-explicit-any
+              permissionMode: "bypassPermissions" as any,
+              allowedTools: [
+                "Bash",
+                "Read",
+                "Write",
+                "Edit",
+                "Glob",
+                "Grep",
+              ],
+              ...(qOpts.effort
+                ? { effort: qOpts.effort as "low" | "medium" | "high" }
+                : {}),
+              abortController: ac,
+            },
+          });
+        },
+        onLine: async (text) => {
+          const prefixed = prefix ? `${prefix}${text}` : text;
+          Deno.stdout.writeSync(enc.encode(prefixed + "\n"));
+          if (workerId !== undefined) {
+            await writeWorkerLine(workerId, {
+              type: "log",
+              level: "info",
+              tags: ["info", "agent-stream"],
+              message: text,
+              ts: Date.now(),
+              workerId,
+            });
+          }
+        },
+      },
+    });
+  }
+
+  // Non-claude agents use a subprocess with optional stdin piping.
+  return executeSubprocess({
+    spec,
+    selection,
+    iterationNum,
+    signal,
+    log,
+    cwd,
+    workerIndex,
+    workerId,
+    agentInputBus,
+  });
+};
+
+/** Subprocess executor for non-claude agents (codex, etc.). */
+const executeSubprocess = async (
+  {
+    spec,
+    selection,
+    iterationNum,
+    signal,
+    log,
+    cwd,
+    workerIndex,
+    workerId,
+    agentInputBus,
+  }: {
+    spec: import("./types.ts").CommandSpec;
+    selection: import("./types.ts").ModelSelection;
+    iterationNum: number;
+    signal: AbortSignal;
+    log: import("./types.ts").Logger;
+    cwd: string | undefined;
+    workerIndex: number | undefined;
+    workerId: string | undefined;
+    agentInputBus: import("./gui/input-bus.ts").AgentInputBus | undefined;
+  },
+): Promise<IterationResult> => {
   const combinedSignal = AbortSignal.any([
     signal,
     AbortSignal.timeout(TIMEOUT_MS),
@@ -219,7 +352,7 @@ export const executeAgent: AgentRunDeps["execute"] = async (
 
   try {
     const useInputBus = agentInputBus !== undefined &&
-      workerIndex !== undefined;
+      workerIndex !== undefined && workerId !== undefined;
     const child = new Deno.Command(spec.command, {
       args: spec.args,
       stdin: useInputBus ? "piped" : "null",
@@ -236,54 +369,42 @@ export const executeAgent: AgentRunDeps["execute"] = async (
     }).spawn();
 
     if (useInputBus) {
-      agentInputBus.register(workerIndex, child.stdin);
+      agentInputBus.register(workerId, child.stdin);
     }
 
     const prefix = workerIndex !== undefined
       ? workerPrefix(workerIndex, selection.targetScenario)
       : undefined;
 
-    const rawStdout = agent === "claude"
-      ? child.stdout.pipeThrough(ndjsonResultTransform())
-      : child.stdout;
-
-    // Apply per-line prefix for terminal output only; disk writes (validation
-    // logs) bypass this transform so on-disk content stays prefix-free.
-    const stdoutStream = prefix
-      ? rawStdout.pipeThrough(linePrefixTransform(prefix))
-      : rawStdout;
-    const stderrStream = prefix
-      ? child.stderr.pipeThrough(linePrefixTransform(prefix))
-      : child.stderr;
-
-    // Forward worker output lines to the logger for GUI streaming.
-    // The prefix transform has already prepended [W0/sXXX] so the GUI
-    // can filter by worker index.
-    // Also append to a log file so the GUI can replay past output.
-    let workerLogFile: Deno.FsFile | undefined;
-    if (workerIndex !== undefined) {
-      try {
-        const logDir = ".ralph/worker-logs";
-        await Deno.mkdir(logDir, { recursive: true });
-        workerLogFile = await Deno.open(
-          `${logDir}/worker-${workerIndex}.log`,
-          { create: true, truncate: true, write: true },
-        );
-      } catch {
-        // Non-critical: GUI replay won't work but execution continues
-      }
-    }
-    const logEncoder = new TextEncoder();
-    const guiOnLine = workerIndex !== undefined
+    const guiOnLine = workerId !== undefined
       ? (line: string): void => {
-        log({ tags: ["info", "agent-stream"], message: line });
-        try {
-          workerLogFile?.write(logEncoder.encode(line + "\n"));
-        } catch {
-          // Best-effort file write
-        }
+        writeWorkerLine(workerId, {
+          type: "log",
+          level: "info",
+          tags: ["info", "agent-stream"],
+          message: line,
+          ts: Date.now(),
+          workerId,
+        });
       }
       : undefined;
+
+    // Tee raw streams: one copy for GUI (clean), one for terminal (prefixed).
+    const [rawStdoutForTerminal, rawStdoutForGui] = guiOnLine
+      ? child.stdout.tee()
+      : [child.stdout, undefined];
+    const [rawStderrForTerminal, rawStderrForGui] = guiOnLine
+      ? child.stderr.tee()
+      : [child.stderr, undefined];
+
+    const stdoutStream = prefix
+      ? rawStdoutForTerminal.pipeThrough(linePrefixTransform(prefix))
+      : rawStdoutForTerminal;
+    const stderrStream = prefix
+      ? rawStderrForTerminal.pipeThrough(linePrefixTransform(prefix))
+      : rawStderrForTerminal;
+
+    const nullOutput = { write: async (_: Uint8Array): Promise<number> => 0 };
 
     const [status, foundAllCompleteSigil] = await Promise.all([
       child.status,
@@ -291,19 +412,32 @@ export const executeAgent: AgentRunDeps["execute"] = async (
         stream: stdoutStream,
         output: Deno.stdout,
         marker: COMPLETION_MARKER,
-        onLine: guiOnLine,
       }),
       pipeStream({
         stream: stderrStream,
         output: Deno.stderr,
-        onLine: guiOnLine,
       }),
+      ...(rawStdoutForGui
+        ? [
+          pipeStream({
+            stream: rawStdoutForGui,
+            output: nullOutput,
+            onLine: guiOnLine,
+          }),
+        ]
+        : []),
+      ...(rawStderrForGui
+        ? [
+          pipeStream({
+            stream: rawStderrForGui,
+            output: nullOutput,
+            onLine: guiOnLine,
+          }),
+        ]
+        : []),
     ]);
 
-    if (useInputBus) agentInputBus.unregister(workerIndex);
-    try {
-      workerLogFile?.close();
-    } catch { /* already closed */ }
+    if (useInputBus) agentInputBus.unregister(workerId);
 
     if (status.code !== 0) {
       log({

@@ -1,14 +1,10 @@
 /**
- * End-to-end tests for the visual task graph GUI overhaul.
+ * End-to-end tests for the visual task graph GUI.
  *
  * Tests cover:
- * - Main page contains React Flow graph infrastructure
- * - Graph nodes for all orchestrator states exist in rendered HTML
- * - Tab switching elements (Graph/Log) present
- * - Worker modal infrastructure present
+ * - Server serves pages with graph infrastructure
  * - SSE delivers merge_start and merge_done events
  * - Logger emits merge events from structured log messages
- * - Import map for React/xyflow present
  *
  * @module
  */
@@ -16,10 +12,10 @@
 import { assert, assertEquals } from "jsr:@std/assert@^1.0.11";
 import { startGuiServer } from "../src/gui/server.tsx";
 import { createEventBus } from "../src/gui/events.ts";
-import type { GuiEvent, GuiEventBus } from "../src/gui/events.ts";
+import type { GuiEvent } from "../src/gui/events.ts";
 import { createGuiLogger } from "../src/gui/logger.ts";
 import { createAgentInputBus } from "../src/gui/input-bus.ts";
-import { GUI_HTML } from "../src/gui/html.ts";
+import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 
 const BASE_PORT = 47450;
 let portCounter = 0;
@@ -27,49 +23,43 @@ const nextPort = (): number => BASE_PORT + portCounter++;
 
 const startServer = async (
   port: number,
-  opts: { bus?: GuiEventBus } = {},
-): Promise<{ ac: AbortController; done: Promise<void>; bus: GuiEventBus }> => {
+): Promise<{ ac: AbortController; done: Promise<void> }> => {
+  await initLogDir();
   const ac = new AbortController();
-  const bus = opts.bus ?? createEventBus();
   const done = startGuiServer({
     port,
-    bus,
     signal: ac.signal,
     agentInputBus: createAgentInputBus(),
+    skipBuild: true,
   });
   await new Promise<void>((r) => setTimeout(r, 80));
-  return { ac, done, bus };
+  return { ac, done };
 };
 
 // ---------------------------------------------------------------------------
-// Static HTML structure tests (no server needed)
+// Island source file existence tests (replaces static HTML tests)
 // ---------------------------------------------------------------------------
 
-Deno.test("GUI_HTML contains React Flow import map", () => {
-  assert(GUI_HTML.includes("importmap"));
-  assert(GUI_HTML.includes("@xyflow/react"));
-  assert(GUI_HTML.includes("react"));
-  assert(GUI_HTML.includes("react-dom/client"));
+Deno.test("Island files exist for all GUI components", async () => {
+  const islands = [
+    "event-store.ts",
+    "sse-provider.tsx",
+    "connection-status.tsx",
+    "log-panel.tsx",
+    "sidebar.tsx",
+    "tab-switcher.tsx",
+    "workflow-graph.tsx",
+    "worker-modal.tsx",
+    "worker-page-app.tsx",
+  ];
+  for (const name of islands) {
+    const stat = await Deno.stat(`src/gui/islands/${name}`).catch(() => null);
+    assert(stat !== null, `Missing island: src/gui/islands/${name}`);
+  }
 });
 
-Deno.test("GUI_HTML contains graph-root mount point", () => {
-  assert(GUI_HTML.includes('id="graph-root"'));
-});
-
-Deno.test("GUI_HTML contains tab switching elements", () => {
-  assert(GUI_HTML.includes('data-tab="graph"'));
-  assert(GUI_HTML.includes('data-tab="log"'));
-  assert(GUI_HTML.includes("graph-panel"));
-  assert(GUI_HTML.includes("log-panel"));
-});
-
-Deno.test("GUI_HTML contains React Flow graph module script", () => {
-  assert(GUI_HTML.includes("ReactFlow"));
-  assert(GUI_HTML.includes("createRoot"));
-  assert(GUI_HTML.includes("graph-root"));
-});
-
-Deno.test("GUI_HTML contains orchestrator state node definitions", () => {
+Deno.test("workflow-graph.tsx contains all orchestrator states", async () => {
+  const src = await Deno.readTextFile("src/gui/islands/workflow-graph.tsx");
   const expectedStates = [
     "init",
     "reading_progress",
@@ -81,53 +71,22 @@ Deno.test("GUI_HTML contains orchestrator state node definitions", () => {
     "aborted",
   ];
   for (const state of expectedStates) {
-    assert(
-      GUI_HTML.includes(`'${state}'`) || GUI_HTML.includes(`"${state}"`),
-      `Expected state "${state}" in GUI_HTML`,
-    );
+    assert(src.includes(state), `Missing state "${state}" in workflow-graph`);
   }
 });
 
-Deno.test("GUI_HTML contains worker node creation logic", () => {
-  assert(GUI_HTML.includes("worker_active"));
-  assert(GUI_HTML.includes("worker_done"));
-  assert(GUI_HTML.includes("worker-"));
-  assert(GUI_HTML.includes("merge"));
+Deno.test("workflow-graph.tsx handles worker and merge events", async () => {
+  const src = await Deno.readTextFile("src/gui/islands/workflow-graph.tsx");
+  assert(src.includes("worker_active") || src.includes("getActiveWorkers"));
+  assert(src.includes("merge"));
+  assert(src.includes("smoothstep"));
 });
 
-Deno.test("GUI_HTML contains merge event handling", () => {
-  assert(GUI_HTML.includes("merge_start"));
-  assert(GUI_HTML.includes("merge_done"));
-});
-
-Deno.test("GUI_HTML contains worker modal infrastructure", () => {
-  assert(GUI_HTML.includes("worker-modal"));
-  assert(GUI_HTML.includes("_openWorkerModal"));
-  assert(GUI_HTML.includes("modal-overlay"));
-  assert(GUI_HTML.includes("modal-content"));
-  assert(GUI_HTML.includes("pop out"));
-});
-
-Deno.test("GUI_HTML contains xyflow CSS link", () => {
-  assert(GUI_HTML.includes("@xyflow/react"));
-  assert(GUI_HTML.includes("style.css"));
-});
-
-Deno.test("GUI_HTML contains pulse animation for active nodes", () => {
-  assert(GUI_HTML.includes("@keyframes pulse"));
-  assert(GUI_HTML.includes("animation"));
-});
-
-Deno.test("GUI_HTML graph module defines edge styles for done/active states", () => {
-  assert(GUI_HTML.includes("edge-active") || GUI_HTML.includes("edgeStyle"));
-  assert(GUI_HTML.includes("#16a34a")); // done green color
-  assert(GUI_HTML.includes("#22c55e")); // accent green
-  assert(GUI_HTML.includes("#a78bfa")); // loop purple
-});
-
-Deno.test("GUI_HTML graph module references smoothstep edge for loop-back", () => {
-  assert(GUI_HTML.includes("smoothstep"));
-  assert(GUI_HTML.includes("e-loop"));
+Deno.test("main-page.tsx has no dangerouslySetInnerHTML script tags", async () => {
+  const src = await Deno.readTextFile("src/gui/pages/main-page.tsx");
+  assert(!src.includes("MAIN_PAGE_VANILLA_SCRIPT"));
+  assert(!src.includes("GRAPH_MODULE_SCRIPT"));
+  assert(!src.includes("WORKER_PAGE_SCRIPT"));
 });
 
 // ---------------------------------------------------------------------------
@@ -232,13 +191,12 @@ Deno.test("createGuiLogger does not emit merge events for unrelated messages", (
 // ---------------------------------------------------------------------------
 
 Deno.test({
-  name: "SSE /events delivers merge_start and merge_done events",
+  name: "SSE /events delivers merge events written to log file",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
     const port = nextPort();
-    const bus = createEventBus();
-    const { ac, done } = await startServer(port, { bus });
+    const { ac, done } = await startServer(port);
 
     const res = await fetch(`http://localhost:${port}/events`);
     assertEquals(res.status, 200);
@@ -249,22 +207,22 @@ Deno.test({
     const decoder = new TextDecoder();
     const events: unknown[] = [];
 
-    const emitTimer = setTimeout(() => {
-      bus.emit({
+    setTimeout(async () => {
+      await writeOrchestratorEvent({
         type: "merge_start",
         workerIndex: 0,
         scenario: "GUI.a",
         ts: Date.now(),
       });
-      bus.emit({
+      await writeOrchestratorEvent({
         type: "merge_done",
         workerIndex: 0,
         outcome: "merged",
         ts: Date.now(),
       });
-    }, 30);
+    }, 200);
 
-    const deadline = Date.now() + 2000;
+    const deadline = Date.now() + 3000;
     let buffer = "";
     while (events.length < 2 && Date.now() < deadline) {
       const timeoutId = { id: 0 };
@@ -294,7 +252,6 @@ Deno.test({
       }
     }
 
-    clearTimeout(emitTimer);
     await reader.cancel();
     ac.abort();
     await done;
@@ -318,104 +275,26 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
-// Full stack: logger → bus → SSE for merge events
+// Server serves main page at /
 // ---------------------------------------------------------------------------
 
 Deno.test({
-  name: "createGuiLogger merge log → SSE: full stack merge event delivery",
+  name: "GET / serves page with graph infrastructure",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
     const port = nextPort();
-    const bus = createEventBus();
-    const { ac, done } = await startServer(port, { bus });
+    const { ac, done } = await startServer(port);
 
-    const res = await fetch(`http://localhost:${port}/events`);
-    const body = res.body;
-    if (!body) throw new Error("Expected response body");
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    const events: unknown[] = [];
+    const res = await fetch(`http://localhost:${port}/`);
+    assertEquals(res.status, 200);
+    const html = await res.text();
 
-    const log = createGuiLogger(() => {}, bus);
+    assert(html.includes("ralphmania"), "Missing title");
+    assert(html.includes("app-root"), "Missing app mount point");
+    assert(html.includes("/islands/boot.js"), "Missing boot script");
 
-    const emitTimer = setTimeout(() => {
-      log({
-        tags: ["info", "orchestrator"],
-        message: "Merging worker 0 (GUI.a)",
-      });
-      log({
-        tags: ["info", "orchestrator"],
-        message: "Worker 0 merge: merged",
-      });
-    }, 30);
-
-    const deadline = Date.now() + 2000;
-    let buffer = "";
-    // Expect: 2 log events + 1 merge_start + 1 merge_done = 4
-    while (events.length < 4 && Date.now() < deadline) {
-      const timeoutId = { id: 0 };
-      const { value, done: streamDone } = await Promise.race([
-        reader.read(),
-        new Promise<{ value: undefined; done: true }>((r) => {
-          timeoutId.id = setTimeout(
-            () => r({ value: undefined, done: true }),
-            500,
-          );
-        }),
-      ]);
-      clearTimeout(timeoutId.id);
-      if (streamDone && !value) break;
-      if (value) {
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          const dataLine = line
-            .split("\n")
-            .find((l: string) => l.startsWith("data: "));
-          if (dataLine) {
-            events.push(JSON.parse(dataLine.slice(6)));
-          }
-        }
-      }
-    }
-
-    clearTimeout(emitTimer);
-    await reader.cancel();
     ac.abort();
     await done;
-
-    const mergeStarts = events.filter(
-      (e: unknown) => (e as { type: string }).type === "merge_start",
-    );
-    const mergeDones = events.filter(
-      (e: unknown) => (e as { type: string }).type === "merge_done",
-    );
-    assertEquals(mergeStarts.length, 1, "Expected 1 merge_start event");
-    assertEquals(mergeDones.length, 1, "Expected 1 merge_done event");
   },
-});
-
-// ---------------------------------------------------------------------------
-// Server serves main page with graph infrastructure at /
-// ---------------------------------------------------------------------------
-
-Deno.test("GET / serves page with React Flow graph infrastructure", async () => {
-  const port = nextPort();
-  const { ac, done } = await startServer(port);
-
-  const res = await fetch(`http://localhost:${port}/`);
-  assertEquals(res.status, 200);
-  const html = await res.text();
-
-  // Verify key graph elements are present
-  assert(html.includes("graph-root"), "Missing graph-root mount point");
-  assert(html.includes("importmap"), "Missing import map");
-  assert(html.includes("@xyflow/react"), "Missing xyflow import");
-  assert(html.includes("ReactFlow"), "Missing ReactFlow component");
-  assert(html.includes("tab-bar"), "Missing tab bar");
-
-  ac.abort();
-  await done;
 });

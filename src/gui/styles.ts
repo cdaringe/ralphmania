@@ -8,6 +8,7 @@ export const BASE_CSS = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--mono);background:var(--bg);color:var(--text);
   height:100dvh;display:flex;flex-direction:column;font-size:13px}
+#app-root{display:flex;flex-direction:column;height:100%;flex:1;overflow:hidden}
 header{background:var(--surface);border-bottom:1px solid var(--border);
   padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
 header h1{font-size:15px;color:var(--accent);letter-spacing:-0.02em}
@@ -52,6 +53,12 @@ export const LOG_CSS = `
 .t-info{color:#22d3ee}.t-error{color:#f87171;font-weight:700}
 .t-debug{color:#52525b}.t-orch{color:#4ade80}
 .t-validate{color:#fbbf24}.t-trans{color:#a78bfa}
+.t-user{color:#f472b6}.t-input{color:#f472b6}
+.le:has(.t-user),.le-user{border-left:3px solid #f472b6;padding-left:5px}
+.le:has(.t-user) .le-msg,.le-user .le-msg{color:#f9a8d4}
+.worker-status-badge{font-size:10px;padding:2px 8px;border-radius:99px;
+  background:#fef2f2;border:1px solid var(--error);color:var(--error);
+  white-space:nowrap}
 `;
 
 export const TAB_CSS = `

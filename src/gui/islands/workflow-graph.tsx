@@ -1,0 +1,485 @@
+/**
+ * Workflow graph island — React Flow visualization of the orchestrator
+ * state machine with dynamic worker nodes.
+ *
+ * Fresh islands use preact, but React Flow requires real React. This island
+ * bridges the two: preact handles lifecycle/state, while React + React Flow
+ * are loaded from esm.sh and render into a dedicated React root.
+ *
+ * @module
+ */
+import { useEffect, useRef } from "preact/hooks";
+import {
+  getActiveWorkers,
+  getOrchestratorState,
+  setSelectedWorker,
+  subscribe,
+  type WorkerInfo,
+} from "./event-store.ts";
+
+const ACCENT = "#22c55e",
+  DONE_GREEN = "#16a34a",
+  INACTIVE = "#d1d5db",
+  MUTED = "#9ca3af",
+  ERROR = "#ef4444",
+  PURPLE = "#a78bfa",
+  BG = "#f4f4f5";
+
+const STATE_ORDER = [
+  "init",
+  "reading_progress",
+  "finding_actionable",
+  "running_workers",
+  "validating",
+  "checking_doneness",
+];
+
+const baseNodeStyle = {
+  padding: "8px 18px",
+  borderRadius: 8,
+  fontSize: 12,
+  fontFamily: "'Cascadia Code','SF Mono','Fira Code',monospace",
+  textAlign: "center" as const,
+  minWidth: 160,
+};
+
+const stateNodeStyle = (
+  state: string,
+  activeState: string,
+): Record<string, unknown> => {
+  const activeIdx = STATE_ORDER.indexOf(activeState);
+  const thisIdx = STATE_ORDER.indexOf(state);
+  return state === activeState
+    ? {
+      background: "#f0fdf4",
+      border: `2px solid ${ACCENT}`,
+      color: ACCENT,
+      fontWeight: 700,
+      boxShadow: "0 0 12px rgba(34,197,94,.4)",
+      animation: "pulse 1.5s ease-in-out infinite",
+    }
+    : activeIdx >= 0 && thisIdx >= 0 && thisIdx < activeIdx
+    ? {
+      background: "#dcfce7",
+      border: `1.5px solid ${DONE_GREEN}`,
+      color: "#15803d",
+    }
+    : {
+      background: "#f9fafb",
+      border: `1px solid ${INACTIVE}`,
+      color: MUTED,
+      opacity: 0.7,
+    };
+};
+
+const terminalNodeStyle = (
+  state: string,
+  activeState: string,
+): Record<string, unknown> =>
+  state === "done" && activeState === "done"
+    ? {
+      background: "#f0fdf4",
+      border: `2px solid ${ACCENT}`,
+      color: ACCENT,
+      fontWeight: 700,
+      boxShadow: "0 0 12px rgba(34,197,94,.4)",
+    }
+    : state === "aborted" && activeState === "aborted"
+    ? {
+      background: "#fef2f2",
+      border: `2px solid ${ERROR}`,
+      color: ERROR,
+      fontWeight: 700,
+    }
+    : {
+      background: "#f9fafb",
+      border: `1px solid ${INACTIVE}`,
+      color: MUTED,
+      opacity: 0.5,
+    };
+
+const edgeStyle = (
+  _from: string,
+  to: string,
+  activeState: string,
+): Record<string, unknown> => {
+  const activeIdx = STATE_ORDER.indexOf(activeState);
+  const toIdx = STATE_ORDER.indexOf(to);
+  return to === activeState
+    ? { stroke: ACCENT, strokeWidth: 2 }
+    : activeIdx >= 0 && toIdx >= 0 && toIdx < activeIdx
+    ? { stroke: DONE_GREEN, strokeWidth: 1.5 }
+    : { stroke: INACTIVE, strokeWidth: 1, opacity: 0.5 };
+};
+
+// deno-lint-ignore no-explicit-any
+type RF = {
+  ReactFlow: any;
+  Background: any;
+  Controls: any;
+  MarkerType: any;
+  Position: any;
+};
+
+// deno-lint-ignore no-explicit-any
+const buildGraph = (
+  as: string,
+  workersMap: ReadonlyMap<number, WorkerInfo>,
+  rf: RF,
+): { nodes: any[]; edges: any[] } => {
+  const { MarkerType: MT, Position: P } = rf;
+
+  // deno-lint-ignore no-explicit-any
+  const nodes: any[] = [
+    {
+      id: "init",
+      position: { x: 250, y: 0 },
+      data: { label: "init" },
+      style: { ...baseNodeStyle, ...stateNodeStyle("init", as) },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "reading_progress",
+      position: { x: 250, y: 90 },
+      data: { label: "reading_progress" },
+      style: { ...baseNodeStyle, ...stateNodeStyle("reading_progress", as) },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "finding_actionable",
+      position: { x: 250, y: 180 },
+      data: { label: "finding_actionable" },
+      style: { ...baseNodeStyle, ...stateNodeStyle("finding_actionable", as) },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "running_workers",
+      position: { x: 250, y: 270 },
+      data: { label: "running_workers" },
+      style: { ...baseNodeStyle, ...stateNodeStyle("running_workers", as) },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "validating",
+      position: { x: 250, y: 540 },
+      data: { label: "validating" },
+      style: { ...baseNodeStyle, ...stateNodeStyle("validating", as) },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "checking_doneness",
+      position: { x: 250, y: 630 },
+      data: { label: "checking_doneness" },
+      style: { ...baseNodeStyle, ...stateNodeStyle("checking_doneness", as) },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "done",
+      position: { x: 250, y: 720 },
+      data: { label: "done" },
+      style: {
+        ...baseNodeStyle,
+        borderRadius: 20,
+        ...terminalNodeStyle("done", as),
+      },
+      targetPosition: P.Top,
+    },
+    {
+      id: "aborted",
+      position: { x: 500, y: 90 },
+      data: { label: "aborted" },
+      style: {
+        ...baseNodeStyle,
+        borderRadius: 20,
+        minWidth: 100,
+        ...terminalNodeStyle("aborted", as),
+      },
+      targetPosition: P.Left,
+    },
+  ];
+
+  // deno-lint-ignore no-explicit-any
+  const edges: any[] = [
+    {
+      id: "e-init-rp",
+      source: "init",
+      target: "reading_progress",
+      style: edgeStyle("init", "reading_progress", as),
+      markerEnd: { type: MT.ArrowClosed },
+    },
+    {
+      id: "e-rp-fa",
+      source: "reading_progress",
+      target: "finding_actionable",
+      style: edgeStyle("reading_progress", "finding_actionable", as),
+      markerEnd: { type: MT.ArrowClosed },
+    },
+    {
+      id: "e-fa-rw",
+      source: "finding_actionable",
+      target: "running_workers",
+      style: edgeStyle("finding_actionable", "running_workers", as),
+      markerEnd: { type: MT.ArrowClosed },
+    },
+    {
+      id: "e-rw-val",
+      source: "running_workers",
+      target: "validating",
+      style: edgeStyle("running_workers", "validating", as),
+      markerEnd: { type: MT.ArrowClosed },
+    },
+    {
+      id: "e-val-cd",
+      source: "validating",
+      target: "checking_doneness",
+      style: edgeStyle("validating", "checking_doneness", as),
+      markerEnd: { type: MT.ArrowClosed },
+    },
+    {
+      id: "e-cd-done",
+      source: "checking_doneness",
+      target: "done",
+      style: edgeStyle("checking_doneness", "done", as),
+      markerEnd: { type: MT.ArrowClosed },
+    },
+    {
+      id: "e-loop",
+      source: "checking_doneness",
+      target: "reading_progress",
+      type: "smoothstep",
+      style: { stroke: PURPLE, strokeWidth: 1.5, strokeDasharray: "6,3" },
+      markerEnd: { type: MT.ArrowClosed, color: PURPLE },
+      sourcePosition: P.Right,
+      targetPosition: P.Right,
+    },
+    {
+      id: "e-rp-abort",
+      source: "reading_progress",
+      target: "aborted",
+      style: { stroke: INACTIVE, strokeWidth: 1, opacity: 0.4 },
+      markerEnd: { type: MT.ArrowClosed },
+      sourcePosition: P.Right,
+    },
+  ];
+
+  // Dynamic worker nodes
+  if (workersMap.size > 0) {
+    const entries = [...workersMap.entries()];
+    const startX = 50;
+    const spacing = Math.min(200, 600 / entries.length);
+
+    entries.forEach(([wi, info], idx) => {
+      const cx = startX + spacing * idx;
+      const isDone = info.status === "done" || info.status === "merged";
+      const isMerging = info.status === "merging";
+      const nodeStyle = isDone
+        ? {
+          ...baseNodeStyle,
+          background: "#dcfce7",
+          border: `1.5px solid ${DONE_GREEN}`,
+          color: "#15803d",
+          cursor: "pointer",
+          minWidth: 80,
+        }
+        : isMerging
+        ? {
+          ...baseNodeStyle,
+          background: "#fefce8",
+          border: "2px solid #f59e0b",
+          color: "#92400e",
+          cursor: "pointer",
+          minWidth: 80,
+          animation: "pulse 1.5s ease-in-out infinite",
+        }
+        : {
+          ...baseNodeStyle,
+          background: "#f0fdf4",
+          border: `2px solid ${ACCENT}`,
+          color: ACCENT,
+          fontWeight: 700,
+          cursor: "pointer",
+          minWidth: 80,
+          boxShadow: "0 0 12px rgba(34,197,94,.4)",
+          animation: "pulse 1.5s ease-in-out infinite",
+        };
+
+      nodes.push({
+        id: `worker-${wi}`,
+        position: { x: cx, y: 370 },
+        data: {
+          label: `W${wi} ${info.scenario}`,
+          workerIndex: wi,
+          scenario: info.scenario,
+        },
+        style: nodeStyle,
+        sourcePosition: P.Bottom,
+        targetPosition: P.Top,
+      });
+      edges.push(
+        {
+          id: `e-rw-w${wi}`,
+          source: "running_workers",
+          target: `worker-${wi}`,
+          style: {
+            stroke: isDone ? DONE_GREEN : ACCENT,
+            strokeWidth: isDone ? 1.5 : 2,
+          },
+          markerEnd: { type: MT.ArrowClosed },
+        },
+        {
+          id: `e-w${wi}-merge`,
+          source: `worker-${wi}`,
+          target: "merge",
+          style: {
+            stroke: isDone ? DONE_GREEN : ACCENT,
+            strokeWidth: isDone ? 1.5 : 2,
+          },
+          markerEnd: { type: MT.ArrowClosed },
+        },
+      );
+    });
+
+    const mergeActive = entries.some(([, i]) => i.status === "merging");
+    const allDone = entries.every(([, i]) =>
+      i.status === "done" || i.status === "merged"
+    );
+    nodes.push({
+      id: "merge",
+      position: { x: 250, y: 460 },
+      data: { label: "merge" },
+      style: {
+        ...baseNodeStyle,
+        borderRadius: 20,
+        minWidth: 80,
+        ...(mergeActive
+          ? {
+            background: "#fefce8",
+            border: "2px solid #f59e0b",
+            color: "#92400e",
+            animation: "pulse 1.5s ease-in-out infinite",
+          }
+          : allDone
+          ? {
+            background: "#dcfce7",
+            border: `1.5px solid ${DONE_GREEN}`,
+            color: "#15803d",
+          }
+          : {
+            background: "#f9fafb",
+            border: `1px solid ${INACTIVE}`,
+            color: MUTED,
+            opacity: 0.7,
+          }),
+      },
+      sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    });
+    edges.push({
+      id: "e-merge-val",
+      source: "merge",
+      target: "validating",
+      style: { stroke: allDone ? DONE_GREEN : INACTIVE, strokeWidth: 1.5 },
+      markerEnd: { type: MT.ArrowClosed },
+    });
+
+    // Remove direct rw→val edge when workers exist
+    const rwValIdx = edges.findIndex((e: { id: string }) =>
+      e.id === "e-rw-val"
+    );
+    if (rwValIdx >= 0) edges.splice(rwValIdx, 1);
+  }
+
+  return { nodes, edges };
+};
+
+export default function WorkflowGraph(): preact.JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let disposed = false;
+    // deno-lint-ignore no-explicit-any
+    let reactRoot: any;
+
+    (async (): Promise<void> => {
+      // Load real React + React Flow from esm.sh.
+      const [React, ReactDOMClient, rfMod] = await Promise.all([
+        import(/* @vite-ignore */ "https://esm.sh/react@19"),
+        import(/* @vite-ignore */ "https://esm.sh/react-dom@19/client"),
+        import(
+          /* @vite-ignore */ "https://esm.sh/@xyflow/react@12?external=react,react-dom"
+        ),
+      ]);
+      if (disposed) return;
+
+      const rf: RF = rfMod;
+      reactRoot = ReactDOMClient.createRoot(containerRef.current!);
+
+      const render = (): void => {
+        const as = getOrchestratorState();
+        const workers = getActiveWorkers();
+        const { nodes, edges } = buildGraph(as, workers, rf);
+
+        // deno-lint-ignore no-explicit-any
+        const onNodeClick = (_event: any, node: any): void => {
+          if (node.data?.workerIndex !== undefined) {
+            setSelectedWorker({
+              workerIndex: node.data.workerIndex,
+              scenario: node.data.scenario,
+            });
+          }
+        };
+
+        reactRoot.render(
+          React.createElement(
+            rf.ReactFlow,
+            {
+              nodes,
+              edges,
+              onNodeClick,
+              fitView: true,
+              fitViewOptions: { padding: 0.2 },
+              nodesDraggable: false,
+              nodesConnectable: false,
+              elementsSelectable: false,
+              panOnDrag: true,
+              zoomOnScroll: true,
+              minZoom: 0.5,
+              maxZoom: 2,
+              proOptions: { hideAttribution: true },
+              style: { background: BG },
+            },
+            React.createElement(rf.Background, {
+              color: "#e4e4e7",
+              gap: 20,
+              size: 1,
+            }),
+            React.createElement(rf.Controls, { showInteractive: false }),
+          ),
+        );
+      };
+
+      render();
+      subscribe(render);
+    })();
+
+    return (): void => {
+      disposed = true;
+      reactRoot?.unmount();
+    };
+  }, []);
+
+  return (
+    <div
+      id="graph-root"
+      ref={containerRef}
+      style={{ position: "absolute", inset: 0, background: BG }}
+    />
+  );
+}

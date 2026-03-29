@@ -61,6 +61,7 @@ import { resetAllWorktrees } from "./src/git/worktree.ts";
 import { computeExitCode } from "./src/exit.ts";
 import { createEventBus } from "./src/gui/events.ts";
 import { createGuiLogger } from "./src/gui/logger.ts";
+import { initLogDir, writeOrchestratorEvent } from "./src/gui/log-dir.ts";
 import { startGuiServer } from "./src/gui/server.tsx";
 import { createAgentInputBus } from "./src/gui/input-bus.ts";
 
@@ -166,10 +167,14 @@ const main = async (): Promise<number> => {
   if (gui) {
     const bus = createEventBus();
     agentInputBus = createAgentInputBus();
+    await initLogDir();
+    // Bridge: bus events → orchestrator log file for SSE file-tailing
+    bus.subscribe((event) => {
+      writeOrchestratorEvent(event);
+    });
     log = createGuiLogger(log, bus);
     startGuiServer({
       port: guiPort,
-      bus,
       log,
       signal: guiController.signal,
       agentInputBus,
