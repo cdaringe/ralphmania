@@ -17,13 +17,13 @@ import {
   type WorkerInfo,
 } from "./event-store.ts";
 
-const ACCENT = "#22c55e",
-  DONE_GREEN = "#16a34a",
-  INACTIVE = "#d1d5db",
-  MUTED = "#9ca3af",
-  ERROR = "#ef4444",
-  PURPLE = "#a78bfa",
-  BG = "#f4f4f5";
+const ACCENT = "#22c55e";
+const DONE_GREEN = "#16a34a";
+const INACTIVE = "#d1d5db";
+const MUTED = "#9ca3af";
+const ERROR = "#ef4444";
+const PURPLE = "#a78bfa";
+const BG = "#f4f4f5";
 
 const STATE_ORDER = [
   "init",
@@ -113,24 +113,16 @@ const edgeStyle = (
 };
 
 // deno-lint-ignore no-explicit-any
-type RF = {
-  ReactFlow: any;
-  Background: any;
-  Controls: any;
-  MarkerType: any;
-  Position: any;
-};
+type RF = Record<string, any>;
 
-// deno-lint-ignore no-explicit-any
 const buildGraph = (
   as: string,
   workersMap: ReadonlyMap<number, WorkerInfo>,
   rf: RF,
-): { nodes: any[]; edges: any[] } => {
+): { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] } => {
   const { MarkerType: MT, Position: P } = rf;
 
-  // deno-lint-ignore no-explicit-any
-  const nodes: any[] = [
+  const nodes: Record<string, unknown>[] = [
     {
       id: "init",
       position: { x: 250, y: 0 },
@@ -204,8 +196,7 @@ const buildGraph = (
     },
   ];
 
-  // deno-lint-ignore no-explicit-any
-  const edges: any[] = [
+  const edges: Record<string, unknown>[] = [
     {
       id: "e-init-rp",
       source: "init",
@@ -419,6 +410,7 @@ export default function WorkflowGraph(): preact.JSX.Element {
       if (disposed) return;
 
       const rf: RF = rfMod;
+      // deno-lint-ignore no-non-null-assertion
       reactRoot = ReactDOMClient.createRoot(containerRef.current!);
 
       const render = (): void => {

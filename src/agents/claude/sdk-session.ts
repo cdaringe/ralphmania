@@ -59,7 +59,7 @@ export const createInputChannel = (): InputChannel => {
       next: (): Promise<IteratorResult<string>> =>
         queue.length > 0
           ? (consumed++,
-            Promise.resolve({ value: queue.shift()!, done: false }))
+            Promise.resolve({ value: queue.shift() as string, done: false }))
           : closed
           ? Promise.resolve({
             value: undefined as unknown as string,
@@ -131,6 +131,7 @@ export const executeClaudeSession = async (
   // Register the input channel on the bus so the GUI can push messages.
   // After each push, emit a queue status event so the UX can display it.
   if (agentInputBus && workerId) {
+    // deno-lint-ignore require-await
     agentInputBus.registerSession(workerId, async (text: string) => {
       inputChannel.push(text);
       deps.onLine(

@@ -95,7 +95,10 @@ export const startGuiServer = async (
     );
   });
 
-  // GET /events — SSE stream.
+  // GET /events — SSE stream backed by tailing .ralph/worker-logs/*.log.
+  // On connect: replays all existing log file contents, then watches for
+  // new data. This means late-joiners receive the full event history and
+  // arrive at the correct state.
   app.get("/events", (_ctx) => {
     const clientAc = new AbortController();
     const clientSignal = clientAc.signal;

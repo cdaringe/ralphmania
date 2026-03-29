@@ -48,9 +48,21 @@ const appendLine = async (
   await Deno.writeTextFile(path, line, { append: true });
 };
 
-/** Write an orchestrator event to the orchestrator log file. */
-export const writeOrchestratorEvent = (event: GuiEvent): Promise<void> =>
-  appendLine(ORCHESTRATOR_LOG, event);
+/**
+ * Serialized write queue for the orchestrator log. Events are appended
+ * in order — each write waits for the previous to flush before starting.
+ * This prevents concurrent `writeTextFile` calls from interleaving and
+ * corrupting NDJSON lines.
+ */
+let orchestratorWriteChain: Promise<void> = Promise.resolve();
+
+/** Write an orchestrator event to the orchestrator log file (serialized). */
+export const writeOrchestratorEvent = (event: GuiEvent): Promise<void> => {
+  orchestratorWriteChain = orchestratorWriteChain.then(() =>
+    appendLine(ORCHESTRATOR_LOG, event)
+  );
+  return orchestratorWriteChain;
+};
 
 /** Write a worker output line to its log file, keyed by scenario ID. */
 export const writeWorkerLine = (

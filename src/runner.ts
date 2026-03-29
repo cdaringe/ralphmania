@@ -261,6 +261,7 @@ export const executeAgent: AgentRunDeps["execute"] = async (
             },
             parent_tool_use_id: null,
           });
+          // deno-lint-ignore explicit-function-return-type
           async function* promptStream() {
             yield userMsg(qOpts.prompt);
             for await (const text of qOpts.inputMessages) {
@@ -404,7 +405,9 @@ const executeSubprocess = async (
       ? rawStderrForTerminal.pipeThrough(linePrefixTransform(prefix))
       : rawStderrForTerminal;
 
-    const nullOutput = { write: async (_: Uint8Array): Promise<number> => 0 };
+    const nullOutput = {
+      write: (_: Uint8Array): Promise<number> => Promise.resolve(0),
+    };
 
     const [status, foundAllCompleteSigil] = await Promise.all([
       child.status,

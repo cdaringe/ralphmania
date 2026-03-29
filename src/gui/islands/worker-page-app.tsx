@@ -38,6 +38,7 @@ export default function WorkerPageApp(): preact.JSX.Element {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    // deno-lint-ignore no-undef
     document.title = `ralphmania \u00b7 worker ${workerIndex}`;
     let es: EventSource;
     let timer: number | undefined;
@@ -125,7 +126,7 @@ export default function WorkerPageApp(): preact.JSX.Element {
     <>
       <header>
         <h1>ralphmania</h1>
-        <a class="back" href="/">{"\u2190"} overview</a>
+        <a class="back" href="/">← overview</a>
         <span style="font-size:13px;color:var(--muted)">
           worker {workerIndex}
         </span>

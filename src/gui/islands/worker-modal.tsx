@@ -107,7 +107,7 @@ export default function WorkerModal(): preact.JSX.Element | null {
       <div class="modal-content">
         <div class="modal-header">
           <h2>
-            W{selected.workerIndex} {"\u2192"} {escHtml(selected.scenario)}
+            W{selected.workerIndex} → {escHtml(selected.scenario)}
           </h2>
           {finished && <span class="worker-status-badge">inactive</span>}
           <a

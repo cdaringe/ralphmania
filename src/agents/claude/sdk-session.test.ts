@@ -11,7 +11,7 @@ const fakeDeps = (
   messages: unknown[],
   lines: string[] = [],
 ): ClaudeSessionDeps => ({
-  async *query() {
+  async *query(): AsyncGenerator<unknown> {
     for (const m of messages) yield m;
   },
   onLine: (text) => {
@@ -179,7 +179,7 @@ Deno.test(
     const bus = createAgentInputBus();
     const receivedInputs: string[] = [];
     const deps: ClaudeSessionDeps = {
-      async *query(qOpts) {
+      async *query(qOpts): AsyncGenerator<unknown> {
         // Consume the inputMessages channel in the background.
         // Simulate: agent yields a message, then user sends feedback,
         // then agent yields another.

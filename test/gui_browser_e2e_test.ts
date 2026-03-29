@@ -57,11 +57,14 @@ async function setup(): Promise<TestContext> {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
-  page.on("console", (msg: { type: () => string; text: () => string }) =>
-    console.log(`[browser:${msg.type()}] ${msg.text()}`)
+  page.on(
+    "console",
+    (msg: { type: () => string; text: () => string }) =>
+      console.log(`[browser:${msg.type()}] ${msg.text()}`),
   );
-  page.on("pageerror", (err: { message: string }) =>
-    console.log(`[browser:error] ${err.message}`)
+  page.on(
+    "pageerror",
+    (err: { message: string }) => console.log(`[browser:error] ${err.message}`),
   );
   // Use 'load' not 'networkidle0' — SSE keeps the connection alive forever
   await page.goto(`http://localhost:${port}/`, { waitUntil: "load" });
@@ -648,6 +651,128 @@ Deno.test({
         `Expected log message in log panel, got: ${
           logContent.substring(0, 200)
         }`,
+      );
+    } finally {
+      await teardown(ctx);
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Worker done state — modal disables input, shows inactive badge
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "browser: worker_done disables modal input and shows inactive badge",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const ctx = await setup();
+    try {
+      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
+
+      // Create and complete a worker
+      await writeOrchestratorEvent({
+        type: "state",
+        from: "finding_actionable",
+        to: "running_workers",
+        ts: Date.now(),
+      });
+      await new Promise<void>((r) => setTimeout(r, 200));
+
+      await writeOrchestratorEvent({
+        type: "worker_active",
+        workerIndex: 0,
+        scenario: "DONE.1",
+        ts: Date.now(),
+      });
+      await new Promise<void>((r) => setTimeout(r, 500));
+
+      // Open the modal
+      const workerNode = await ctx.page.$(
+        '.react-flow__node[data-id="worker-0"]',
+      );
+      assert(workerNode !== null, "Worker node not found");
+      await workerNode.click();
+      await new Promise<void>((r) => setTimeout(r, 500));
+
+      // Verify input is enabled before worker_done
+      const enabledBefore = await ctx.page.evaluate(() => {
+        const ta = document.querySelector(
+          "#worker-modal textarea",
+        ) as HTMLTextAreaElement | null;
+        return ta ? !ta.disabled : null;
+      });
+      assertEquals(
+        enabledBefore,
+        true,
+        "Input should be enabled while running",
+      );
+
+      // Complete the worker
+      await writeOrchestratorEvent({
+        type: "worker_done",
+        workerIndex: 0,
+        scenario: "DONE.1",
+        ts: Date.now(),
+      });
+      await new Promise<void>((r) => setTimeout(r, 500));
+
+      // Verify input is disabled and inactive badge shows
+      const stateAfter = await ctx.page.evaluate(() => {
+        const ta = document.querySelector(
+          "#worker-modal textarea",
+        ) as HTMLTextAreaElement | null;
+        const badge = document.querySelector(".worker-status-badge");
+        return {
+          inputDisabled: ta?.disabled ?? null,
+          hasBadge: badge !== null,
+          badgeText: badge?.textContent ?? "",
+        };
+      });
+
+      assertEquals(
+        stateAfter.inputDisabled,
+        true,
+        "Input should be disabled after worker_done",
+      );
+      assert(stateAfter.hasBadge, "Should show inactive badge");
+      assert(
+        stateAfter.badgeText.includes("inactive"),
+        `Badge should say inactive, got: ${stateAfter.badgeText}`,
+      );
+    } finally {
+      await teardown(ctx);
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Layout: app-root fills viewport
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "browser: app-root fills the viewport height",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const ctx = await setup();
+    try {
+      await ctx.page.waitForSelector("#app-root", { timeout: 5000 });
+
+      const heights = await ctx.page.evaluate(() => {
+        const appRoot = document.getElementById("app-root");
+        const vh = globalThis.innerHeight;
+        return {
+          appRootHeight: appRoot?.getBoundingClientRect().height ?? 0,
+          viewportHeight: vh,
+        };
+      });
+
+      // app-root should be at least 90% of viewport (allowing for minor rounding)
+      assert(
+        heights.appRootHeight >= heights.viewportHeight * 0.9,
+        `app-root (${heights.appRootHeight}px) should fill viewport (${heights.viewportHeight}px)`,
       );
     } finally {
       await teardown(ctx);

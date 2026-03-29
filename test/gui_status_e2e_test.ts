@@ -181,7 +181,7 @@ Deno.test("GET /status returns 500 when provider throws", async () => {
 // Main page HTML contains status section
 // ---------------------------------------------------------------------------
 
-Deno.test("GET / returns HTML with status section and fetchStatus JS", async () => {
+Deno.test("GET / returns HTML shell with app-root and boot island", async () => {
   const port = nextPort();
   const { ac, done } = await startServer(port, {
     statusProvider: stubStatusProvider({
@@ -194,11 +194,9 @@ Deno.test("GET / returns HTML with status section and fetchStatus JS", async () 
   const res = await fetch(`http://localhost:${port}/`);
   assertEquals(res.status, 200);
   const html = await res.text();
-  assertStringIncludes(html, "status-summary");
-  assertStringIncludes(html, "status-list");
-  assertStringIncludes(html, "fetchStatus");
-  assertStringIncludes(html, "/api/status");
-  assertStringIncludes(html, "Progress");
+  assertStringIncludes(html, "app-root");
+  assertStringIncludes(html, "/islands/boot.js");
+  assertStringIncludes(html, "ralphmania");
 
   ac.abort();
   await done;

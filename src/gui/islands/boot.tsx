@@ -12,6 +12,7 @@ import WorkflowGraph from "./workflow-graph.tsx";
 import LogPanel from "./log-panel.tsx";
 import WorkerModal from "./worker-modal.tsx";
 
+// deno-lint-ignore no-undef
 const root = document.getElementById("app-root");
 if (root) {
   render(

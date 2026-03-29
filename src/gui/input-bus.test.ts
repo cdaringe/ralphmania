@@ -111,6 +111,7 @@ Deno.test("AgentInputBus: send on errored stream returns err with message", asyn
 Deno.test("AgentInputBus: registerSession sends via session sender", async () => {
   const bus = createAgentInputBus();
   const received: string[] = [];
+  // deno-lint-ignore require-await
   bus.registerSession("SC.1", async (text) => {
     received.push(text);
   });
@@ -121,6 +122,7 @@ Deno.test("AgentInputBus: registerSession sends via session sender", async () =>
 
 Deno.test("AgentInputBus: session sender error returns err with message", async () => {
   const bus = createAgentInputBus();
+  // deno-lint-ignore require-await
   bus.registerSession("SC.1", async () => {
     throw new Error("session closed");
   });

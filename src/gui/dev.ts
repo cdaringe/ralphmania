@@ -7,7 +7,7 @@
  *
  * @module
  */
-import * as esbuild from "npm:esbuild";
+import * as esbuild from "npm:esbuild@~0.25.5";
 import * as path from "jsr:@std/path@^1";
 
 const GUI_DIR = path.dirname(path.fromFileUrl(import.meta.url));

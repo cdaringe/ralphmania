@@ -7,6 +7,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
+  "exclude": [".ralph/"],
   "lint": {
     "exclude": ["src/set-fns.ts"],
     "rules": {

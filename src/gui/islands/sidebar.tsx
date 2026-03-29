@@ -137,7 +137,7 @@ export default function Sidebar(): preact.JSX.Element {
                 >
                   <span class="wid">W{idx}</span>{" "}
                   <span class="wscen">
-                    {"\u2192"} {escHtml(info.scenario)}
+                    → {escHtml(info.scenario)}
                   </span>
                 </a>
               ))

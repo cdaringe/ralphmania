@@ -8,11 +8,13 @@ TypeScript Islands.
 ## What's Done
 
 ### Server Migration (COMPLETE — 2026-03-29)
+
 - `src/gui/server.tsx` — Replaced Hono with Fresh 2 `App` + `Deno.serve`
 - Uses `preact-render-to-string` for SSR instead of Hono's `c.html()`
 - `src/gui/html.ts` → `src/gui/html.tsx` (JSX support for `renderToString`)
 - `deno.json` — Added `preact-render-to-string`, `preact/jsx-runtime` imports
-- `src/gui/logger.test.ts` — Fixed pre-existing 3-arg call to 2-arg `createGuiLogger`
+- `src/gui/logger.test.ts` — Fixed pre-existing 3-arg call to 2-arg
+  `createGuiLogger`
 - All 653 tests pass (2 pre-existing worktree lint/fmt failures unrelated)
 
 ### Infrastructure (keep)
