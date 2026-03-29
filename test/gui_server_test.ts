@@ -4,15 +4,13 @@ import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 
 Deno.test("startGuiServer serves HTML page at /", async () => {
   const ctrl = new AbortController();
-  const serverPromise = startGuiServer({
-    port: 18440,
+  const handle = await startGuiServer({
+    port: 0,
     signal: ctrl.signal,
     skipBuild: true,
   });
 
-  await new Promise<void>((r) => setTimeout(r, 50));
-
-  const res = await fetch("http://localhost:18440/");
+  const res = await fetch(`http://localhost:${handle.port}/`);
   assertEquals(res.status, 200);
   assert(
     res.headers.get("content-type")?.toLowerCase().includes("text/html"),
@@ -21,25 +19,23 @@ Deno.test("startGuiServer serves HTML page at /", async () => {
   assert(text.includes("ralphmania"));
 
   ctrl.abort();
-  await serverPromise.catch((): void => {});
+  await handle.finished.catch((): void => {});
 });
 
 Deno.test("startGuiServer returns 404 for unknown paths", async () => {
   const ctrl = new AbortController();
-  const serverPromise = startGuiServer({
-    port: 18441,
+  const handle = await startGuiServer({
+    port: 0,
     signal: ctrl.signal,
     skipBuild: true,
   });
 
-  await new Promise<void>((r) => setTimeout(r, 50));
-
-  const res = await fetch("http://localhost:18441/anything");
+  const res = await fetch(`http://localhost:${handle.port}/anything`);
   assertEquals(res.status, 404);
   await res.body?.cancel();
 
   ctrl.abort();
-  await serverPromise.catch((): void => {});
+  await handle.finished.catch((): void => {});
 });
 
 Deno.test({
@@ -48,16 +44,14 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const ctrl = new AbortController();
-    const serverPromise = startGuiServer({
-      port: 18442,
+    const handle = await startGuiServer({
+      port: 0,
       signal: ctrl.signal,
       skipBuild: true,
     });
 
-    await new Promise<void>((r) => setTimeout(r, 50));
-
     const reqCtrl = new AbortController();
-    const res = await fetch("http://localhost:18442/events", {
+    const res = await fetch(`http://localhost:${handle.port}/events`, {
       signal: reqCtrl.signal,
     });
     assertEquals(res.status, 200);
@@ -67,7 +61,7 @@ Deno.test({
     await res.body?.cancel().catch((): void => {});
 
     ctrl.abort();
-    await serverPromise.catch((): void => {});
+    await handle.finished.catch((): void => {});
   },
 });
 
@@ -78,16 +72,14 @@ Deno.test({
   fn: async () => {
     await initLogDir();
     const ctrl = new AbortController();
-    const serverPromise = startGuiServer({
-      port: 18443,
+    const handle = await startGuiServer({
+      port: 0,
       signal: ctrl.signal,
       skipBuild: true,
     });
 
-    await new Promise<void>((r) => setTimeout(r, 50));
-
     const reqCtrl = new AbortController();
-    const res = await fetch("http://localhost:18443/events", {
+    const res = await fetch(`http://localhost:${handle.port}/events`, {
       signal: reqCtrl.signal,
     });
     assertEquals(res.status, 200);
@@ -124,21 +116,19 @@ Deno.test({
     await reader.cancel().catch((): void => {});
 
     ctrl.abort();
-    await serverPromise.catch((): void => {});
+    await handle.finished.catch((): void => {});
   },
 });
 
 Deno.test("startGuiServer serves worker page at /worker/:id", async () => {
   const ctrl = new AbortController();
-  const serverPromise = startGuiServer({
-    port: 18445,
+  const handle = await startGuiServer({
+    port: 0,
     signal: ctrl.signal,
     skipBuild: true,
   });
 
-  await new Promise<void>((r) => setTimeout(r, 50));
-
-  const res = await fetch("http://localhost:18445/worker/0");
+  const res = await fetch(`http://localhost:${handle.port}/worker/0`);
   assertEquals(res.status, 200);
   assert(
     res.headers.get("content-type")?.toLowerCase().includes("text/html"),
@@ -147,5 +137,5 @@ Deno.test("startGuiServer serves worker page at /worker/:id", async () => {
   assert(text.includes("ralphmania"));
 
   ctrl.abort();
-  await serverPromise.catch((): void => {});
+  await handle.finished.catch((): void => {});
 });

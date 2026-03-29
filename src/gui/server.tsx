@@ -39,10 +39,17 @@ const htmlResponse = (jsx: preact.VNode): Response =>
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 
-/** Start the GUI HTTP server. Resolves when the server closes. */
+export type GuiServerHandle = {
+  /** The actual port the server is listening on. */
+  readonly port: number;
+  /** Resolves when the server closes. */
+  readonly finished: Promise<void>;
+};
+
+/** Start the GUI HTTP server. Returns the bound port and a finish promise. */
 export const startGuiServer = async (
   opts: GuiServerOptions,
-): Promise<void> => {
+): Promise<GuiServerHandle> => {
   const { port, signal, agentInputBus, statusProvider } = opts;
   const log = opts.log ?? createLogger();
 
@@ -195,6 +202,10 @@ export const startGuiServer = async (
     { port, signal, onListen: (): void => {} },
     handler,
   );
-  log({ tags: ["info"], message: `GUI available at http://localhost:${port}` });
-  await server.finished;
+  const actualPort = server.addr.port;
+  log({
+    tags: ["info"],
+    message: `GUI available at http://localhost:${actualPort}`,
+  });
+  return { port: actualPort, finished: server.finished };
 };

@@ -19,11 +19,6 @@ import { createAgentInputBus } from "../src/gui/input-bus.ts";
 import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 import type { StatusDiff } from "../src/status-diff.ts";
 
-// Ports for e2e tests — chosen to avoid conflicts with other test servers
-const BASE_PORT = 47210;
-let portCounter = 0;
-const nextPort = (): number => BASE_PORT + portCounter++;
-
 /** Helper: create a StatusProvider that returns canned data. */
 const stubStatusProvider = (diff: StatusDiff): StatusProvider => () =>
   Promise.resolve(diff);
@@ -32,24 +27,21 @@ const stubStatusProvider = (diff: StatusDiff): StatusProvider => () =>
 const failingStatusProvider = (): StatusProvider => () =>
   Promise.reject(new Error("disk error"));
 
-/** Helper: start server, wait for listen, return cleanup. */
+/** Helper: start server, return cleanup. */
 const startServer = async (
-  port: number,
   opts: {
     statusProvider?: StatusProvider;
   } = {},
-): Promise<{ ac: AbortController; done: Promise<void> }> => {
+): Promise<{ ac: AbortController; done: Promise<void>; port: number }> => {
   await initLogDir();
   const ac = new AbortController();
-  const done = startGuiServer({
-    port,
+  const handle = await startGuiServer({
+    port: 0,
     signal: ac.signal,
     agentInputBus: createAgentInputBus(),
     statusProvider: opts.statusProvider,
   });
-  // Wait for server to start listening
-  await new Promise<void>((r) => setTimeout(r, 80));
-  return { ac, done };
+  return { ac, done: handle.finished, port: handle.port };
 };
 
 // ---------------------------------------------------------------------------
@@ -57,13 +49,12 @@ const startServer = async (
 // ---------------------------------------------------------------------------
 
 Deno.test("GET /api/status returns JSON diff when provider is configured", async () => {
-  const port = nextPort();
   const diff: StatusDiff = {
     specOnly: ["NEW.1"],
     progressOnly: ["OLD.1"],
     shared: [{ id: "A.1", status: "VERIFIED", summary: "done" }],
   };
-  const { ac, done } = await startServer(port, {
+  const { ac, done, port } = await startServer({
     statusProvider: stubStatusProvider(diff),
   });
 
@@ -82,8 +73,7 @@ Deno.test("GET /api/status returns JSON diff when provider is configured", async
 });
 
 Deno.test("GET /api/status returns empty diff when no provider", async () => {
-  const port = nextPort();
-  const { ac, done } = await startServer(port);
+  const { ac, done, port } = await startServer();
 
   const res = await fetch(`http://localhost:${port}/api/status`);
   assertEquals(res.status, 200);
@@ -97,8 +87,7 @@ Deno.test("GET /api/status returns empty diff when no provider", async () => {
 });
 
 Deno.test("GET /api/status returns 500 when provider throws", async () => {
-  const port = nextPort();
-  const { ac, done } = await startServer(port, {
+  const { ac, done, port } = await startServer({
     statusProvider: failingStatusProvider(),
   });
 
@@ -116,7 +105,6 @@ Deno.test("GET /api/status returns 500 when provider throws", async () => {
 // ---------------------------------------------------------------------------
 
 Deno.test("GET /status returns HTML with status diff when provider configured", async () => {
-  const port = nextPort();
   const diff: StatusDiff = {
     specOnly: ["B.2"],
     progressOnly: [],
@@ -125,7 +113,7 @@ Deno.test("GET /status returns HTML with status diff when provider configured", 
       { id: "B.1", status: "NEEDS_REWORK", summary: "broken" },
     ],
   };
-  const { ac, done } = await startServer(port, {
+  const { ac, done, port } = await startServer({
     statusProvider: stubStatusProvider(diff),
   });
 
@@ -150,8 +138,7 @@ Deno.test("GET /status returns HTML with status diff when provider configured", 
 });
 
 Deno.test("GET /status returns fallback HTML when no provider", async () => {
-  const port = nextPort();
-  const { ac, done } = await startServer(port);
+  const { ac, done, port } = await startServer();
 
   const res = await fetch(`http://localhost:${port}/status`);
   assertEquals(res.status, 200);
@@ -163,8 +150,7 @@ Deno.test("GET /status returns fallback HTML when no provider", async () => {
 });
 
 Deno.test("GET /status returns 500 when provider throws", async () => {
-  const port = nextPort();
-  const { ac, done } = await startServer(port, {
+  const { ac, done, port } = await startServer({
     statusProvider: failingStatusProvider(),
   });
 
@@ -182,8 +168,7 @@ Deno.test("GET /status returns 500 when provider throws", async () => {
 // ---------------------------------------------------------------------------
 
 Deno.test("GET / returns HTML shell with app-root and boot island", async () => {
-  const port = nextPort();
-  const { ac, done } = await startServer(port, {
+  const { ac, done, port } = await startServer({
     statusProvider: stubStatusProvider({
       specOnly: [],
       progressOnly: [],
@@ -211,9 +196,8 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const port = nextPort();
     await initLogDir();
-    const { ac, done } = await startServer(port);
+    const { ac, done, port } = await startServer();
 
     // Connect to SSE
     const res = await fetch(`http://localhost:${port}/events`);
@@ -304,7 +288,6 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const port = nextPort();
     let callCount = 0;
     const statusProvider: StatusProvider = () => {
       callCount++;
@@ -316,7 +299,7 @@ Deno.test({
           : [{ id: "X.1", status: "VERIFIED", summary: "done" }],
       });
     };
-    const { ac, done } = await startServer(port, { statusProvider });
+    const { ac, done, port } = await startServer({ statusProvider });
 
     // First fetch: X.1 is not started
     const res1 = await fetch(`http://localhost:${port}/api/status`);

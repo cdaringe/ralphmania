@@ -3,10 +3,6 @@ import { assert, assertEquals } from "jsr:@std/assert@^1";
 import { createAgentInputBus } from "./input-bus.ts";
 import { startGuiServer } from "./server.tsx";
 
-const P0 = 47201;
-const P1 = 47202;
-const P2 = 47203;
-
 Deno.test(
   "POST /input/:workerId: sends text to registered worker, returns ok JSON",
   async () => {
@@ -21,16 +17,14 @@ Deno.test(
     inputBus.register("GUI.0", stream);
 
     const ac = new AbortController();
-    const serverDone = startGuiServer({
-      port: P0,
+    const handle = await startGuiServer({
+      port: 0,
       signal: ac.signal,
       agentInputBus: inputBus,
       skipBuild: true,
     });
 
-    await new Promise<void>((r) => setTimeout(r, 50));
-
-    const res = await fetch(`http://localhost:${P0}/input/GUI.0`, {
+    const res = await fetch(`http://localhost:${handle.port}/input/GUI.0`, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: "hello agent",
@@ -42,7 +36,7 @@ Deno.test(
     assertEquals(collected.join(""), "hello agent\n");
 
     ac.abort();
-    await serverDone;
+    await handle.finished;
   },
 );
 
@@ -52,16 +46,14 @@ Deno.test(
     const inputBus = createAgentInputBus();
 
     const ac = new AbortController();
-    const serverDone = startGuiServer({
-      port: P1,
+    const handle = await startGuiServer({
+      port: 0,
       signal: ac.signal,
       agentInputBus: inputBus,
       skipBuild: true,
     });
 
-    await new Promise<void>((r) => setTimeout(r, 50));
-
-    const res = await fetch(`http://localhost:${P1}/input/NOBODY`, {
+    const res = await fetch(`http://localhost:${handle.port}/input/NOBODY`, {
       method: "POST",
       body: "hello",
     });
@@ -75,7 +67,7 @@ Deno.test(
     );
 
     ac.abort();
-    await serverDone;
+    await handle.finished;
   },
 );
 
@@ -83,15 +75,13 @@ Deno.test(
   "POST /input/:workerId: returns 503 when no input bus configured",
   async () => {
     const ac = new AbortController();
-    const serverDone = startGuiServer({
-      port: P2,
+    const handle = await startGuiServer({
+      port: 0,
       signal: ac.signal,
       skipBuild: true,
     });
 
-    await new Promise<void>((r) => setTimeout(r, 50));
-
-    const res = await fetch(`http://localhost:${P2}/input/NOBODY`, {
+    const res = await fetch(`http://localhost:${handle.port}/input/NOBODY`, {
       method: "POST",
       body: "hello",
     });
@@ -101,6 +91,6 @@ Deno.test(
     assertEquals(json.ok, false);
 
     ac.abort();
-    await serverDone;
+    await handle.finished;
   },
 );

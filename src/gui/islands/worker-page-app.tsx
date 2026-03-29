@@ -39,7 +39,7 @@ export default function WorkerPageApp(): preact.JSX.Element {
 
   useEffect(() => {
     // deno-lint-ignore no-undef
-    document.title = `ralphmania \u00b7 worker ${workerIndex}`;
+    document.title = `ralphmania \u00b7 W${workerIndex} \u00b7 ${workerId}`;
     let es: EventSource;
     let timer: number | undefined;
 
@@ -115,12 +115,8 @@ export default function WorkerPageApp(): preact.JSX.Element {
       });
   };
 
-  const badgeClass = connected
-    ? workerState === "done" ? "badge done" : "badge"
-    : "badge off";
-  const badgeText = connected
-    ? workerState === "done" ? "done" : "live"
-    : "disconnected";
+  const badgeClass = connected ? "badge" : "badge off";
+  const badgeText = connected ? "connected" : "disconnected";
 
   return (
     <>
@@ -128,25 +124,17 @@ export default function WorkerPageApp(): preact.JSX.Element {
         <h1>ralphmania</h1>
         <a class="back" href="/">← overview</a>
         <span style="font-size:13px;color:var(--muted)">
-          worker {workerIndex}
+          W{workerIndex} · {workerId}
+        </span>
+        <span
+          class={`info-val state-${workerState}`}
+          style="font-size:12px;margin-left:8px"
+        >
+          {workerState}
         </span>
         <span class={badgeClass}>{badgeText}</span>
       </header>
       <main>
-        <aside>
-          <div>
-            <div class="pt">Worker</div>
-            <div class="info-val neutral">W{workerIndex}</div>
-          </div>
-          <div>
-            <div class="pt">Scenario</div>
-            <div class="info-val">{workerId}</div>
-          </div>
-          <div>
-            <div class="pt">State</div>
-            <div class={`info-val state-${workerState}`}>{workerState}</div>
-          </div>
-        </aside>
         <section style="display:flex;flex-direction:column;overflow:hidden">
           <div id="log-bar">
             <label>

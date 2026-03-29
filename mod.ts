@@ -188,7 +188,7 @@ const main = async (): Promise<number> => {
         const progressRows = progressResult.isOk() ? progressResult.value : [];
         return computeStatusDiff(specIds, progressRows);
       },
-    }).catch((): void => {});
+    }).then((h) => h.finished).catch((): void => {});
   }
 
   const shutdownController = new AbortController();

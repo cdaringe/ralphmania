@@ -17,23 +17,18 @@ import { createGuiLogger } from "../src/gui/logger.ts";
 import { createAgentInputBus } from "../src/gui/input-bus.ts";
 import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 
-const BASE_PORT = 47450;
-let portCounter = 0;
-const nextPort = (): number => BASE_PORT + portCounter++;
-
-const startServer = async (
-  port: number,
-): Promise<{ ac: AbortController; done: Promise<void> }> => {
+const startServer = async (): Promise<
+  { ac: AbortController; done: Promise<void>; port: number }
+> => {
   await initLogDir();
   const ac = new AbortController();
-  const done = startGuiServer({
-    port,
+  const handle = await startGuiServer({
+    port: 0,
     signal: ac.signal,
     agentInputBus: createAgentInputBus(),
     skipBuild: true,
   });
-  await new Promise<void>((r) => setTimeout(r, 80));
-  return { ac, done };
+  return { ac, done: handle.finished, port: handle.port };
 };
 
 // ---------------------------------------------------------------------------
@@ -195,8 +190,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const port = nextPort();
-    const { ac, done } = await startServer(port);
+    const { ac, done, port } = await startServer();
 
     const res = await fetch(`http://localhost:${port}/events`);
     assertEquals(res.status, 200);
@@ -283,8 +277,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const port = nextPort();
-    const { ac, done } = await startServer(port);
+    const { ac, done, port } = await startServer();
 
     const res = await fetch(`http://localhost:${port}/`);
     assertEquals(res.status, 200);

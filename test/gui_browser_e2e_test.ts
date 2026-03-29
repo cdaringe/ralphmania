@@ -3,14 +3,9 @@
 /**
  * Browser-based end-to-end tests for the visual task graph GUI.
  *
- * Uses Puppeteer to launch a real headless Chrome instance and verify:
- * - React Flow graph renders with all orchestrator state nodes
- * - Tab switching works (Graph/Log)
- * - State transitions highlight the correct node
- * - Dynamic worker nodes appear on worker_active events
- * - Worker nodes become clickable and open the modal
- * - Merge events update the merge node
- * - The loop-back edge exists
+ * Uses Puppeteer with a single shared browser instance and parallel pages
+ * to verify the full GUI: graph rendering, tabs, SSE-driven state
+ * transitions, worker/merge nodes, modal, sidebar, log panel, and layout.
  *
  * @module
  */
@@ -25,37 +20,46 @@ const CHROME_PATH = `${
   Deno.env.get("HOME")
 }/.cache/puppeteer/chrome/linux-147.0.7727.24/chrome-linux64/chrome`;
 
-const BASE_PORT = 47350;
-let portCounter = 0;
-const nextPort = (): number => BASE_PORT + portCounter++;
+// ---------------------------------------------------------------------------
+// Shared browser — launched once, reused by all tests
+// ---------------------------------------------------------------------------
+
+let sharedBrowser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+
+async function getBrowser(): Promise<
+  Awaited<ReturnType<typeof puppeteer.launch>>
+> {
+  if (!sharedBrowser) {
+    sharedBrowser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
+  return sharedBrowser;
+}
 
 interface TestContext {
   ac: AbortController;
   done: Promise<void>;
   port: number;
-  browser: Awaited<ReturnType<typeof puppeteer.launch>>;
   page: Awaited<
     ReturnType<Awaited<ReturnType<typeof puppeteer.launch>>["newPage"]>
   >;
 }
 
 async function setup(): Promise<TestContext> {
-  const port = nextPort();
   await initLogDir();
   const ac = new AbortController();
-  const done = startGuiServer({
-    port,
+  const handle = await startGuiServer({
+    port: 0,
     signal: ac.signal,
     agentInputBus: createAgentInputBus(),
   });
-  // Builder esbuild compilation + server startup needs time.
-  await new Promise<void>((r) => setTimeout(r, 10000));
+  const { port } = handle;
+  const done = handle.finished;
 
-  const browser = await puppeteer.launch({
-    executablePath: CHROME_PATH,
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await getBrowser();
   const page = await browser.newPage();
   page.on(
     "console",
@@ -66,130 +70,78 @@ async function setup(): Promise<TestContext> {
     "pageerror",
     (err: { message: string }) => console.log(`[browser:error] ${err.message}`),
   );
-  // Use 'load' not 'networkidle0' — SSE keeps the connection alive forever
   await page.goto(`http://localhost:${port}/`, { waitUntil: "load" });
 
-  return { ac, done, port, browser, page };
+  return { ac, done, port, page };
 }
 
 async function teardown(ctx: TestContext): Promise<void> {
   await ctx.page.close();
-  await ctx.browser.close();
   ctx.ac.abort();
   await ctx.done.catch(() => {});
-  // Wait for port + file watcher cleanup
-  await new Promise<void>((r) => setTimeout(r, 200));
+  await new Promise<void>((r) => setTimeout(r, 100));
 }
 
 // ---------------------------------------------------------------------------
-// Graph rendering
+// 1. Static graph rendering, tabs, and layout
 // ---------------------------------------------------------------------------
 
 Deno.test({
-  name: "browser: React Flow graph renders with orchestrator state nodes",
+  name:
+    "browser: graph renders nodes/edges, init is active, tabs switch, layout fills viewport",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
     const ctx = await setup();
     try {
-      // Wait for React Flow to render (the .react-flow container)
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
-      // Check that state nodes exist in the rendered graph
-      // React Flow renders nodes as divs with data-id attributes
+      // -- Nodes --
       const nodeIds = await ctx.page.evaluate(() => {
         const nodes = document.querySelectorAll(".react-flow__node");
         return Array.from(nodes).map((n) => n.getAttribute("data-id"));
       });
-
-      const expectedStates = [
-        "init",
-        "reading_progress",
-        "finding_actionable",
-        "running_workers",
-        "validating",
-        "checking_doneness",
-        "done",
-        "aborted",
-      ];
-      for (const state of expectedStates) {
+      for (
+        const state of [
+          "init",
+          "reading_progress",
+          "finding_actionable",
+          "running_workers",
+          "validating",
+          "checking_doneness",
+          "done",
+          "aborted",
+        ]
+      ) {
         assert(
           nodeIds.includes(state),
           `Expected node "${state}" in graph, got: ${JSON.stringify(nodeIds)}`,
         );
       }
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
 
-Deno.test({
-  name: "browser: Graph has edges connecting state nodes",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
-
+      // -- Edges --
       const edgeCount = await ctx.page.evaluate(() => {
         return document.querySelectorAll(".react-flow__edge").length;
       });
-
-      // Should have at least the main chain edges + loop + abort
       assert(edgeCount >= 7, `Expected at least 7 edges, got ${edgeCount}`);
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
 
-Deno.test({
-  name: "browser: init node is active by default (has pulse animation)",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
-
-      // The init node should have the active styling (animation)
+      // -- Init node is active (pulse animation) --
       const initNodeStyle = await ctx.page.evaluate(() => {
         const node = document.querySelector(
           '.react-flow__node[data-id="init"]',
         );
         if (!node) return null;
-        const inner = node.querySelector(".react-flow__node-default") ||
-          node;
+        const inner = node.querySelector(".react-flow__node-default") || node;
         return inner.getAttribute("style") || "";
       });
-
       assert(initNodeStyle !== null, "init node not found");
-      // Active nodes have the pulse animation in their inline style
       assert(
         initNodeStyle.includes("animation") ||
           initNodeStyle.includes("pulse"),
         `Expected init node to have pulse animation, got style: ${initNodeStyle}`,
       );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
 
-// ---------------------------------------------------------------------------
-// Tab switching
-// ---------------------------------------------------------------------------
-
-Deno.test({
-  name: "browser: Tab switching shows/hides Graph and Log panels",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      // Graph panel should be visible initially
+      // -- Tab switching --
       const graphVisible = await ctx.page.evaluate(() => {
         const panel = document.getElementById("graph-panel");
         return panel?.classList.contains("active") ?? false;
@@ -200,7 +152,6 @@ Deno.test({
         "Graph panel should be active initially",
       );
 
-      // Click Log tab
       await ctx.page.click('[data-tab="log"]');
       await new Promise<void>((r) => setTimeout(r, 100));
 
@@ -223,7 +174,6 @@ Deno.test({
         "Log should be visible after Log click",
       );
 
-      // Click Graph tab to switch back
       await ctx.page.click('[data-tab="graph"]');
       await new Promise<void>((r) => setTimeout(r, 100));
 
@@ -236,6 +186,20 @@ Deno.test({
         true,
         "Graph should be visible after Graph click",
       );
+
+      // -- Layout: app-root fills viewport --
+      const heights = await ctx.page.evaluate(() => {
+        const appRoot = document.getElementById("app-root");
+        const vh = globalThis.innerHeight;
+        return {
+          appRootHeight: appRoot?.getBoundingClientRect().height ?? 0,
+          viewportHeight: vh,
+        };
+      });
+      assert(
+        heights.appRootHeight >= heights.viewportHeight * 0.9,
+        `app-root (${heights.appRootHeight}px) should fill viewport (${heights.viewportHeight}px)`,
+      );
     } finally {
       await teardown(ctx);
     }
@@ -243,11 +207,11 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
-// State transitions via SSE
+// 2. SSE state transitions update the graph
 // ---------------------------------------------------------------------------
 
 Deno.test({
-  name: "browser: state event updates active node in graph",
+  name: "browser: state event updates active node, previous goes green",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
@@ -255,47 +219,38 @@ Deno.test({
     try {
       await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
 
-      // Emit a state transition
       await writeOrchestratorEvent({
         type: "state",
         from: "init",
         to: "reading_progress",
         ts: Date.now(),
       });
-
-      // Wait for the graph to update
       await new Promise<void>((r) => setTimeout(r, 500));
 
-      // reading_progress node should now be active (have animation)
+      // reading_progress should be active
       const rpStyle = await ctx.page.evaluate(() => {
         const node = document.querySelector(
           '.react-flow__node[data-id="reading_progress"]',
         );
         if (!node) return "";
-        const inner = node.querySelector(".react-flow__node-default") ||
-          node;
+        const inner = node.querySelector(".react-flow__node-default") || node;
         return inner.getAttribute("style") || "";
       });
-
-      // Active nodes have animation or pulse in style, or green accent border
       assert(
         rpStyle.includes("animation") || rpStyle.includes("pulse") ||
           rpStyle.includes("34, 197, 94") || rpStyle.includes("#22c55e"),
-        `Expected reading_progress to be active after state event, got: ${rpStyle}`,
+        `Expected reading_progress to be active, got: ${rpStyle}`,
       );
 
-      // init node should be "done" styled (green)
+      // init should be "done" (green)
       const initStyle = await ctx.page.evaluate(() => {
         const node = document.querySelector(
           '.react-flow__node[data-id="init"]',
         );
         if (!node) return "";
-        const inner = node.querySelector(".react-flow__node-default") ||
-          node;
+        const inner = node.querySelector(".react-flow__node-default") || node;
         return inner.getAttribute("style") || "";
       });
-
-      // Browser renders hex as rgb(), so check for both
       assert(
         initStyle.includes("#dcfce7") || initStyle.includes("#15803d") ||
           initStyle.includes("16a34a") ||
@@ -310,11 +265,12 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
-// Dynamic worker nodes
+// 3. Worker lifecycle: active, done, merge, modal, inactive badge
 // ---------------------------------------------------------------------------
 
 Deno.test({
-  name: "browser: worker_active events create dynamic worker nodes in graph",
+  name:
+    "browser: worker_active creates nodes, worker_done marks done, merge_start activates merge, modal opens with input, worker_done disables input",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
@@ -331,7 +287,7 @@ Deno.test({
       });
       await new Promise<void>((r) => setTimeout(r, 200));
 
-      // Emit worker_active events
+      // -- Worker active events create nodes --
       await writeOrchestratorEvent({
         type: "worker_active",
         workerIndex: 0,
@@ -344,16 +300,12 @@ Deno.test({
         scenario: "GUI.b",
         ts: Date.now(),
       });
-
-      // Wait for React to re-render
       await new Promise<void>((r) => setTimeout(r, 1000));
 
-      // Check for worker nodes
       const nodeIds = await ctx.page.evaluate(() => {
         const nodes = document.querySelectorAll(".react-flow__node");
         return Array.from(nodes).map((n) => n.getAttribute("data-id"));
       });
-
       assert(
         nodeIds.includes("worker-0"),
         `Expected worker-0 node, got: ${JSON.stringify(nodeIds)}`,
@@ -366,161 +318,8 @@ Deno.test({
         nodeIds.includes("merge"),
         `Expected merge node, got: ${JSON.stringify(nodeIds)}`,
       );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
 
-Deno.test({
-  name: "browser: worker_done marks worker node as done",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
-
-      // Set up workers
-      await writeOrchestratorEvent({
-        type: "state",
-        from: "finding_actionable",
-        to: "running_workers",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 200));
-
-      await writeOrchestratorEvent({
-        type: "worker_active",
-        workerIndex: 0,
-        scenario: "TEST.1",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // Complete the worker
-      await writeOrchestratorEvent({
-        type: "worker_done",
-        workerIndex: 0,
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // Worker node should have done styling (green background)
-      const workerStyle = await ctx.page.evaluate(() => {
-        const node = document.querySelector(
-          '.react-flow__node[data-id="worker-0"]',
-        );
-        if (!node) return "NOT_FOUND";
-        const inner = node.querySelector(".react-flow__node-default") ||
-          node;
-        return inner.getAttribute("style") || "";
-      });
-
-      assert(
-        workerStyle.includes("#dcfce7") || workerStyle.includes("#16a34a") ||
-          workerStyle.includes("220, 252, 231") ||
-          workerStyle.includes("22, 163, 74"),
-        `Expected worker-0 to have done styling, got: ${workerStyle}`,
-      );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Merge events
-// ---------------------------------------------------------------------------
-
-Deno.test({
-  name: "browser: merge_start activates merge node",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
-
-      // Set up workers
-      await writeOrchestratorEvent({
-        type: "state",
-        from: "finding_actionable",
-        to: "running_workers",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 200));
-
-      await writeOrchestratorEvent({
-        type: "worker_active",
-        workerIndex: 0,
-        scenario: "M.1",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // Start merge
-      await writeOrchestratorEvent({
-        type: "merge_start",
-        workerIndex: 0,
-        scenario: "M.1",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // Merge node should be active (amber/pulsing)
-      const mergeStyle = await ctx.page.evaluate(() => {
-        const node = document.querySelector(
-          '.react-flow__node[data-id="merge"]',
-        );
-        if (!node) return "NOT_FOUND";
-        const inner = node.querySelector(".react-flow__node-default") ||
-          node;
-        return inner.getAttribute("style") || "";
-      });
-
-      assert(
-        mergeStyle.includes("#fefce8") || mergeStyle.includes("#f59e0b") ||
-          mergeStyle.includes("animation"),
-        `Expected merge node to be active, got: ${mergeStyle}`,
-      );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Worker modal
-// ---------------------------------------------------------------------------
-
-Deno.test({
-  name: "browser: clicking worker node opens modal",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
-
-      // Set up a worker
-      await writeOrchestratorEvent({
-        type: "state",
-        from: "finding_actionable",
-        to: "running_workers",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 200));
-
-      await writeOrchestratorEvent({
-        type: "worker_active",
-        workerIndex: 0,
-        scenario: "MODAL.1",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 1000));
-
-      // Click the worker node
+      // -- Click worker-0 node to open modal --
       const workerNode = await ctx.page.$(
         '.react-flow__node[data-id="worker-0"]',
       );
@@ -528,175 +327,23 @@ Deno.test({
       await workerNode.click();
       await new Promise<void>((r) => setTimeout(r, 500));
 
-      // Modal should be visible
       const modalVisible = await ctx.page.evaluate(() => {
         const modal = document.getElementById("worker-modal");
         return modal && modal.style.display !== "none" &&
           modal.innerHTML.length > 0;
       });
-
       assert(modalVisible, "Expected worker modal to be visible after click");
 
-      // Modal should contain the worker info
       const modalContent = await ctx.page.evaluate(() => {
         const modal = document.getElementById("worker-modal");
         return modal?.textContent || "";
       });
-
       assert(
-        modalContent.includes("MODAL.1"),
+        modalContent.includes("GUI.a"),
         `Expected modal to contain scenario name, got: ${modalContent}`,
       );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
 
-// ---------------------------------------------------------------------------
-// Sidebar updates
-// ---------------------------------------------------------------------------
-
-Deno.test({
-  name: "browser: sidebar state-val updates on state events",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector("#state-val", { timeout: 5000 });
-
-      await writeOrchestratorEvent({
-        type: "state",
-        from: "init",
-        to: "finding_actionable",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 300));
-
-      const stateText = await ctx.page.evaluate(() => {
-        return document.getElementById("state-val")?.textContent || "";
-      });
-
-      assertEquals(stateText, "finding_actionable");
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
-
-Deno.test({
-  name: "browser: sidebar workers list updates on worker_active",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector("#workers", { timeout: 5000 });
-
-      await writeOrchestratorEvent({
-        type: "worker_active",
-        workerIndex: 0,
-        scenario: "SIDE.1",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 300));
-
-      const workersHtml = await ctx.page.evaluate(() => {
-        return document.getElementById("workers")?.innerHTML || "";
-      });
-
-      assert(workersHtml.includes("W0"), "Expected W0 in sidebar workers");
-      assert(
-        workersHtml.includes("SIDE.1"),
-        "Expected scenario in sidebar workers",
-      );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Log panel
-// ---------------------------------------------------------------------------
-
-Deno.test({
-  name: "browser: log events appear in log panel",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      // Switch to log tab
-      await ctx.page.click('[data-tab="log"]');
-      await new Promise<void>((r) => setTimeout(r, 100));
-
-      // Emit a log event
-      await writeOrchestratorEvent({
-        type: "log",
-        level: "info",
-        tags: ["info", "orchestrator"],
-        message: "browser test log message",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 300));
-
-      const logContent = await ctx.page.evaluate(() => {
-        return document.getElementById("log")?.textContent || "";
-      });
-
-      assert(
-        logContent.includes("browser test log message"),
-        `Expected log message in log panel, got: ${
-          logContent.substring(0, 200)
-        }`,
-      );
-    } finally {
-      await teardown(ctx);
-    }
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Worker done state — modal disables input, shows inactive badge
-// ---------------------------------------------------------------------------
-
-Deno.test({
-  name: "browser: worker_done disables modal input and shows inactive badge",
-  sanitizeOps: false,
-  sanitizeResources: false,
-  fn: async () => {
-    const ctx = await setup();
-    try {
-      await ctx.page.waitForSelector(".react-flow", { timeout: 15000 });
-
-      // Create and complete a worker
-      await writeOrchestratorEvent({
-        type: "state",
-        from: "finding_actionable",
-        to: "running_workers",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 200));
-
-      await writeOrchestratorEvent({
-        type: "worker_active",
-        workerIndex: 0,
-        scenario: "DONE.1",
-        ts: Date.now(),
-      });
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // Open the modal
-      const workerNode = await ctx.page.$(
-        '.react-flow__node[data-id="worker-0"]',
-      );
-      assert(workerNode !== null, "Worker node not found");
-      await workerNode.click();
-      await new Promise<void>((r) => setTimeout(r, 500));
-
-      // Verify input is enabled before worker_done
+      // Verify input is enabled while worker is running
       const enabledBefore = await ctx.page.evaluate(() => {
         const ta = document.querySelector(
           "#worker-modal textarea",
@@ -709,16 +356,53 @@ Deno.test({
         "Input should be enabled while running",
       );
 
-      // Complete the worker
+      // -- Merge start activates merge node --
       await writeOrchestratorEvent({
-        type: "worker_done",
+        type: "merge_start",
         workerIndex: 0,
-        scenario: "DONE.1",
+        scenario: "GUI.a",
         ts: Date.now(),
       });
       await new Promise<void>((r) => setTimeout(r, 500));
 
-      // Verify input is disabled and inactive badge shows
+      const mergeStyle = await ctx.page.evaluate(() => {
+        const node = document.querySelector(
+          '.react-flow__node[data-id="merge"]',
+        );
+        if (!node) return "NOT_FOUND";
+        const inner = node.querySelector(".react-flow__node-default") || node;
+        return inner.getAttribute("style") || "";
+      });
+      assert(
+        mergeStyle.includes("#fefce8") || mergeStyle.includes("#f59e0b") ||
+          mergeStyle.includes("animation"),
+        `Expected merge node to be active, got: ${mergeStyle}`,
+      );
+
+      // -- Worker done marks node as done and disables modal input --
+      await writeOrchestratorEvent({
+        type: "worker_done",
+        workerIndex: 0,
+        scenario: "GUI.a",
+        ts: Date.now(),
+      });
+      await new Promise<void>((r) => setTimeout(r, 500));
+
+      const workerStyle = await ctx.page.evaluate(() => {
+        const node = document.querySelector(
+          '.react-flow__node[data-id="worker-0"]',
+        );
+        if (!node) return "NOT_FOUND";
+        const inner = node.querySelector(".react-flow__node-default") || node;
+        return inner.getAttribute("style") || "";
+      });
+      assert(
+        workerStyle.includes("#dcfce7") || workerStyle.includes("#16a34a") ||
+          workerStyle.includes("220, 252, 231") ||
+          workerStyle.includes("22, 163, 74"),
+        `Expected worker-0 to have done styling, got: ${workerStyle}`,
+      );
+
       const stateAfter = await ctx.page.evaluate(() => {
         const ta = document.querySelector(
           "#worker-modal textarea",
@@ -730,7 +414,6 @@ Deno.test({
           badgeText: badge?.textContent ?? "",
         };
       });
-
       assertEquals(
         stateAfter.inputDisabled,
         true,
@@ -748,34 +431,91 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
-// Layout: app-root fills viewport
+// 4. Sidebar + log panel updates via SSE
 // ---------------------------------------------------------------------------
 
 Deno.test({
-  name: "browser: app-root fills the viewport height",
+  name:
+    "browser: sidebar state-val and workers update on events, log panel shows messages",
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
     const ctx = await setup();
     try {
-      await ctx.page.waitForSelector("#app-root", { timeout: 5000 });
+      await ctx.page.waitForSelector("#state-val", { timeout: 5000 });
 
-      const heights = await ctx.page.evaluate(() => {
-        const appRoot = document.getElementById("app-root");
-        const vh = globalThis.innerHeight;
-        return {
-          appRootHeight: appRoot?.getBoundingClientRect().height ?? 0,
-          viewportHeight: vh,
-        };
+      // -- State updates sidebar --
+      await writeOrchestratorEvent({
+        type: "state",
+        from: "init",
+        to: "finding_actionable",
+        ts: Date.now(),
       });
+      await new Promise<void>((r) => setTimeout(r, 300));
 
-      // app-root should be at least 90% of viewport (allowing for minor rounding)
+      const stateText = await ctx.page.evaluate(() => {
+        return document.getElementById("state-val")?.textContent || "";
+      });
+      assertEquals(stateText, "finding_actionable");
+
+      // -- Worker active updates sidebar workers list --
+      await writeOrchestratorEvent({
+        type: "worker_active",
+        workerIndex: 0,
+        scenario: "SIDE.1",
+        ts: Date.now(),
+      });
+      await new Promise<void>((r) => setTimeout(r, 300));
+
+      const workersHtml = await ctx.page.evaluate(() => {
+        return document.getElementById("workers")?.innerHTML || "";
+      });
+      assert(workersHtml.includes("W0"), "Expected W0 in sidebar workers");
       assert(
-        heights.appRootHeight >= heights.viewportHeight * 0.9,
-        `app-root (${heights.appRootHeight}px) should fill viewport (${heights.viewportHeight}px)`,
+        workersHtml.includes("SIDE.1"),
+        "Expected scenario in sidebar workers",
+      );
+
+      // -- Log events appear in log panel --
+      await ctx.page.click('[data-tab="log"]');
+      await new Promise<void>((r) => setTimeout(r, 100));
+
+      await writeOrchestratorEvent({
+        type: "log",
+        level: "info",
+        tags: ["info", "orchestrator"],
+        message: "browser test log message",
+        ts: Date.now(),
+      });
+      await new Promise<void>((r) => setTimeout(r, 300));
+
+      const logContent = await ctx.page.evaluate(() => {
+        return document.getElementById("log")?.textContent || "";
+      });
+      assert(
+        logContent.includes("browser test log message"),
+        `Expected log message in log panel, got: ${
+          logContent.substring(0, 200)
+        }`,
       );
     } finally {
       await teardown(ctx);
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Cleanup: close shared browser after all tests
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "browser: cleanup shared browser",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    if (sharedBrowser) {
+      await sharedBrowser.close();
+      sharedBrowser = null;
     }
   },
 });
