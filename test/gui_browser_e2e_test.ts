@@ -16,9 +16,11 @@ import { startGuiServer } from "../src/gui/server.tsx";
 import { createAgentInputBus } from "../src/gui/input-bus.ts";
 import { initLogDir, writeOrchestratorEvent } from "../src/gui/log-dir.ts";
 
-const CHROME_PATH = `${
-  Deno.env.get("HOME")
-}/.cache/puppeteer/chrome/linux-147.0.7727.24/chrome-linux64/chrome`;
+const CHROME_PATH =
+  Deno.env.get("PUPPETEER_EXECUTABLE_PATH") ??
+  `${
+    Deno.env.get("HOME")
+  }/.cache/puppeteer/chrome/linux-147.0.7727.24/chrome-linux64/chrome`;
 
 // ---------------------------------------------------------------------------
 // Shared browser — launched once, reused by all tests
