@@ -584,19 +584,20 @@ export const transitionRunningWorkers = async (
     );
     results.forEach((wr) => {
       const scenario = uniqueActionable[wr.workerIndex];
+      const elapsed = formatDuration(wr.completedAt - wr.startedAt);
       if (scenario !== undefined) {
         if (stillActionable.has(scenario)) {
           ctx.log({
             tags: ["info", "orchestrator"],
             message: yellow(
-              `Scenario ${scenario}: still actionable after worker ${wr.workerIndex}`,
+              `Scenario ${scenario}: still actionable after worker ${wr.workerIndex} (${elapsed})`,
             ),
           });
         } else {
           ctx.log({
             tags: ["info", "orchestrator"],
             message: green(
-              `Scenario ${scenario}: resolved by worker ${wr.workerIndex}`,
+              `Scenario ${scenario}: resolved by worker ${wr.workerIndex} (${elapsed})`,
             ),
           });
         }
