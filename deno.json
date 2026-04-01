@@ -47,7 +47,7 @@
     "yeet": "deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
   },
   "imports": {
-    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk",
+    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.2.87",
     "@cliffy/ansi": "jsr:@cliffy/ansi@^1.0.0",
     "@cliffy/command": "jsr:@cliffy/command@^1.0.0",
     "@fresh/core": "jsr:@fresh/core@^2",
