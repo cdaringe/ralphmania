@@ -30,7 +30,7 @@ import {
 import { parseScenarioIds } from "../progress.ts";
 import { dim, green, yellow } from "../colors.ts";
 import { difference, xor } from "../set-fns.ts";
-import { Status } from "../constants.ts";
+import { formatDuration, Status } from "../constants.ts";
 
 // ---------------------------------------------------------------------------
 // Deep completion verification — re-reads spec + progress from disk
