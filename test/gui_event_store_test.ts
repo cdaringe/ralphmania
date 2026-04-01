@@ -51,6 +51,8 @@ Deno.test("event-store does not infer orchestrator state from worker activity", 
 
 Deno.test("event-store trims retained log history and bumps revisions", () => {
   resetStore();
+  const initialLogVersion = getLogVersion();
+  const initialWorkerLogVersion = getWorkerLogVersion();
 
   for (let i = 0; i < 1605; i++) {
     dispatch({
@@ -67,6 +69,6 @@ Deno.test("event-store trims retained log history and bumps revisions", () => {
   assertEquals(getLogEvents()[0]?.message, "line 301");
   assertEquals(getWorkerLogBuffer("GUI.a").length, 600);
   assertEquals(getWorkerLogBuffer("GUI.a")[0]?.message, "line 1005");
-  assertEquals(getLogVersion(), 1605);
-  assertEquals(getWorkerLogVersion(), 1605);
+  assertEquals(getLogVersion() - initialLogVersion, 1605);
+  assertEquals(getWorkerLogVersion() - initialWorkerLogVersion, 1605);
 });

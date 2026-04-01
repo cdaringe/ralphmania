@@ -89,6 +89,42 @@ const verifyCompletion = async (
 };
 
 // ---------------------------------------------------------------------------
+// Progress diff tracking — logs status changes between iterations
+// ---------------------------------------------------------------------------
+
+let previousStatuses: Map<string, string> = new Map();
+
+/** Reset progress diff state (useful for testing). */
+export const resetProgressDiff = (): void => {
+  previousStatuses = new Map();
+};
+
+const logProgressDiff = (
+  rows: { scenario: string; status: string }[],
+  log: Logger,
+): void => {
+  const current = new Map(rows.map((r) => [r.scenario, r.status]));
+  if (previousStatuses.size > 0) {
+    const changes: string[] = [];
+    for (const [id, status] of current) {
+      const prev = previousStatuses.get(id);
+      if (prev !== undefined && prev !== status) {
+        changes.push(`${id}: ${prev} → ${status}`);
+      } else if (prev === undefined) {
+        changes.push(`${id}: (new) → ${status}`);
+      }
+    }
+    if (changes.length > 0) {
+      log({
+        tags: ["info", "orchestrator", "progress-diff"],
+        message: `Progress changes: ${changes.join(", ")}`,
+      });
+    }
+  }
+  previousStatuses = current;
+};
+
+// ---------------------------------------------------------------------------
 // Context — immutable config threaded through every transition
 // ---------------------------------------------------------------------------
 
@@ -223,6 +259,12 @@ export const transitionReadingProgress = async (
 
   const content = await ctx.deps.readProgress();
   let validationFailurePath = state.validationFailurePath;
+
+  // Log scenario status changes between rounds.
+  const diffParsed = parseProgressRows(content);
+  if (diffParsed.isOk()) {
+    logProgressDiff(diffParsed.value, ctx.log);
+  }
 
   const invalidResult = validateProgressStatuses(content);
   if (invalidResult.isErr()) {
