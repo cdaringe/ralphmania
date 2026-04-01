@@ -24,6 +24,8 @@ adapter implementations are in `ports/impl.ts`.
 - Structural tests: `test/arch_1_test.ts`
   - Purity checks (no raw `Deno.*` in domain code outside c8 wiring blocks)
   - Contract centralization check (`src/ports/types.ts`)
+  - Explicit split check: `src/ports/types.ts` has no `Deno.*`, while
+    `src/ports/impl.ts` contains only default Deno adapters
   - No duplicate inline contract declarations in domain modules
 - Integration test: `ARCH.1 [integration]` in `test/arch_1_test.ts`
   - `runParallelLoop` executes via injected `MachineDeps` (no default adapter

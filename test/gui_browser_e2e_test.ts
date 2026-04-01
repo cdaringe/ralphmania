@@ -120,6 +120,10 @@ Deno.test({
       }
 
       // -- Edges --
+      await ctx.page.waitForFunction(
+        () => document.querySelectorAll(".react-flow__edge").length >= 7,
+        { timeout: 5000 },
+      );
       const edgeCount = await ctx.page.evaluate(() => {
         return document.querySelectorAll(".react-flow__edge").length;
       });

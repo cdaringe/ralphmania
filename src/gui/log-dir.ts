@@ -45,6 +45,7 @@ const appendLine = async (
   event: GuiEvent,
 ): Promise<void> => {
   const line = JSON.stringify(event) + "\n";
+  await Deno.mkdir(LOG_DIR, { recursive: true });
   await Deno.writeTextFile(path, line, { append: true });
 };
 

@@ -160,6 +160,28 @@ Deno.test("ARCH.1: contracts are centralized in src/ports/types.ts", async () =>
   }
 });
 
+Deno.test("ARCH.1: ports/types is pure contracts; ports/impl contains Deno adapters", async () => {
+  const typesSrc = await Deno.readTextFile(
+    new URL("../src/ports/types.ts", import.meta.url),
+  );
+  const implSrc = await Deno.readTextFile(
+    new URL("../src/ports/impl.ts", import.meta.url),
+  );
+
+  assertEquals(/\bDeno\./.test(typesSrc), false);
+  assert(/\bDeno\./.test(implSrc), "Expected Deno adapters in ports/impl.ts");
+  for (
+    const name of [
+      "defaultLoggerOutput",
+      "defaultModelIODeps",
+      "defaultProgressFileDeps",
+      "defaultValidationHookDeps",
+    ] as const
+  ) {
+    assertStringIncludes(implSrc, `export const ${name}`);
+  }
+});
+
 Deno.test("ARCH.1: port type declarations are not duplicated in domain modules", async () => {
   const files = [
     "../src/logger.ts",

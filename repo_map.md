@@ -28,6 +28,9 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   (embedded SPA). Activated via `--gui [--gui-port N]` flag. `createGuiLogger`
   wraps the main logger to tee all log calls to the bus; it also detects
   `transition`-tagged messages and emits explicit `state` events.
+  - Ops note: `src/gui/log-dir.ts` now creates `.ralph/worker-logs/` on demand
+    before appending NDJSON lines, so `/input/:workerId` logging is safe even
+    when `initLogDir()` has not run.
 - **Runner** (`src/runner.ts`): `executeAgent` spawns agent subprocess;
   `pipeStream` handles I/O; `linePrefixTransform`/`workerPrefix` add per-worker
   terminal prefix (scenario 33)
@@ -82,7 +85,7 @@ Notable implementations:
 
 - ARCH.1: contracts in `src/ports/types.ts`; default adapters in
   `src/ports/impl.ts`; domain modules import ports. Enforced by
-  `test/arch_1_test.ts` (purity + contract centralization + integration + e2e).
+  `test/arch_1_test.ts` (purity + contract/adapter split + integration + e2e).
 - ARCH.2: `src/model.ts` owns all derivations — `orderActionableScenarios`
   (rework-first ordering) and `computeEffectiveLevel` (escalation merge);
   pipeline stages in `src/machines/state-machine.ts` are thin orchestrators only
@@ -104,3 +107,4 @@ Notable implementations:
 - Progress: `progress.md`
 - Architecture: `ARCHITECTURE.md`
 - Runtime state dir: `.ralph/` (currently no `.ralph/*.md` docs in this branch)
+- ARCH.1 details: `docs/scenarios/ARCH.1-hexagonal-architecture.md`
