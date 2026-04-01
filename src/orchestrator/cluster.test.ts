@@ -2,6 +2,7 @@ import { assertEquals, assertNotEquals } from "jsr:@std/assert@^1";
 import type { Logger } from "../types.ts";
 import {
   buildClusteringPrompt,
+  clearClusterCache,
   clusterByArea,
   clusterScenarios,
   parseClusteringResponse,
@@ -277,6 +278,7 @@ Deno.test("selectBatchFromClusters: returns empty for empty input", () => {
 // ---------------------------------------------------------------------------
 
 Deno.test("clusterScenarios: 0 scenarios returns empty", async () => {
+  clearClusterCache();
   const result = await clusterScenarios({
     scenarioIds: [],
     specContent: specWithAreas,
@@ -287,6 +289,7 @@ Deno.test("clusterScenarios: 0 scenarios returns empty", async () => {
 });
 
 Deno.test("clusterScenarios: 1 scenario returns single-element cluster", async () => {
+  clearClusterCache();
   const result = await clusterScenarios({
     scenarioIds: ["ARCH.1"],
     specContent: specWithAreas,
@@ -299,6 +302,7 @@ Deno.test("clusterScenarios: 1 scenario returns single-element cluster", async (
 });
 
 Deno.test("clusterScenarios: fast model success path uses model clusters", async () => {
+  clearClusterCache();
   const modelResponse = JSON.stringify({
     clusters: [
       { id: "Architecture", scenarios: ["ARCH.1", "ARCH.2"] },
@@ -318,6 +322,7 @@ Deno.test("clusterScenarios: fast model success path uses model clusters", async
 });
 
 Deno.test("clusterScenarios: incomplete coverage falls back to area-based", async () => {
+  clearClusterCache();
   // Model response only covers ARCH.1, not ARCH.2 or 1
   const incompleteResponse = JSON.stringify({
     clusters: [{ id: "Architecture", scenarios: ["ARCH.1"] }],
@@ -344,6 +349,7 @@ Deno.test("clusterScenarios: incomplete coverage falls back to area-based", asyn
 });
 
 Deno.test("clusterScenarios: error from model falls back to area-based", async () => {
+  clearClusterCache();
   const logs: string[] = [];
   const result = await clusterScenarios({
     scenarioIds: ["ARCH.1", "ARCH.2"],
@@ -365,6 +371,7 @@ Deno.test("clusterScenarios: error from model falls back to area-based", async (
 });
 
 Deno.test("clusterScenarios: non-Error rejection falls back to area-based", async () => {
+  clearClusterCache();
   const logs: string[] = [];
   const result = await clusterScenarios({
     scenarioIds: ["ARCH.1", "ARCH.2"],
@@ -387,6 +394,7 @@ Deno.test("clusterScenarios: non-Error rejection falls back to area-based", asyn
 });
 
 Deno.test("clusterScenarios: unparseable model response falls back to area-based", async () => {
+  clearClusterCache();
   const logs: string[] = [];
   const result = await clusterScenarios({
     scenarioIds: ["ARCH.1", "1"],

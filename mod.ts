@@ -54,6 +54,7 @@ import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
   CLAUDE_VERIFIER,
+  formatDuration,
 } from "./src/constants.ts";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
@@ -240,6 +241,7 @@ const main = async (): Promise<number> => {
       () => "",
     );
     const expectedScenarioIds = parseScenarioIds(specContent);
+    const loopStartedAt = Date.now();
 
     const iterationsUsed = await runParallelLoop({
       agent,
@@ -257,12 +259,26 @@ const main = async (): Promise<number> => {
 
     if (iterationsUsed === 130) return 130;
 
+    const elapsed = formatDuration(Date.now() - loopStartedAt);
+
     const finalContent = await Deno.readTextFile(filePaths.progressFile).catch(
       () => "",
     );
     const finalSection = finalContent.split("END_DEMO")[1] ?? "";
     const allDoneResult = isAllVerified(finalSection, expectedScenarioIds);
     const allDone = allDoneResult.isOk() && allDoneResult.value;
+
+    // Completion summary
+    const finalRows = parseProgressRows(finalSection);
+    const verified = finalRows.isOk()
+      ? finalRows.value.filter((r) => r.status === "VERIFIED").length
+      : 0;
+    const total = expectedScenarioIds.length;
+    log({
+      tags: ["info"],
+      message:
+        `Loop finished: ${verified}/${total} verified, ${iterationsUsed} iteration(s), ${elapsed}`,
+    });
 
     await plugin.onLoopEnd?.({
       finalState: {

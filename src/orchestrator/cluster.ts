@@ -252,7 +252,8 @@ export const selectBatchFromClusters = (
 let cachedKey: string | undefined;
 let cachedClusters: Cluster[] | undefined;
 
-const cacheKey = (ids: readonly string[]): string => ids.slice().sort().join(",");
+const cacheKey = (ids: readonly string[]): string =>
+  ids.slice().sort().join(",");
 
 /** Clear the cluster cache (useful for testing). */
 export const clearClusterCache = (): void => {

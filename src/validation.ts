@@ -114,10 +114,9 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
     if (error instanceof DOMException && error.name === "AbortError") {
       log({
         tags: ["error", "validate"],
-        message:
-          `Validation TIMEOUT (iteration ${iterationNum}): exceeded ${
-            formatDuration(VALIDATION_TIMEOUT_MS)
-          }`,
+        message: `Validation TIMEOUT (iteration ${iterationNum}): exceeded ${
+          formatDuration(VALIDATION_TIMEOUT_MS)
+        }`,
       });
       return { status: "failed", outputPath };
     }
