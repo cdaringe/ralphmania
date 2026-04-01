@@ -70,6 +70,19 @@ export type GuiServerHandle = {
   readonly finished: Promise<void>;
 };
 
+/** Compute a short content hash for cache-busting asset URLs. */
+const computeBuildHash = async (
+  ...maps: ReadonlyMap<string, string>[]
+): Promise<string> => {
+  const parts = maps.flatMap((m) => [...m.values()]);
+  const data = new TextEncoder().encode(parts.join(""));
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .slice(0, 4)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
+
 /** Start the GUI HTTP server. Returns the bound port and a finish promise. */
 export const startGuiServer = async (
   opts: GuiServerOptions,
@@ -94,7 +107,19 @@ export const startGuiServer = async (
     ? new Map<string, string>()
     : await loadCssFiles();
 
+  // Build hash for cache-busting asset URLs.
+  const buildHash = opts.skipBuild
+    ? ""
+    : await computeBuildHash(islands, cssFiles);
+
   const app = new App();
+
+  // Cache-control for compiled assets: immutable for the lifetime of
+  // this server process (content is compiled once at startup, the build
+  // hash in the query string busts the cache on restart).
+  const assetCache = buildHash
+    ? "public, max-age=86400, immutable"
+    : "no-cache";
 
   // GET /css/:name — serve CSS files.
   app.get("/css/:name", (ctx) => {
@@ -103,7 +128,7 @@ export const startGuiServer = async (
       ? new Response(content, {
         headers: {
           "content-type": "text/css; charset=utf-8",
-          "cache-control": "no-cache",
+          "cache-control": assetCache,
         },
       })
       : new Response("not found", { status: 404 });
@@ -116,7 +141,7 @@ export const startGuiServer = async (
       ? new Response(code, {
         headers: {
           "content-type": "text/javascript; charset=utf-8",
-          "cache-control": "no-cache",
+          "cache-control": assetCache,
         },
       })
       : new Response("not found", { status: 404 });
@@ -283,7 +308,10 @@ export const startGuiServer = async (
   });
 
   // GET /scenario/:id — scenario detail page
-  app.get("/scenario/:id", (_ctx) => htmlResponse(<ScenarioPage />));
+  app.get(
+    "/scenario/:id",
+    (_ctx) => htmlResponse(<ScenarioPage v={buildHash} />),
+  );
 
   // GET /api/worker-log/:id
   app.get("/api/worker-log/:id", async (ctx) => {
@@ -299,7 +327,7 @@ export const startGuiServer = async (
   });
 
   // GET /worker/:id — per-worker detail page
-  app.get("/worker/:id", (_ctx) => htmlResponse(<WorkerPage />));
+  app.get("/worker/:id", (_ctx) => htmlResponse(<WorkerPage v={buildHash} />));
 
   // GET /api/status
   app.get("/api/status", async (_ctx) => {
@@ -334,7 +362,7 @@ export const startGuiServer = async (
   });
 
   // GET / — main GUI page
-  app.get("/", (_ctx) => htmlResponse(<MainPage />));
+  app.get("/", (_ctx) => htmlResponse(<MainPage v={buildHash} />));
 
   const handler = await app.handler();
   const server = Deno.serve(

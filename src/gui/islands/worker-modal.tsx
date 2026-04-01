@@ -9,46 +9,11 @@ import {
   getWorkerLogBuffer,
   getWorkerLogVersion,
   isWorkerFinished,
-  type LogEvent,
   setSelectedWorker,
   subscribe,
 } from "./event-store.ts";
-import { ansiToHtml } from "../client/ansi.ts";
-
-const fmt = (ts: number): string => new Date(ts).toTimeString().slice(0, 8);
-
-const escHtml = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-const messageHtmlCache = new WeakMap<LogEvent, string>();
-
-const getMessageHtml = (ev: LogEvent): string => {
-  const cached = messageHtmlCache.get(ev);
-  if (cached !== undefined) return cached;
-  const html = ansiToHtml(ev.message);
-  messageHtmlCache.set(ev, html);
-  return html;
-};
-
-const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
-  const isUser = ev.tags.includes("user");
-  const cls = isUser
-    ? "t-user"
-    : ev.level === "error"
-    ? "t-error"
-    : ev.level === "debug"
-    ? "t-debug"
-    : "t-info";
-  return (
-    <div class={`le${isUser ? " le-user" : ""}`}>
-      <span class="le-ts">{fmt(ev.ts)}</span>
-      <span
-        class={`le-msg ${cls}`}
-        dangerouslySetInnerHTML={{ __html: getMessageHtml(ev) }}
-      />
-    </div>
-  );
-};
+import { escHtml } from "../client/html.ts";
+import { LogEntry } from "../client/log-entry.tsx";
 
 export default function WorkerModal(): preact.JSX.Element | null {
   const [selected, setLocal] = useState(getSelectedWorker());
@@ -138,7 +103,7 @@ export default function WorkerModal(): preact.JSX.Element | null {
           </button>
         </div>
         <div class="modal-log" ref={logRef}>
-          {events.map((ev, i) => <LogEntry key={i} ev={ev} />)}
+          {events.map((ev) => <LogEntry key={ev.seq} ev={ev} />)}
         </div>
         <div class="modal-input">
           <textarea

@@ -16,6 +16,8 @@ export type LogEvent = {
   readonly message: string;
   readonly ts: number;
   readonly workerId?: string;
+  /** Monotonic sequence number for stable rendering keys. */
+  readonly seq: number;
 };
 
 export type WorkerInfo = {
@@ -71,6 +73,7 @@ const finishedWorkers = new Set<string>();
 const subscribers = new Map<Subscriber, ReadonlySet<StoreTopic> | null>();
 let logVersion = 0;
 let workerLogVersion = 0;
+let nextSeq = 0;
 const pendingTopics = new Set<StoreTopic>();
 let notifyFrameId: number | null = null;
 const frameScheduler = globalThis as typeof globalThis & {
@@ -84,11 +87,15 @@ const flushNotifications = (): void => {
   const changed = new Set(pendingTopics);
   pendingTopics.clear();
   for (const [fn, subscribedTopics] of subscribers) {
-    if (
-      subscribedTopics === null ||
-      [...subscribedTopics].some((topic) => changed.has(topic))
-    ) {
+    if (subscribedTopics === null) {
       fn();
+      continue;
+    }
+    for (const topic of subscribedTopics) {
+      if (changed.has(topic)) {
+        fn();
+        break;
+      }
     }
   }
 };
@@ -195,7 +202,7 @@ export const resetStore = (): void => {
 /** Dispatch an SSE event into the store. */
 export const dispatch = (ev: GuiEvent): void => {
   if (ev.type === "log") {
-    const logEv = ev as LogEvent;
+    const logEv = { ...ev, seq: nextSeq++ } as LogEvent;
     logEvents.push(logEv);
     trimLogBuffer(logEvents, MAX_LOG_EVENTS, TRIMMED_LOG_EVENTS);
     logVersion++;

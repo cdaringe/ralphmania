@@ -8,63 +8,9 @@ import {
   clearLogEvents,
   getLogEvents,
   getLogVersion,
-  type LogEvent,
   subscribe,
 } from "./event-store.ts";
-import { ansiToHtml } from "../client/ansi.ts";
-
-const fmt = (ts: number): string => new Date(ts).toTimeString().slice(0, 8);
-
-const TAG_CLS: Record<string, string> = {
-  info: "t-info",
-  error: "t-error",
-  debug: "t-debug",
-  orchestrator: "t-orch",
-  validate: "t-validate",
-  transition: "t-trans",
-  user: "t-user",
-  input: "t-input",
-};
-
-const escHtml = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-const messageHtmlCache = new WeakMap<LogEvent, string>();
-const tagsHtmlCache = new WeakMap<LogEvent, string>();
-
-const getMessageHtml = (ev: LogEvent): string => {
-  const cached = messageHtmlCache.get(ev);
-  if (cached !== undefined) return cached;
-  const html = ansiToHtml(ev.message);
-  messageHtmlCache.set(ev, html);
-  return html;
-};
-
-const getTagsHtml = (ev: LogEvent): string => {
-  const cached = tagsHtmlCache.get(ev);
-  if (cached !== undefined) return cached;
-  const html = ev.tags
-    .map((t) => `<span class="${TAG_CLS[t] ?? ""}">${escHtml(t)}</span>`)
-    .join('<span style="color:#3f3f46">:</span>');
-  tagsHtmlCache.set(ev, html);
-  return html;
-};
-
-const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
-  return (
-    <div class="le">
-      <span class="le-ts">{fmt(ev.ts)}</span>
-      <span
-        class="le-tags"
-        dangerouslySetInnerHTML={{ __html: `[${getTagsHtml(ev)}]` }}
-      />
-      <span
-        class="le-msg"
-        dangerouslySetInnerHTML={{ __html: getMessageHtml(ev) }}
-      />
-    </div>
-  );
-};
+import { LogEntry } from "../client/log-entry.tsx";
 
 export default function LogPanel(): preact.JSX.Element {
   const [version, setVersion] = useState(getLogVersion());
@@ -121,7 +67,7 @@ export default function LogPanel(): preact.JSX.Element {
         </button>
       </div>
       <div id="log" ref={logRef}>
-        {visible.map((ev, i) => <LogEntry key={i} ev={ev} />)}
+        {visible.map((ev) => <LogEntry key={ev.seq} ev={ev} showTags />)}
       </div>
     </>
   );

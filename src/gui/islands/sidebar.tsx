@@ -14,9 +14,7 @@ import {
   subscribe,
   type WorkerInfo,
 } from "./event-store.ts";
-
-const escHtml = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+import { escHtml } from "../client/html.ts";
 
 export default function Sidebar(): preact.JSX.Element {
   const [hydrated, setHydrated] = useState(getHydrated());

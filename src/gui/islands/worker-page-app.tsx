@@ -7,31 +7,19 @@
  * @module
  */
 import { useEffect, useRef, useState } from "preact/hooks";
-import { ansiToHtml } from "../client/ansi.ts";
+import { LogEntry, type LogEventLike } from "../client/log-entry.tsx";
 
-type LogEvent = {
+type LogEvent = LogEventLike & {
   readonly type: "log";
-  readonly level: string;
-  readonly message: string;
-  readonly ts: number;
   readonly workerId?: string;
 };
 
 // deno-lint-ignore no-explicit-any
 type GuiEvent = { readonly type: string; [k: string]: any };
 
-const fmt = (ts: number): string => new Date(ts).toTimeString().slice(0, 8);
 const MAX_EVENTS = 800;
 const TRIMMED_EVENTS = 600;
-const messageHtmlCache = new WeakMap<LogEvent, string>();
-
-const getMessageHtml = (ev: LogEvent): string => {
-  const cached = messageHtmlCache.get(ev);
-  if (cached !== undefined) return cached;
-  const html = ansiToHtml(ev.message);
-  messageHtmlCache.set(ev, html);
-  return html;
-};
+let localSeq = 0;
 
 export default function WorkerPageApp(): preact.JSX.Element {
   const parts = globalThis.location?.pathname.split("/") ?? [];
@@ -64,7 +52,11 @@ export default function WorkerPageApp(): preact.JSX.Element {
         try {
           const ev: GuiEvent = JSON.parse(e.data);
           if (ev.type === "log") {
-            const logEv = ev as LogEvent;
+            const logEv = {
+              ...ev,
+              tags: (ev.tags as readonly string[]) ?? [],
+              seq: localSeq++,
+            } as LogEvent;
             if (logEv.workerId === workerId) {
               setEvents((prev) => {
                 const next = [...prev, logEv];
@@ -177,24 +169,7 @@ export default function WorkerPageApp(): preact.JSX.Element {
             </button>
           </div>
           <div id="log" ref={logRef}>
-            {visible.map((ev, i) => {
-              const cls = ev.level === "error"
-                ? "t-error"
-                : ev.level === "debug"
-                ? "t-debug"
-                : "t-info";
-              return (
-                <div class="le" key={i}>
-                  <span class="le-ts">{fmt(ev.ts)}</span>
-                  <span
-                    class={`le-msg ${cls}`}
-                    dangerouslySetInnerHTML={{
-                      __html: getMessageHtml(ev),
-                    }}
-                  />
-                </div>
-              );
-            })}
+            {visible.map((ev) => <LogEntry key={ev.seq} ev={ev} />)}
           </div>
           <div id="input-bar">
             <textarea
