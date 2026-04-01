@@ -52,6 +52,11 @@ type StoreTopic =
   | "selection"
   | "worker_logs";
 
+const MAX_LOG_EVENTS = 1500;
+const TRIMMED_LOG_EVENTS = 1200;
+const MAX_WORKER_LOG_EVENTS = 800;
+const TRIMMED_WORKER_LOG_EVENTS = 600;
+
 // --- Mutable store ---
 let connected = false;
 let hydrated = false;
@@ -64,18 +69,47 @@ let selectedWorker: SelectedWorker = null;
 /** Scenarios whose workers have finished (worker_done received). */
 const finishedWorkers = new Set<string>();
 const subscribers = new Map<Subscriber, ReadonlySet<StoreTopic> | null>();
+let logVersion = 0;
+let workerLogVersion = 0;
+const pendingTopics = new Set<StoreTopic>();
+let notifyFrameId: number | null = null;
+const frameScheduler = globalThis as typeof globalThis & {
+  requestAnimationFrame?: (cb: (time: number) => void) => number;
+  cancelAnimationFrame?: (id: number) => void;
+};
 
-const notify = (...topics: StoreTopic[]): void => {
-  const changed = new Set(topics);
+const flushNotifications = (): void => {
+  notifyFrameId = null;
+  if (pendingTopics.size === 0) return;
+  const changed = new Set(pendingTopics);
+  pendingTopics.clear();
   for (const [fn, subscribedTopics] of subscribers) {
     if (
       subscribedTopics === null ||
-      topics.length === 0 ||
       [...subscribedTopics].some((topic) => changed.has(topic))
     ) {
       fn();
     }
   }
+};
+
+const scheduleNotificationFlush = (): void => {
+  if (notifyFrameId !== null) return;
+  if (typeof frameScheduler.requestAnimationFrame === "function") {
+    notifyFrameId = frameScheduler.requestAnimationFrame(flushNotifications);
+    return;
+  }
+  flushNotifications();
+};
+
+const notify = (...topics: StoreTopic[]): void => {
+  for (const topic of topics) pendingTopics.add(topic);
+  scheduleNotificationFlush();
+};
+
+const trimLogBuffer = (buffer: LogEvent[], max: number, keep: number): void => {
+  if (buffer.length <= max) return;
+  buffer.splice(0, buffer.length - keep);
 };
 
 // --- Public read API ---
@@ -84,6 +118,7 @@ export const getHydrated = (): boolean => hydrated;
 export const getOrchestratorState = (): string => orchestratorState;
 export const getIteration = (): string => iteration;
 export const getLogEvents = (): readonly LogEvent[] => logEvents;
+export const getLogVersion = (): number => logVersion;
 export const getActiveWorkers = (): ReadonlyMap<number, WorkerInfo> =>
   activeWorkers;
 export const getSelectedWorker = (): SelectedWorker => selectedWorker;
@@ -92,6 +127,7 @@ export const isWorkerFinished = (scenario: string): boolean =>
 export const getWorkerLogBuffer = (
   workerId: string,
 ): readonly LogEvent[] => workerLogBuffers.get(workerId) ?? [];
+export const getWorkerLogVersion = (): number => workerLogVersion;
 
 // --- Public write API ---
 export const subscribe = (
@@ -121,17 +157,27 @@ export const setSelectedWorker = (w: SelectedWorker): void => {
 
 export const clearLogEvents = (): void => {
   logEvents.length = 0;
+  logVersion++;
   notify("logs");
 };
 
 /** Reset client-side GUI state while preserving active subscriptions. */
 export const resetStore = (): void => {
+  if (notifyFrameId !== null) {
+    if (typeof frameScheduler.cancelAnimationFrame === "function") {
+      frameScheduler.cancelAnimationFrame(notifyFrameId);
+    }
+    notifyFrameId = null;
+  }
+  pendingTopics.clear();
   connected = false;
   hydrated = false;
   orchestratorState = "init";
   iteration = "";
   logEvents.length = 0;
+  logVersion++;
   workerLogBuffers.clear();
+  workerLogVersion++;
   activeWorkers.clear();
   selectedWorker = null;
   finishedWorkers.clear();
@@ -151,12 +197,16 @@ export const dispatch = (ev: GuiEvent): void => {
   if (ev.type === "log") {
     const logEv = ev as LogEvent;
     logEvents.push(logEv);
+    trimLogBuffer(logEvents, MAX_LOG_EVENTS, TRIMMED_LOG_EVENTS);
+    logVersion++;
     let iterationChanged = false;
     // Buffer worker-originated events for modal replay.
     if (logEv.workerId !== undefined) {
       const buf = workerLogBuffers.get(logEv.workerId) ?? [];
       buf.push(logEv);
+      trimLogBuffer(buf, MAX_WORKER_LOG_EVENTS, TRIMMED_WORKER_LOG_EVENTS);
       workerLogBuffers.set(logEv.workerId, buf);
+      workerLogVersion++;
     }
     // Track iteration from log message.
     const m = logEv.message.match(/Round (\d+):/);

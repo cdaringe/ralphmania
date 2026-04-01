@@ -21,6 +21,17 @@ type LogEvent = {
 type GuiEvent = { readonly type: string; [k: string]: any };
 
 const fmt = (ts: number): string => new Date(ts).toTimeString().slice(0, 8);
+const MAX_EVENTS = 800;
+const TRIMMED_EVENTS = 600;
+const messageHtmlCache = new WeakMap<LogEvent, string>();
+
+const getMessageHtml = (ev: LogEvent): string => {
+  const cached = messageHtmlCache.get(ev);
+  if (cached !== undefined) return cached;
+  const html = ansiToHtml(ev.message);
+  messageHtmlCache.set(ev, html);
+  return html;
+};
 
 export default function WorkerPageApp(): preact.JSX.Element {
   const parts = globalThis.location?.pathname.split("/") ?? [];
@@ -55,7 +66,13 @@ export default function WorkerPageApp(): preact.JSX.Element {
           if (ev.type === "log") {
             const logEv = ev as LogEvent;
             if (logEv.workerId === workerId) {
-              setEvents((prev) => [...prev, logEv]);
+              setEvents((prev) => {
+                const next = [...prev, logEv];
+                if (next.length > MAX_EVENTS) {
+                  next.splice(0, next.length - TRIMMED_EVENTS);
+                }
+                return next;
+              });
             }
           } else if (
             ev.type === "worker_active" && ev.workerIndex === workerIndex
@@ -172,7 +189,7 @@ export default function WorkerPageApp(): preact.JSX.Element {
                   <span
                     class={`le-msg ${cls}`}
                     dangerouslySetInnerHTML={{
-                      __html: ansiToHtml(ev.message),
+                      __html: getMessageHtml(ev),
                     }}
                   />
                 </div>

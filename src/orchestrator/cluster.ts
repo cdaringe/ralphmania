@@ -245,9 +245,25 @@ export const selectBatchFromClusters = (
 // Main clustering function
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Cluster cache — skip LLM call when scenario set hasn't changed
+// ---------------------------------------------------------------------------
+
+let cachedKey: string | undefined;
+let cachedClusters: Cluster[] | undefined;
+
+const cacheKey = (ids: readonly string[]): string => ids.slice().sort().join(",");
+
+/** Clear the cluster cache (useful for testing). */
+export const clearClusterCache = (): void => {
+  cachedKey = undefined;
+  cachedClusters = undefined;
+};
+
 /**
  * Main entry point. Tries the fast model for clustering; falls back to
  * area-based clustering if the model fails or returns incomplete coverage.
+ * Results are cached — repeated calls with the same scenario set skip the LLM.
  */
 export const clusterScenarios = async ({
   scenarioIds,
@@ -263,6 +279,16 @@ export const clusterScenarios = async ({
   // Edge cases: 0 or 1 scenario — no clustering needed
   if (scenarioIds.length <= 1) {
     return scenarioIds.map((id) => ({ id, scenarios: [id] }));
+  }
+
+  // Return cached result if the scenario set hasn't changed.
+  const key = cacheKey(scenarioIds);
+  if (key === cachedKey && cachedClusters !== undefined) {
+    log({
+      tags: ["debug", "orchestrator"],
+      message: `Reusing cached clustering for ${scenarioIds.length} scenarios`,
+    });
+    return cachedClusters;
   }
 
   const areaMap = parseSpecAreas(specContent);
@@ -288,6 +314,8 @@ export const clusterScenarios = async ({
           message:
             `Clustered ${scenarioIds.length} scenarios into ${parsed.length} conflict groups via fast model`,
         });
+        cachedKey = key;
+        cachedClusters = parsed;
         return parsed;
       }
 
@@ -312,5 +340,8 @@ export const clusterScenarios = async ({
     });
   }
 
-  return clusterByArea(scenarioIds, areaMap);
+  const fallback = clusterByArea(scenarioIds, areaMap);
+  cachedKey = key;
+  cachedClusters = fallback;
+  return fallback;
 };

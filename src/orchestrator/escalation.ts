@@ -71,19 +71,27 @@ export const readEscalationState = async (
   }
 };
 
+/** Serialize concurrent writes so parallel workers don't clobber each other. */
+let writeLock: Promise<void> = Promise.resolve();
+
 /** Persist escalation state to `.ralph/escalation.json`. */
 export const writeEscalationState = async (
   state: EscalationState,
   log: Logger,
   io: EscalationIODeps = defaultEscalationIO,
 ): Promise<void> => {
-  try {
-    await io.mkdir(".ralph", { recursive: true });
-    await io.writeTextFile(ESCALATION_FILE, JSON.stringify(state));
-  } catch (e) {
-    log({
-      tags: ["error", "escalation"],
-      message: `Failed to write escalation state: ${e}`,
-    });
-  }
+  // Chain writes so concurrent calls are serialized, not interleaved.
+  const prev = writeLock;
+  writeLock = prev.then(async () => {
+    try {
+      await io.mkdir(".ralph", { recursive: true });
+      await io.writeTextFile(ESCALATION_FILE, JSON.stringify(state));
+    } catch (e) {
+      log({
+        tags: ["error", "escalation"],
+        message: `Failed to write escalation state: ${e}`,
+      });
+    }
+  });
+  await writeLock;
 };

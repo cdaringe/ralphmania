@@ -67,6 +67,8 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
     suffix: ".log",
   });
 
+  const timeoutSignal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
+
   try {
     const child = new Deno.Command("bash", {
       args: [VALIDATE_SCRIPT],
@@ -75,6 +77,7 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
       stderr: "piped",
       cwd,
       env: { ...nonInteractiveEnv(), [RALPH_OUTPUT_FILE_VAR]: tmpOutputPath },
+      signal: timeoutSignal,
     }).spawn();
 
     await Promise.all([
@@ -105,9 +108,19 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
       }),
         { status: "failed", outputPath });
   } catch (error) {
-    /* c8 ignore start — defensive crash handler */
+    /* c8 ignore start — defensive crash/timeout handler */
     file.close();
     await Deno.remove(tmpOutputPath).catch(() => {});
+    if (error instanceof DOMException && error.name === "AbortError") {
+      log({
+        tags: ["error", "validate"],
+        message:
+          `Validation TIMEOUT (iteration ${iterationNum}): exceeded ${
+            formatDuration(VALIDATION_TIMEOUT_MS)
+          }`,
+      });
+      return { status: "failed", outputPath };
+    }
     log({
       tags: ["error", "validate"],
       message: `Validation crashed (iteration ${iterationNum}): ${error}`,

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   clearLogEvents,
   getLogEvents,
+  getLogVersion,
   type LogEvent,
   subscribe,
 } from "./event-store.ts";
@@ -28,28 +29,45 @@ const TAG_CLS: Record<string, string> = {
 const escHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
-  const tagsHtml = ev.tags
+const messageHtmlCache = new WeakMap<LogEvent, string>();
+const tagsHtmlCache = new WeakMap<LogEvent, string>();
+
+const getMessageHtml = (ev: LogEvent): string => {
+  const cached = messageHtmlCache.get(ev);
+  if (cached !== undefined) return cached;
+  const html = ansiToHtml(ev.message);
+  messageHtmlCache.set(ev, html);
+  return html;
+};
+
+const getTagsHtml = (ev: LogEvent): string => {
+  const cached = tagsHtmlCache.get(ev);
+  if (cached !== undefined) return cached;
+  const html = ev.tags
     .map((t) => `<span class="${TAG_CLS[t] ?? ""}">${escHtml(t)}</span>`)
     .join('<span style="color:#3f3f46">:</span>');
+  tagsHtmlCache.set(ev, html);
+  return html;
+};
 
+const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
   return (
     <div class="le">
       <span class="le-ts">{fmt(ev.ts)}</span>
       <span
         class="le-tags"
-        dangerouslySetInnerHTML={{ __html: `[${tagsHtml}]` }}
+        dangerouslySetInnerHTML={{ __html: `[${getTagsHtml(ev)}]` }}
       />
       <span
         class="le-msg"
-        dangerouslySetInnerHTML={{ __html: ansiToHtml(ev.message) }}
+        dangerouslySetInnerHTML={{ __html: getMessageHtml(ev) }}
       />
     </div>
   );
 };
 
 export default function LogPanel(): preact.JSX.Element {
-  const [events, setEvents] = useState<readonly LogEvent[]>(getLogEvents());
+  const [version, setVersion] = useState(getLogVersion());
   const [autoScroll, setAutoScroll] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -57,16 +75,18 @@ export default function LogPanel(): preact.JSX.Element {
   useEffect(
     () =>
       subscribe(() => {
-        setEvents([...getLogEvents()]);
+        setVersion(getLogVersion());
       }, ["logs"]),
     [],
   );
+
+  const events = getLogEvents();
 
   useEffect(() => {
     if (autoScroll && logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [events, autoScroll]);
+  }, [version, autoScroll]);
 
   const visible = showDebug
     ? events

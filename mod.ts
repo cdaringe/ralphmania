@@ -58,7 +58,10 @@ import {
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 import { runParallelLoop } from "./src/orchestrator/mod.ts";
-import { resetAllWorktrees } from "./src/git/worktree.ts";
+import {
+  pruneOrphanedBranches,
+  resetAllWorktrees,
+} from "./src/git/worktree.ts";
 import { computeExitCode } from "./src/exit.ts";
 import { createEventBus } from "./src/gui/events.ts";
 import { createGuiLogger } from "./src/gui/logger.ts";
@@ -154,6 +157,9 @@ const main = async (): Promise<number> => {
       return 1;
     }
   }
+
+  // Always prune orphaned ralph/worker-* branches on boot (cheap, safe).
+  await pruneOrphanedBranches({ log });
 
   const filePaths: FilePaths = {
     specFile: configHookResult?.specFile ?? DEFAULT_FILE_PATHS.specFile,

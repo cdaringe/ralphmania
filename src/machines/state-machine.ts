@@ -43,11 +43,11 @@ import { Status } from "../constants.ts";
  */
 const verifyCompletion = async (
   ctx: MachineContext,
+  existingProgressContent?: string,
 ): Promise<{ done: boolean; freshSpecIds: readonly string[] }> => {
-  const [specContent, progressContent] = await Promise.all([
-    ctx.deps.readSpec(),
-    ctx.deps.readProgress(),
-  ]);
+  const [specContent, progressContent] = existingProgressContent !== undefined
+    ? [await ctx.deps.readSpec(), existingProgressContent]
+    : await Promise.all([ctx.deps.readSpec(), ctx.deps.readProgress()]);
   const freshSpecIds = parseScenarioIds(specContent);
   const parsed = parseProgressRows(progressContent);
   if (parsed.isErr()) {
@@ -114,6 +114,10 @@ export type WorkerResult = {
   readonly workerIndex: number;
   readonly iterationResult: IterationResult;
   readonly worktree: WorktreeInfo;
+  /** Epoch ms when the worker started executing. */
+  readonly startedAt: number;
+  /** Epoch ms when the worker finished (including validation re-run if any). */
+  readonly completedAt: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -239,7 +243,7 @@ export const transitionReadingProgress = async (
   }
 
   if (!validationFailurePath) {
-    const { done } = await verifyCompletion(ctx);
+    const { done } = await verifyCompletion(ctx, content);
     if (done) {
       ctx.log({
         tags: ["info", "orchestrator"],
@@ -449,6 +453,7 @@ export const transitionRunningWorkers = async (
           ctx.level,
         );
         const wLog = prefixLog(ctx.log, i);
+        const startedAt = Date.now();
         return ctx.deps.runIteration({
           iterationNum: iterationsUsed,
           agent: ctx.agent,
@@ -510,7 +515,13 @@ export const transitionRunningWorkers = async (
                 : {}),
             });
           }
-          return { workerIndex: i, iterationResult, worktree: wt };
+          return {
+            workerIndex: i,
+            iterationResult,
+            worktree: wt,
+            startedAt,
+            completedAt: Date.now(),
+          };
         });
       }),
     );

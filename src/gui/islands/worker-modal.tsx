@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   getSelectedWorker,
   getWorkerLogBuffer,
+  getWorkerLogVersion,
   isWorkerFinished,
   type LogEvent,
   setSelectedWorker,
@@ -18,6 +19,16 @@ const fmt = (ts: number): string => new Date(ts).toTimeString().slice(0, 8);
 
 const escHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+const messageHtmlCache = new WeakMap<LogEvent, string>();
+
+const getMessageHtml = (ev: LogEvent): string => {
+  const cached = messageHtmlCache.get(ev);
+  if (cached !== undefined) return cached;
+  const html = ansiToHtml(ev.message);
+  messageHtmlCache.set(ev, html);
+  return html;
+};
 
 const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
   const isUser = ev.tags.includes("user");
@@ -33,7 +44,7 @@ const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
       <span class="le-ts">{fmt(ev.ts)}</span>
       <span
         class={`le-msg ${cls}`}
-        dangerouslySetInnerHTML={{ __html: ansiToHtml(ev.message) }}
+        dangerouslySetInnerHTML={{ __html: getMessageHtml(ev) }}
       />
     </div>
   );
@@ -41,7 +52,9 @@ const LogEntry = ({ ev }: { ev: LogEvent }): preact.JSX.Element => {
 
 export default function WorkerModal(): preact.JSX.Element | null {
   const [selected, setLocal] = useState(getSelectedWorker());
-  const [events, setEvents] = useState<readonly LogEvent[]>([]);
+  const [workerLogVersion, setWorkerLogVersion] = useState(
+    getWorkerLogVersion(),
+  );
   const [finished, setFinished] = useState(false);
   const [sendStatus, setSendStatus] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
@@ -53,18 +66,20 @@ export default function WorkerModal(): preact.JSX.Element | null {
         const w = getSelectedWorker();
         setLocal(w);
         if (w) {
-          setEvents([...getWorkerLogBuffer(w.scenario)]);
           setFinished(isWorkerFinished(w.scenario));
         }
+        setWorkerLogVersion(getWorkerLogVersion());
       }, ["selection", "worker_logs", "graph"]),
     [],
   );
+
+  const events = selected ? getWorkerLogBuffer(selected.scenario) : [];
 
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [events]);
+  }, [workerLogVersion, selected]);
 
   if (!selected) return null;
 

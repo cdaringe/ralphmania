@@ -3,7 +3,11 @@ import {
   dispatch,
   getActiveWorkers,
   getHydrated,
+  getLogEvents,
+  getLogVersion,
   getOrchestratorState,
+  getWorkerLogBuffer,
+  getWorkerLogVersion,
   resetStore,
   setHydrated,
 } from "../src/gui/islands/event-store.ts";
@@ -43,4 +47,26 @@ Deno.test("event-store does not infer orchestrator state from worker activity", 
   });
   assertEquals(getOrchestratorState(), "init");
   assertEquals(getActiveWorkers().get(0)?.scenario, "GUI.a");
+});
+
+Deno.test("event-store trims retained log history and bumps revisions", () => {
+  resetStore();
+
+  for (let i = 0; i < 1605; i++) {
+    dispatch({
+      type: "log",
+      level: "info",
+      tags: ["info"],
+      message: `line ${i}`,
+      ts: i,
+      workerId: "GUI.a",
+    });
+  }
+
+  assertEquals(getLogEvents().length, 1304);
+  assertEquals(getLogEvents()[0]?.message, "line 301");
+  assertEquals(getWorkerLogBuffer("GUI.a").length, 604);
+  assertEquals(getWorkerLogBuffer("GUI.a")[0]?.message, "line 1001");
+  assertEquals(getLogVersion(), 1605);
+  assertEquals(getWorkerLogVersion(), 1605);
 });
