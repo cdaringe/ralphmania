@@ -24,13 +24,11 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
 - **Scenario Machine** (`src/machines/scenario-machine.ts`): scenario lifecycle
   FSM (`unimplemented → wip → work_complete → verified/obsolete`)
 - **GUI** (`src/gui/`): realtime web UI — `events.ts` (pure event bus),
-  `logger.ts` (Logger wrapper → bus), `server.ts` (HTTP+SSE server), `html.ts`
-  (embedded SPA). Activated via `--gui [--gui-port N]` flag. `createGuiLogger`
-  wraps the main logger to tee all log calls to the bus; it also detects
-  `transition`-tagged messages and emits explicit `state` events.
-  - Ops note: `src/gui/log-dir.ts` now creates `.ralph/worker-logs/` on demand
-    before appending NDJSON lines, so `/input/:workerId` logging is safe even
-    when `initLogDir()` has not run.
+  `logger.ts` (Logger wrapper → bus), `server.tsx` (HTTP+SSE server + island
+  compiler), `pages/main-page.tsx` (Fresh shell), and islands under
+  `src/gui/islands/` (React/Preact client pieces). Activated via
+  `--gui [--gui-port N]` flag. `createGuiLogger` wraps the main logger to tee
+  log calls to the bus and emits explicit `state` events.
 - **Runner** (`src/runner.ts`): `executeAgent` spawns agent subprocess;
   `pipeStream` handles I/O; `linePrefixTransform`/`workerPrefix` add per-worker
   terminal prefix (scenario 33)
@@ -75,6 +73,11 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   (`gui/html.ts`) has a Progress sidebar that fetches `/api/status` on load and
   on every state/worker_done SSE event. E2E tests in
   `test/gui_status_e2e_test.ts` (10 tests, DI adapters, no real file I/O).
+- **Workflow graph (GUI.0)**: `src/gui/pages/main-page.tsx` mounts
+  React Flow graph island `src/gui/islands/workflow-graph.tsx` fed by
+  `event-store.ts` SSE state. Dynamic worker nodes/merge node pulse with
+  activity; clicking opens `worker-modal.tsx` (log replay + /input POST). SSE
+  tails `.ralph/worker-logs/*` via `src/gui/log-dir.ts` and `server.tsx`.
 
 ## Scenarios Index
 
