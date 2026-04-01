@@ -65,8 +65,8 @@ Deno.test("event-store trims retained log history and bumps revisions", () => {
 
   assertEquals(getLogEvents().length, 1304);
   assertEquals(getLogEvents()[0]?.message, "line 301");
-  assertEquals(getWorkerLogBuffer("GUI.a").length, 604);
-  assertEquals(getWorkerLogBuffer("GUI.a")[0]?.message, "line 1001");
+  assertEquals(getWorkerLogBuffer("GUI.a").length, 600);
+  assertEquals(getWorkerLogBuffer("GUI.a")[0]?.message, "line 1005");
   assertEquals(getLogVersion(), 1605);
   assertEquals(getWorkerLogVersion(), 1605);
 });
