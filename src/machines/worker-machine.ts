@@ -28,7 +28,6 @@ import { getModel, resolveModelSelection } from "../model.ts";
 import { CLAUDE_CODER, CLAUDE_ESCALATED } from "../constants.ts";
 import { buildCommandSpec, buildPrompt } from "../command.ts";
 import type { AgentInputBus } from "../gui/input-bus.ts";
-export type { AgentRunDeps } from "../ports/types.ts";
 
 // ---------------------------------------------------------------------------
 // Model resolution

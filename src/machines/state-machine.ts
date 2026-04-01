@@ -31,7 +31,6 @@ import { parseScenarioIds } from "../progress.ts";
 import { dim, green, yellow } from "../colors.ts";
 import { difference, xor } from "../set-fns.ts";
 import { Status } from "../constants.ts";
-export type { MachineDeps } from "../ports/types.ts";
 
 // ---------------------------------------------------------------------------
 // Deep completion verification — re-reads spec + progress from disk

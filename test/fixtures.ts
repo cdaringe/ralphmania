@@ -14,8 +14,8 @@ import { ok } from "../src/types.ts";
 import type { WorktreeInfo } from "../src/git/worktree.ts";
 import type {
   MachineContext,
-  MachineDeps,
 } from "../src/machines/state-machine.ts";
+import type { MachineDeps } from "../src/ports/types.ts";
 
 // ---------------------------------------------------------------------------
 // Primitives

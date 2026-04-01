@@ -202,6 +202,26 @@ Deno.test("ARCH.1: port type declarations are not duplicated in domain modules",
   }
 });
 
+Deno.test("ARCH.1: port contracts are imported from src/ports/types.ts, not re-exported by domain modules", async () => {
+  const files = [
+    "../src/logger.ts",
+    "../src/model.ts",
+    "../src/progress.ts",
+    "../src/validation.ts",
+    "../src/machines/state-machine.ts",
+    "../src/machines/worker-machine.ts",
+  ] as const;
+  const forbidden =
+    /export type \{ (ProgressFileDeps|ValidationHookDeps|LoggerOutput|ModelIODeps|AgentRunDeps|MachineDeps) \} from "\.\.?\/.*ports\/types\.ts";/;
+  for (const relPath of files) {
+    const src = await Deno.readTextFile(new URL(relPath, import.meta.url));
+    assert(
+      !forbidden.test(src),
+      `${relPath} re-exports port contracts; import from src/ports/types.ts directly`,
+    );
+  }
+});
+
 Deno.test("ARCH.1 [integration]: orchestrator runs against injected MachineDeps end-to-end", async () => {
   const progress = createProgressStore("| ARCH.1 |          |      |");
   let iterations = 0;

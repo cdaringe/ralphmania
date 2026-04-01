@@ -13,6 +13,8 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   - `src/ports/impl.ts` = default Deno adapter implementations only
   - Domain modules consume these ports and keep logic pure: `src/machines/*.ts`,
     `src/model.ts`, `src/progress.ts`, `src/validation.ts`, `src/logger.ts`
+  - Boundary rule: domain modules should not re-export port contracts; import
+    types directly from `src/ports/types.ts`
 - **Orchestrator** (`src/orchestrator/mod.ts`) drives `runParallelLoop` via
   `src/machines/state-machine.ts`; `src/orchestrator/escalation.ts` manages
   escalation state; `src/orchestrator/progress-queries.ts` provides progress
@@ -87,8 +89,10 @@ See `docs/scenarios/` for all scenario write-ups. Scenario status tracked in
 Notable implementations:
 
 - ARCH.1: contracts in `src/ports/types.ts`; default adapters in
-  `src/ports/impl.ts`; domain modules import ports. Enforced by
-  `test/arch_1_test.ts` (purity + contract/adapter split + integration + e2e).
+  `src/ports/impl.ts`; domain modules import port types directly (no re-exports
+  from domain modules). Enforced by `test/arch_1_test.ts` (purity +
+  contract/adapter split + no duplicate/re-exported contracts + integration +
+  e2e).
 - ARCH.2: `src/model.ts` owns all derivations — `orderActionableScenarios`
   (rework-first ordering) and `computeEffectiveLevel` (escalation merge);
   pipeline stages in `src/machines/state-machine.ts` are thin orchestrators only

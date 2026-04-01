@@ -44,8 +44,6 @@ export const DEFAULT_FILE_PATHS: FilePaths = {
   progressFile: PROGRESS_FILE,
 };
 
-export type { ProgressFileDeps } from "./ports/types.ts";
-
 const writeProgressTemplate = async (
   log: Logger,
   paths: FilePaths,

@@ -10,8 +10,6 @@ import {
   VALIDATE_TEMPLATE,
 } from "./constants.ts";
 
-export type { ValidationHookDeps } from "./ports/types.ts";
-
 export const ensureValidationHook = async (
   log: Logger,
   deps: ValidationHookDeps = defaultValidationHookDeps,

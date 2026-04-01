@@ -5,7 +5,7 @@ import {
   parseScenarioCount,
   parseScenarioIds,
 } from "../src/progress.ts";
-import type { ProgressFileDeps } from "../src/progress.ts";
+import type { ProgressFileDeps } from "../src/ports/types.ts";
 import type { Logger } from "../src/types.ts";
 
 const noop: Logger = () => {};

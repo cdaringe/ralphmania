@@ -30,8 +30,6 @@ import {
   parseTotalCount,
 } from "./orchestrator/progress-queries.ts";
 
-export type { ModelIODeps } from "./ports/types.ts";
-
 export const getModel = (
   { agent, mode }: { agent: Agent; mode: "fast" | "general" | "strong" },
 ): string =>

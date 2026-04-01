@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@^1";
 import { err, ok } from "neverthrow";
-import type { MachineContext, MachineDeps } from "./state-machine.ts";
+import type { MachineContext } from "./state-machine.ts";
+import type { MachineDeps } from "../ports/types.ts";
 import {
   isTerminal,
   transition,

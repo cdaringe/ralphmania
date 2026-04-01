@@ -11,7 +11,6 @@ import {
   red,
   yellow,
 } from "./colors.ts";
-export type { LoggerOutput } from "./ports/types.ts";
 
 const tagColor: Record<string, (s: string) => string> = {
   error: red,
