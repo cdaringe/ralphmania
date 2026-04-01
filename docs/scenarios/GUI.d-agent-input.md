@@ -19,16 +19,15 @@
   worker's stdin. Returns `true` on success, `false` if no worker is registered
   or the write fails (e.g. broken pipe after process exit).
 
-### Agent subprocess stdin
+### Backend support
 
-`executeAgent` in `src/runner.ts` now accepts optional `agentInputBus` and
-`workerIndex`. When both are present:
+Interactive GUI input is currently supported for Claude workers only.
+`executeAgent` uses the Claude SDK session API to queue follow-up user messages
+mid-run.
 
-1. Subprocess is spawned with `stdin: "piped"` instead of `"null"`.
-2. `agentInputBus.register(workerIndex, child.stdin)` is called immediately
-   after spawn.
-3. `agentInputBus.unregister(workerIndex)` is called after `await child.status`
-   resolves.
+Codex workers continue to run as one-shot subprocesses with `stdin: "null"`.
+This avoids a startup hang where current `codex exec` builds wait on an open
+stdin pipe and print `Reading additional input from stdin...`.
 
 ### HTTP endpoint — `POST /input/:workerId`
 
@@ -71,7 +70,7 @@ They are disabled again when the worker reaches `done` or `failed` state.
   `orchestrator.ts` to every `runIterationImpl` call.
 
 When `--gui` is not active, `agentInputBus` is `undefined` and all behavior is
-identical to before (subprocess stdin remains `"null"`).
+identical to before.
 
 ## Evidence
 
@@ -83,6 +82,6 @@ identical to before (subprocess stdin remains `"null"`).
 | `src/gui/server.test.ts`              | 3 integration tests: 200/404/503 paths via real HTTP           |
 | `src/gui/html.ts`                     | `#input-bar` textarea + send button in WORKER_PAGE_HTML        |
 | `src/machines/worker-machine.test.ts` | `transitionRunningAgent: passes agentInputBus to deps.execute` |
-| `src/runner.ts:204-223`               | `stdin: "piped"`, register/unregister calls                    |
+| `src/runner.ts`                       | Claude session input enabled; Codex subprocess stdin disabled  |
 | `src/orchestrator.ts:90`              | `agentInputBus` closed over in `runIteration` dep              |
 | `mod.ts:151-159`                      | `createAgentInputBus()` wired on `--gui` startup               |

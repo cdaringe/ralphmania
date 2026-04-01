@@ -1,0 +1,67 @@
+:root {
+  --bg: #f4f4f5;
+  --surface: #fff;
+  --border: #e4e4e7;
+  --text: #18181b;
+  --muted: #71717a;
+  --accent: #22c55e;
+  --abg: #f0fdf4;
+  --error: #ef4444;
+  --warn: #f59e0b;
+  --mono: "Cascadia Code","SF Mono","Fira Code",monospace;
+  --purple: #a78bfa;
+  --cyan: #22d3ee;
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: var(--mono);
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+#app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  overflow: hidden;
+}
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+header h1 {
+  font-size: 15px;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+.badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: var(--abg);
+}
+.badge.off {
+  border-color: var(--error);
+  color: var(--error);
+  background: #fef2f2;
+}
+.badge.done {
+  border-color: var(--muted);
+  color: var(--muted);
+  background: var(--bg);
+}

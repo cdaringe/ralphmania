@@ -1,5 +1,7 @@
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const WORKER_IDLE_TIMEOUT_MS = 90 * 1000;
+/** Hard timeout for the validation script (10 minutes). */
+export const VALIDATION_TIMEOUT_MS = 10 * 60 * 1000;
 export const REWORK_THRESHOLD = 1;
 export const ESCALATION_FILE = ".ralph/escalation.json";
 export const LOOP_STATE_FILE = ".ralph/loop-state.json";

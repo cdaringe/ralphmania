@@ -1,0 +1,108 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: min(800px, 90vw);
+  height: min(600px, 80vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.modal-header h2 {
+  font-size: 14px;
+  color: var(--accent);
+  flex: 1;
+}
+.modal-header a {
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+.modal-header a:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.modal-close {
+  font-size: 16px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.modal-close:hover {
+  color: var(--error);
+  background: #fef2f2;
+}
+.modal-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  background: #18181b;
+  color: #d4d4d8;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.modal-input {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 6px 12px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.modal-input textarea {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  resize: none;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #18181b;
+  color: #d4d4d8;
+  height: 40px;
+}
+.modal-input textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.modal-input button {
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--abg);
+  color: var(--accent);
+  font-family: var(--mono);
+}
+.modal-input .send-status {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}

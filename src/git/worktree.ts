@@ -125,30 +125,59 @@ const mergeWithTheirs = async (
       "merged" as const);
 };
 
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 export const mergeWorktree = async (
   { worktree, log }: { worktree: WorktreeInfo; log: Logger },
 ): Promise<MergeResult> => {
-  const result = await run([
-    "merge",
-    worktree.branch,
-    "--no-edit",
-    "-m",
-    `Merge ${worktree.branch} (scenario ${worktree.scenario})`,
-  ]);
+  // Retry once after a short delay to handle transient git lock issues.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await run([
+      "merge",
+      worktree.branch,
+      "--no-edit",
+      "-m",
+      `Merge ${worktree.branch} (scenario ${worktree.scenario})`,
+    ]);
 
-  return result.code !== 0
-    ? (log({
+    if (result.code === 0) {
+      log({
+        tags: ["info", "worktree"],
+        message: `Merged ${worktree.branch} (scenario ${worktree.scenario})`,
+      });
+      return "merged";
+    }
+
+    // If it looks like a transient lock error, retry after a brief delay.
+    if (
+      attempt === 0 &&
+      (result.stderr.includes("index.lock") ||
+        result.stderr.includes("Unable to create") ||
+        result.stderr.includes("lock"))
+    ) {
+      log({
+        tags: ["info", "worktree"],
+        message:
+          `Merge for ${worktree.scenario} hit transient lock, retrying in 1s`,
+      });
+      await delay(1000);
+      continue;
+    }
+
+    // Real conflict — abort and try theirs strategy.
+    log({
       tags: ["info", "worktree"],
       message:
         `Merge conflict for scenario ${worktree.scenario}, retrying with theirs strategy`,
-    }),
-      await run(["merge", "--abort"]),
-      await mergeWithTheirs({ worktree, log }))
-    : (log({
-      tags: ["info", "worktree"],
-      message: `Merged ${worktree.branch} (scenario ${worktree.scenario})`,
-    }),
-      "merged" as const);
+    });
+    await run(["merge", "--abort"]);
+    return mergeWithTheirs({ worktree, log });
+  }
+
+  // Unreachable, but satisfies the type checker.
+  await run(["merge", "--abort"]);
+  return mergeWithTheirs({ worktree, log });
 };
 
 export const resetWorkingTree = async (
@@ -207,19 +236,19 @@ export const resetAllWorktrees = async (
   // Prune stale git worktree refs
   await run(["worktree", "prune"]);
 
-  // Delete local ralph/worker-* branches
+  // Delete local ralph/worker-* branches (in parallel — independent ops)
   const branchList = await run(["branch", "--list", "ralph/worker-*"]);
   if (branchList.code === 0 && branchList.stdout) {
     const branches = branchList.stdout.split("\n").map((b) => b.trim()).filter(
       Boolean,
     );
-    for (const branch of branches) {
+    await Promise.all(branches.map(async (branch) => {
       const delResult = await run(["branch", "-D", branch]);
       delResult.code !== 0 && log({
         tags: ["debug", "worktree"],
         message: `Failed to delete branch ${branch}: ${delResult.stderr}`,
       });
-    }
+    }));
   }
 
   // Clear tool state files
@@ -231,6 +260,46 @@ export const resetAllWorktrees = async (
     message: "All ralph worktrees and state cleared.",
   });
   return ok(undefined);
+};
+
+/**
+ * Prune orphaned `ralph/worker-*` branches that have no matching worktree.
+ * Safe to run on every boot — only removes branches whose worktree is gone.
+ */
+export const pruneOrphanedBranches = async (
+  { log }: { log: Logger },
+): Promise<void> => {
+  // Collect active worktree branch refs
+  const wtList = await run(["worktree", "list", "--porcelain"]);
+  const activeRefs = new Set<string>();
+  if (wtList.code === 0) {
+    for (const line of wtList.stdout.split("\n")) {
+      if (line.startsWith("branch refs/heads/ralph/worker-")) {
+        activeRefs.add(line.replace("branch refs/heads/", ""));
+      }
+    }
+  }
+
+  const branchList = await run(["branch", "--list", "ralph/worker-*"]);
+  if (branchList.code !== 0 || !branchList.stdout) return;
+
+  const branches = branchList.stdout.split("\n").map((b) => b.trim()).filter(
+    Boolean,
+  );
+  const orphaned = branches.filter((b) => !activeRefs.has(b));
+  if (orphaned.length === 0) return;
+
+  log({
+    tags: ["info", "worktree"],
+    message: `Pruning ${orphaned.length} orphaned ralph branch(es)`,
+  });
+  await Promise.all(orphaned.map(async (branch) => {
+    const delResult = await run(["branch", "-D", branch]);
+    delResult.code !== 0 && log({
+      tags: ["debug", "worktree"],
+      message: `Failed to prune branch ${branch}: ${delResult.stderr}`,
+    });
+  }));
 };
 
 export const cleanupWorktree = async (

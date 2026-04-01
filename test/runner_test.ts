@@ -5,6 +5,7 @@ import {
   ndjsonResultTransform,
   pipeStream,
   RECEIPTS_PROMPT,
+  supportsInteractiveAgentInput,
   workerPrefix,
 } from "../src/runner.ts";
 
@@ -140,6 +141,11 @@ Deno.test("pipeStream calls onActivity for each non-empty chunk", async () => {
     },
   });
   assertEquals(activityCount, 2);
+});
+
+Deno.test("supportsInteractiveAgentInput only enables live input for claude", () => {
+  assertEquals(supportsInteractiveAgentInput("claude"), true);
+  assertEquals(supportsInteractiveAgentInput("codex"), false);
 });
 
 Deno.test("extractNdjsonResult extracts .result from success result", () => {

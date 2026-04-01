@@ -21,6 +21,7 @@ import { ScenarioPage } from "./pages/scenario-page.tsx";
 import { WorkerPage } from "./pages/worker-page.tsx";
 import type { GuiEvent } from "./events.ts";
 import { type CompiledIslands, compileIslands } from "./dev.ts";
+import { loadCssFiles } from "./css.ts";
 
 /** Returns the current spec-vs-progress status diff. */
 export type StatusProvider = () => Promise<StatusDiff>;
@@ -88,7 +89,25 @@ export const startGuiServer = async (
     ? new Map()
     : await compileIslands();
 
+  // Load CSS files from disk.
+  const cssFiles = opts.skipBuild
+    ? new Map<string, string>()
+    : await loadCssFiles();
+
   const app = new App();
+
+  // GET /css/:name — serve CSS files.
+  app.get("/css/:name", (ctx) => {
+    const content = cssFiles.get(ctx.params.name);
+    return content
+      ? new Response(content, {
+        headers: {
+          "content-type": "text/css; charset=utf-8",
+          "cache-control": "no-cache",
+        },
+      })
+      : new Response("not found", { status: 404 });
+  });
 
   // GET /islands/:name — serve compiled island JS modules.
   app.get("/islands/:name", (ctx) => {

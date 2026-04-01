@@ -192,8 +192,16 @@ export const pipeStream = async ({
         }
       }
     }
-  } catch {
-    // Stream closed or aborted
+  } catch (error: unknown) {
+    // Stream closed or aborted — expected during cancellation.
+    // Log unexpected errors so they don't vanish silently.
+    const isAbort = error instanceof DOMException &&
+      error.name === "AbortError";
+    const isResourceClosed = error instanceof TypeError &&
+      String(error).includes("resource closed");
+    if (!isAbort && !isResourceClosed) {
+      console.error("[pipeStream] unexpected error:", error);
+    }
   }
   // Flush remaining line buffer
   if (onLine && lineBuffer.trimEnd().length > 0) {
@@ -205,13 +213,18 @@ export const pipeStream = async ({
 // Re-export from worker-machine for backward compatibility.
 export { resolveWorkerModelSelection } from "./machines/worker-machine.ts";
 
+/** Only backends with a true multi-turn session API should accept live input. */
+export const supportsInteractiveAgentInput = (
+  agent: import("./types.ts").Agent,
+): boolean => agent === "claude";
+
 /* c8 ignore start — real subprocess execution, tested via integration */
 /**
  * Execute an agent — the I/O boundary of the worker pipeline.
  * This is the default {@link AgentRunDeps.execute} implementation.
  *
  * For claude: uses the Agent SDK session API for interactive multi-turn input.
- * For other agents: uses a subprocess with stdin piping.
+ * For other agents: uses a subprocess with stdin disabled.
  */
 export const executeAgent: AgentRunDeps["execute"] = async (
   {
@@ -330,7 +343,9 @@ export const executeAgent: AgentRunDeps["execute"] = async (
     cwd,
     workerIndex,
     workerId,
-    agentInputBus,
+    agentInputBus: supportsInteractiveAgentInput(agent)
+      ? agentInputBus
+      : undefined,
   });
 };
 
