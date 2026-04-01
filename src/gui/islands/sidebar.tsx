@@ -105,20 +105,28 @@ export default function Sidebar(): preact.JSX.Element {
         {hydrated && status && (
           <div id="status-list">
             {status.shared.map((s) => (
-              <div class="srow" key={s.id}>
+              <a
+                class="srow srow-link"
+                key={s.id}
+                href={`/scenario/${encodeURIComponent(s.id)}`}
+              >
                 <span>{escHtml(s.id)}</span>
                 <span
                   class={`s-${s.status.toLowerCase().replace(/_/g, "-")}`}
                 >
                   {escHtml(s.status)}
                 </span>
-              </div>
+              </a>
             ))}
             {status.specOnly.map((id) => (
-              <div class="srow" key={id}>
+              <a
+                class="srow srow-link"
+                key={id}
+                href={`/scenario/${encodeURIComponent(id)}`}
+              >
                 <span>{escHtml(id)}</span>
                 <span class="s-not-started">NOT_STARTED</span>
-              </div>
+              </a>
             ))}
             {status.progressOnly.map((id) => (
               <div class="srow" key={id}>

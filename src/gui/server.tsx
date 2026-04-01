@@ -13,10 +13,11 @@ import { renderToString } from "preact-render-to-string";
 import type { AgentInputBus } from "./input-bus.ts";
 import type { Logger } from "../types.ts";
 import { createLogger } from "../logger.ts";
-import type { StatusDiff } from "../status-diff.ts";
+import type { ScenarioDetail, StatusDiff } from "../status-diff.ts";
 import { generateStatusHtml } from "../status-diff.ts";
 import { tailLogDir, writeWorkerLine } from "./log-dir.ts";
 import { MainPage } from "./pages/main-page.tsx";
+import { ScenarioPage } from "./pages/scenario-page.tsx";
 import { WorkerPage } from "./pages/worker-page.tsx";
 import type { GuiEvent } from "./events.ts";
 import { type CompiledIslands, compileIslands } from "./dev.ts";
@@ -24,12 +25,26 @@ import { type CompiledIslands, compileIslands } from "./dev.ts";
 /** Returns the current spec-vs-progress status diff. */
 export type StatusProvider = () => Promise<StatusDiff>;
 
+/** Returns full detail for a single scenario by ID. */
+export type ScenarioDetailProvider = (
+  id: string,
+) => Promise<ScenarioDetail | undefined>;
+
+/** Applies a status + rework-notes update to a single progress row. */
+export type ProgressRowUpdater = (update: {
+  readonly scenarioId: string;
+  readonly status: string;
+  readonly reworkNotes: string;
+}) => Promise<{ ok: true } | { ok: false; error: string }>;
+
 export type GuiServerOptions = {
   readonly port: number;
   readonly log?: Logger;
   readonly signal?: AbortSignal;
   readonly agentInputBus?: AgentInputBus;
   readonly statusProvider?: StatusProvider;
+  readonly scenarioDetailProvider?: ScenarioDetailProvider;
+  readonly progressRowUpdater?: ProgressRowUpdater;
   /** Skip island compilation (for unit tests that don't need client JS). */
   readonly skipBuild?: boolean;
 };
@@ -50,7 +65,14 @@ export type GuiServerHandle = {
 export const startGuiServer = async (
   opts: GuiServerOptions,
 ): Promise<GuiServerHandle> => {
-  const { port, signal, agentInputBus, statusProvider } = opts;
+  const {
+    port,
+    signal,
+    agentInputBus,
+    statusProvider,
+    scenarioDetailProvider,
+    progressRowUpdater,
+  } = opts;
   const log = opts.log ?? createLogger();
 
   // Compile island TypeScript to browser JS (unless skipped for unit tests).
@@ -157,6 +179,69 @@ export const startGuiServer = async (
       },
     });
   });
+
+  // GET /api/scenario/:id — full detail for a single scenario.
+  app.get("/api/scenario/:id", async (ctx) => {
+    const id = decodeURIComponent(ctx.params.id);
+    if (!scenarioDetailProvider) {
+      return Response.json(
+        { error: "No scenario detail provider configured" },
+        { status: 503 },
+      );
+    }
+    try {
+      const detail = await scenarioDetailProvider(id);
+      return detail
+        ? Response.json(detail)
+        : Response.json({ error: "Scenario not found" }, { status: 404 });
+    } catch {
+      return Response.json(
+        { error: "Failed to load scenario detail" },
+        { status: 500 },
+      );
+    }
+  });
+
+  // PATCH /api/scenario/:id — update status + rework notes for one scenario.
+  app.patch("/api/scenario/:id", async (ctx) => {
+    const scenarioId = decodeURIComponent(ctx.params.id);
+    if (!progressRowUpdater) {
+      return Response.json(
+        { ok: false, error: "No progress updater configured" },
+        { status: 503 },
+      );
+    }
+    try {
+      const body = await ctx.req.json();
+      const status = typeof body.status === "string" ? body.status : "";
+      const reworkNotes = typeof body.reworkNotes === "string"
+        ? body.reworkNotes
+        : "";
+      if (!status) {
+        return Response.json(
+          { ok: false, error: "status is required" },
+          { status: 400 },
+        );
+      }
+      const result = await progressRowUpdater({
+        scenarioId,
+        status,
+        reworkNotes,
+      });
+      return result.ok ? Response.json({ ok: true }) : Response.json(
+        { ok: false, error: result.error },
+        { status: 422 },
+      );
+    } catch {
+      return Response.json(
+        { ok: false, error: "Failed to update scenario" },
+        { status: 500 },
+      );
+    }
+  });
+
+  // GET /scenario/:id — scenario detail page
+  app.get("/scenario/:id", (_ctx) => htmlResponse(<ScenarioPage />));
 
   // GET /api/worker-log/:id
   app.get("/api/worker-log/:id", async (ctx) => {

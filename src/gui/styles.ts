@@ -37,6 +37,8 @@ aside{background:var(--surface);border-right:1px solid var(--border);
 #status-list{margin-top:6px;display:flex;flex-direction:column;gap:1px;max-height:40vh;overflow-y:auto}
 .srow{display:flex;justify-content:space-between;font-size:10px;padding:1px 0}
 .srow span:first-child{color:var(--muted)}
+.srow-link{text-decoration:none;color:inherit;cursor:pointer;border-radius:2px;padding:1px 2px;margin:-1px -2px}
+.srow-link:hover{background:var(--abg)}
 `;
 
 export const LOG_CSS = `

@@ -1,8 +1,11 @@
 import { assert, assertEquals } from "jsr:@std/assert@^1";
-import { createInputChannel, executeClaudeSession } from "./sdk-session.ts";
-import type { ClaudeSessionDeps } from "./sdk-session.ts";
-import { createAgentInputBus } from "../../gui/input-bus.ts";
-import { COMPLETION_MARKER } from "../../constants.ts";
+import { createAgentInputBus } from "../src/gui/input-bus.ts";
+import { COMPLETION_MARKER } from "../src/constants.ts";
+import {
+  createInputChannel,
+  executeClaudeSession,
+} from "../src/agents/claude/sdk-session.ts";
+import type { ClaudeSessionDeps } from "../src/agents/claude/sdk-session.ts";
 
 const noopLog = (): void => {};
 
@@ -106,6 +109,45 @@ Deno.test(
 );
 
 Deno.test(
+  "executeClaudeSession: returns timeout after idle output period",
+  async () => {
+    const logMessages: string[] = [];
+    const result = await executeClaudeSession({
+      prompt: "do work",
+      model: "claude-test",
+      effort: undefined,
+      iterationNum: 1,
+      signal: AbortSignal.timeout(5000),
+      log: ({ message }) => {
+        logMessages.push(message);
+      },
+      cwd: "/tmp",
+      workerId: "SC.1",
+      agentInputBus: undefined,
+      deps: {
+        async *query(qOpts): AsyncGenerator<unknown> {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          qOpts.signal.throwIfAborted();
+          yield {
+            type: "system",
+            subtype: "timeout",
+          };
+        },
+        onLine: () => {},
+      },
+      timeouts: { idleTimeoutMs: 10 },
+    });
+    assertEquals(result.status, "timeout");
+    assertEquals(
+      logMessages.some((message) =>
+        message.includes("no new output for 10 ms")
+      ),
+      true,
+    );
+  },
+);
+
+Deno.test(
   "executeClaudeSession: registers and unregisters on input bus",
   async () => {
     const bus = createAgentInputBus();
@@ -140,10 +182,6 @@ Deno.test(
     assertEquals(unregistered, ["SC.1"]);
   },
 );
-
-// ---------------------------------------------------------------------------
-// InputChannel unit tests
-// ---------------------------------------------------------------------------
 
 Deno.test("createInputChannel: push before pull yields immediately", async () => {
   const ch = createInputChannel();
@@ -180,15 +218,11 @@ Deno.test(
     const receivedInputs: string[] = [];
     const deps: ClaudeSessionDeps = {
       async *query(qOpts): AsyncGenerator<unknown> {
-        // Consume the inputMessages channel in the background.
-        // Simulate: agent yields a message, then user sends feedback,
-        // then agent yields another.
         yield {
           type: "assistant",
           session_id: "s1",
           message: { content: [{ type: "text", text: "thinking..." }] },
         };
-        // Pull one follow-up message from the input channel.
         const iter = qOpts.inputMessages[Symbol.asyncIterator]();
         const next = await iter.next();
         if (!next.done) receivedInputs.push(next.value);
@@ -196,7 +230,6 @@ Deno.test(
       onLine: () => {},
     };
 
-    // Start execution — it will register on the bus, then block waiting for input.
     const resultP = executeClaudeSession({
       prompt: "do work",
       model: "claude-test",
@@ -210,7 +243,6 @@ Deno.test(
       deps,
     });
 
-    // Simulate user sending feedback via the input bus.
     await new Promise((r) => setTimeout(r, 10));
     const sent = await bus.send("SC.1", "try a different approach");
     assert(sent.isOk());
@@ -225,7 +257,7 @@ Deno.test(
   "executeClaudeSession: skips non-text messages gracefully",
   async () => {
     const lines: string[] = [];
-    await executeClaudeSession({
+    const result = await executeClaudeSession({
       prompt: "do work",
       model: "claude-test",
       effort: undefined,
@@ -236,14 +268,11 @@ Deno.test(
       workerId: "SC.1",
       agentInputBus: undefined,
       deps: fakeDeps([
-        { type: "system", subtype: "init", session_id: "s1" },
-        {
-          type: "assistant",
-          session_id: "s1",
-          message: { content: [{ type: "text", text: "hello" }] },
-        },
+        { type: "assistant", session_id: "s1", message: { content: [] } },
+        { type: "system", subtype: "note" },
       ], lines),
     });
-    assertEquals(lines, ["[system: init]", "hello"]);
+    assertEquals(result.status, "continue");
+    assertEquals(lines, ["[system: note]"]);
   },
 );

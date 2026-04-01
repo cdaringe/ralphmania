@@ -1,4 +1,5 @@
 export const TIMEOUT_MS = 60 * 60 * 1000;
+export const WORKER_IDLE_TIMEOUT_MS = 90 * 1000;
 export const REWORK_THRESHOLD = 1;
 export const ESCALATION_FILE = ".ralph/escalation.json";
 export const LOOP_STATE_FILE = ".ralph/loop-state.json";
@@ -120,3 +121,15 @@ export const buildTargetedPrompt = (scenario: string): string =>
   3.4. Update @progress.md status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
 4. Update repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
 `.trim();
+
+export const formatDuration = (ms: number): string => {
+  if (ms % (60 * 1000) === 0) {
+    const minutes = ms / (60 * 1000);
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  if (ms % 1000 === 0) {
+    const seconds = ms / 1000;
+    return `${seconds} second${seconds === 1 ? "" : "s"}`;
+  }
+  return `${ms} ms`;
+};

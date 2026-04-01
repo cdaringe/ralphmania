@@ -1,5 +1,9 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1.0.11";
-import { computeStatusDiff, generateStatusHtml } from "../src/status-diff.ts";
+import {
+  computeStatusDiff,
+  generateStatusHtml,
+  lookupScenarioDetail,
+} from "../src/status-diff.ts";
 import type { ProgressRow } from "../src/parsers/progress-rows.ts";
 
 const row = (
@@ -120,4 +124,54 @@ Deno.test("generateStatusHtml — NEEDS_REWORK status renders with correct CSS c
   const html = generateStatusHtml(diff);
   assertStringIncludes(html, "NEEDS_REWORK");
   assertStringIncludes(html, "needs-rework");
+});
+
+// ---------------------------------------------------------------------------
+// lookupScenarioDetail
+// ---------------------------------------------------------------------------
+
+Deno.test("lookupScenarioDetail — returns combined spec+progress data", () => {
+  const specRows: ProgressRow[] = [
+    {
+      scenario: "GUI.a",
+      status: "GUI",
+      summary: "Realtime web GUI",
+      reworkNotes: "",
+    },
+  ];
+  const progressRows: ProgressRow[] = [
+    {
+      scenario: "GUI.a",
+      status: "NEEDS_REWORK",
+      summary: "[link](docs/GUI.a.md)",
+      reworkNotes: "Fix SSE",
+    },
+  ];
+  const detail = lookupScenarioDetail("GUI.a", specRows, progressRows);
+  assertEquals(detail, {
+    id: "GUI.a",
+    area: "GUI",
+    description: "Realtime web GUI",
+    status: "NEEDS_REWORK",
+    summary: "[link](docs/GUI.a.md)",
+    reworkNotes: "Fix SSE",
+  });
+});
+
+Deno.test("lookupScenarioDetail — NOT_STARTED when not in progress", () => {
+  const specRows: ProgressRow[] = [
+    {
+      scenario: "1",
+      status: "UX",
+      summary: "Interactive prompts",
+      reworkNotes: "",
+    },
+  ];
+  const detail = lookupScenarioDetail("1", specRows, []);
+  assertEquals(detail?.status, "NOT_STARTED");
+  assertEquals(detail?.area, "UX");
+});
+
+Deno.test("lookupScenarioDetail — returns undefined for unknown ID", () => {
+  assertEquals(lookupScenarioDetail("NOPE", [], []), undefined);
 });

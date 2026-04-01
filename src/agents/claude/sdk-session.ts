@@ -13,7 +13,13 @@
  */
 import type { AgentInputBus } from "../../gui/input-bus.ts";
 import type { IterationResult, Logger } from "../../types.ts";
-import { COMPLETION_MARKER } from "../../constants.ts";
+import {
+  COMPLETION_MARKER,
+  formatDuration,
+  TIMEOUT_MS,
+  WORKER_IDLE_TIMEOUT_MS,
+} from "../../constants.ts";
+import { createIdleWatchdog } from "../../idle-watchdog.ts";
 import { extractSDKText } from "./sdk-text.ts";
 
 /**
@@ -102,6 +108,10 @@ type ExecuteOpts = {
   readonly workerId: string | undefined;
   readonly agentInputBus: AgentInputBus | undefined;
   readonly deps: ClaudeSessionDeps;
+  readonly timeouts?: {
+    hardTimeoutMs?: number;
+    idleTimeoutMs?: number;
+  };
 };
 
 /**
@@ -124,9 +134,16 @@ export const executeClaudeSession = async (
     workerId,
     agentInputBus,
     deps,
+    timeouts,
   } = opts;
 
   const inputChannel = createInputChannel();
+  const hardTimeoutMs = timeouts?.hardTimeoutMs ?? TIMEOUT_MS;
+  const idleTimeoutMs = timeouts?.idleTimeoutMs ?? WORKER_IDLE_TIMEOUT_MS;
+  const watchdog = createIdleWatchdog(signal, {
+    hardTimeoutMs,
+    idleTimeoutMs,
+  });
 
   // Register the input channel on the bus so the GUI can push messages.
   // After each push, emit a queue status event so the UX can display it.
@@ -151,7 +168,7 @@ export const executeClaudeSession = async (
       model,
       cwd,
       effort,
-      signal,
+      signal: watchdog.signal,
     });
 
     let foundCompletionMarker = false;
@@ -160,6 +177,7 @@ export const executeClaudeSession = async (
       if (signal.aborted) break;
       const extracted = extractSDKText(msg);
       if (extracted) {
+        watchdog.touch();
         await deps.onLine(extracted);
         if (extracted.includes(COMPLETION_MARKER)) {
           foundCompletionMarker = true;
@@ -169,11 +187,18 @@ export const executeClaudeSession = async (
 
     inputChannel.close();
     if (agentInputBus && workerId) agentInputBus.unregister(workerId);
+    watchdog.stop();
 
-    if (signal.aborted) {
+    if (signal.aborted || watchdog.timedOut() !== undefined) {
       log({
         tags: ["error"],
-        message: `TIMEOUT: iteration ${iterationNum} exceeded 60 minutes`,
+        message: watchdog.timedOut() === "idle"
+          ? `TIMEOUT: iteration ${iterationNum} produced no new output for ${
+            formatDuration(idleTimeoutMs)
+          }`
+          : `TIMEOUT: iteration ${iterationNum} exceeded ${
+            formatDuration(hardTimeoutMs)
+          }`,
       });
       return { status: "timeout" };
     }
@@ -192,10 +217,21 @@ export const executeClaudeSession = async (
   } catch (error) {
     inputChannel.close();
     if (agentInputBus && workerId) agentInputBus.unregister(workerId);
-    if (error instanceof DOMException && error.name === "AbortError") {
+    watchdog.stop();
+    if (
+      (error instanceof DOMException && error.name === "AbortError") ||
+      signal.aborted ||
+      watchdog.signal.aborted
+    ) {
       log({
         tags: ["error"],
-        message: `TIMEOUT: iteration ${iterationNum} exceeded 60 minutes`,
+        message: watchdog.timedOut() === "idle"
+          ? `TIMEOUT: iteration ${iterationNum} produced no new output for ${
+            formatDuration(idleTimeoutMs)
+          }`
+          : `TIMEOUT: iteration ${iterationNum} exceeded ${
+            formatDuration(hardTimeoutMs)
+          }`,
       });
       return { status: "timeout" };
     }

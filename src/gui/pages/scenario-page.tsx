@@ -1,0 +1,79 @@
+// coverage:ignore — JSX UI component; tested via e2e
+/**
+ * Per-scenario detail page. HTML shell + mount point. The scenario-boot
+ * island loads the full scenario page app.
+ * @module
+ */
+import { BASE_CSS, SIDEBAR_CSS } from "../styles.ts";
+
+const SCENARIO_CSS = `
+.back{font-size:12px;color:var(--muted);text-decoration:none;padding:2px 8px;
+  border:1px solid var(--border);border-radius:4px}
+.back:hover{color:var(--accent);border-color:var(--accent)}
+.detail-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:16px;margin:16px;display:flex;flex-direction:column;gap:12px}
+.detail-row{display:flex;gap:8px;align-items:baseline}
+.detail-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--muted);min-width:100px;flex-shrink:0}
+.detail-value{font-size:13px;word-break:break-word;line-height:1.5}
+.detail-desc{font-size:13px;line-height:1.6;padding:10px 12px;
+  background:var(--bg);border-radius:4px;border-left:3px solid var(--accent)}
+.status-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;
+  border-radius:99px;font-family:var(--mono)}
+.sb-verified{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+.sb-needs-rework{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.sb-wip{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+.sb-work-complete{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+.sb-not-started{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.sb-obsolete{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.rework-form{background:var(--surface);border:1px solid var(--border);
+  border-radius:6px;padding:16px;margin:0 16px 16px}
+.rework-form h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--muted);margin-bottom:10px}
+.rework-form textarea{width:100%;min-height:80px;font-family:var(--mono);
+  font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;
+  background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box}
+.rework-form textarea:focus{outline:none;border-color:var(--accent)}
+.rework-actions{display:flex;gap:8px;margin-top:10px;align-items:center}
+.rework-btn{font-size:12px;padding:6px 16px;cursor:pointer;border-radius:4px;
+  font-family:var(--mono);border:1px solid var(--border);background:var(--surface);color:var(--text)}
+.rework-btn:hover{border-color:var(--accent);color:var(--accent)}
+.rework-btn.danger{border-color:#ef4444;color:#ef4444;background:#fef2f2}
+.rework-btn.danger:hover{background:#fee2e2}
+.rework-btn:disabled{opacity:.4;cursor:not-allowed}
+.rework-status{font-size:11px;color:var(--muted)}
+.rework-status.error{color:var(--error)}
+`;
+
+// deno-lint-ignore no-explicit-any
+export const ScenarioPage = (): any => (
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width,initial-scale=1" />
+      <title>ralphmania · scenario</title>
+      <script
+        type="importmap"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            imports: {
+              "preact": "https://esm.sh/preact@10",
+              "preact/": "https://esm.sh/preact@10/",
+              "preact/hooks": "https://esm.sh/preact@10/hooks",
+              "preact/jsx-runtime": "https://esm.sh/preact@10/jsx-runtime",
+            },
+          }),
+        }}
+      />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: BASE_CSS + SIDEBAR_CSS + SCENARIO_CSS,
+        }}
+      />
+    </head>
+    <body>
+      <div id="app-root" />
+      <script type="module" src="/islands/scenario-boot.js" />
+    </body>
+  </html>
+);

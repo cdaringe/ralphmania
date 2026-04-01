@@ -6,6 +6,16 @@ export type ScenarioStatusEntry = {
   readonly summary: string;
 };
 
+/** Full detail for a single scenario, combining spec and progress data. */
+export type ScenarioDetail = {
+  readonly id: string;
+  readonly area: string;
+  readonly description: string;
+  readonly status: string;
+  readonly summary: string;
+  readonly reworkNotes: string;
+};
+
 /**
  * Set-theoretic diff between spec scenario IDs and progress rows.
  *
@@ -38,6 +48,29 @@ export const computeStatusDiff = (
     shared: progressRows
       .filter((r) => specSet.has(r.scenario))
       .map((r) => ({ id: r.scenario, status: r.status, summary: r.summary })),
+  };
+};
+
+/**
+ * Look up full detail for a single scenario by ID, combining spec and progress.
+ * `specRows` should be the result of `parseProgressRows(specContent)` — columns
+ * map to (id, area, description).
+ */
+export const lookupScenarioDetail = (
+  id: string,
+  specRows: readonly ProgressRow[],
+  progressRows: readonly ProgressRow[],
+): ScenarioDetail | undefined => {
+  const specRow = specRows.find((r) => r.scenario === id);
+  if (!specRow) return undefined;
+  const progressRow = progressRows.find((r) => r.scenario === id);
+  return {
+    id,
+    area: specRow.status,
+    description: specRow.summary,
+    status: progressRow?.status || "NOT_STARTED",
+    summary: progressRow?.summary ?? "",
+    reworkNotes: progressRow?.reworkNotes ?? "",
   };
 };
 

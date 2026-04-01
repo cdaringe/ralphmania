@@ -12,14 +12,17 @@ import { err, ok } from "./types.ts";
 import { extractSDKText } from "./agents/claude/sdk-text.ts";
 import {
   COMPLETION_MARKER,
+  formatDuration,
   nonInteractiveEnv,
   RALPH_RECEIPTS_DIRNAME,
   TIMEOUT_MS,
+  WORKER_IDLE_TIMEOUT_MS,
 } from "./constants.ts";
 import { blue, cyan, green, magenta, yellow } from "./colors.ts";
 import { getModel } from "./model.ts";
 import { buildCommandSpec } from "./command.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
+import { createIdleWatchdog } from "./idle-watchdog.ts";
 import {
   initialWorkerState,
   isWorkerTerminal,
@@ -140,12 +143,20 @@ export const linePrefixTransform = (
  *
  * @returns `true` if any chunk contained the optional `marker` string.
  */
-export const pipeStream = async ({ stream, output, marker, onLine }: {
+export const pipeStream = async ({
+  stream,
+  output,
+  marker,
+  onLine,
+  onActivity,
+}: {
   stream: ReadableStream<Uint8Array>;
   output: { write: (data: Uint8Array) => Promise<number> };
   marker?: string;
   /** Called with each non-empty line for GUI streaming. */
   onLine?: (line: string) => void;
+  /** Called whenever new output bytes are observed on the stream. */
+  onActivity?: () => void;
 }): Promise<boolean> => {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -154,6 +165,7 @@ export const pipeStream = async ({ stream, output, marker, onLine }: {
   let lineBuffer = "";
   try {
     for await (const chunk of stream) {
+      if (chunk.length > 0) onActivity?.();
       const text = decoder.decode(chunk, { stream: true });
       await output.write(encoder.encode(text));
       // Emit complete lines to the GUI callback
@@ -346,10 +358,12 @@ const executeSubprocess = async (
     agentInputBus: import("./gui/input-bus.ts").AgentInputBus | undefined;
   },
 ): Promise<IterationResult> => {
-  const combinedSignal = AbortSignal.any([
-    signal,
-    AbortSignal.timeout(TIMEOUT_MS),
-  ]);
+  const hardTimeoutMs = TIMEOUT_MS;
+  const idleTimeoutMs = WORKER_IDLE_TIMEOUT_MS;
+  const watchdog = createIdleWatchdog(signal, {
+    hardTimeoutMs,
+    idleTimeoutMs,
+  });
 
   try {
     const useInputBus = agentInputBus !== undefined &&
@@ -366,7 +380,7 @@ const executeSubprocess = async (
           ? { CLAUDE_CODE_EFFORT_LEVEL: selection.effort }
           : {}),
       },
-      signal: combinedSignal,
+      signal: watchdog.signal,
     }).spawn();
 
     if (useInputBus) {
@@ -415,10 +429,12 @@ const executeSubprocess = async (
         stream: stdoutStream,
         output: Deno.stdout,
         marker: COMPLETION_MARKER,
+        onActivity: watchdog.touch,
       }),
       pipeStream({
         stream: stderrStream,
         output: Deno.stderr,
+        onActivity: watchdog.touch,
       }),
       ...(rawStdoutForGui
         ? [
@@ -441,6 +457,7 @@ const executeSubprocess = async (
     ]);
 
     if (useInputBus) agentInputBus.unregister(workerId);
+    watchdog.stop();
 
     if (status.code !== 0) {
       log({
@@ -463,10 +480,17 @@ const executeSubprocess = async (
     });
     return { status: "continue" };
   } catch (error) {
+    watchdog.stop();
     if (error instanceof DOMException && error.name === "AbortError") {
       log({
         tags: ["error"],
-        message: `TIMEOUT: iteration ${iterationNum} exceeded 60 minutes`,
+        message: watchdog.timedOut() === "idle"
+          ? `TIMEOUT: iteration ${iterationNum} produced no new output for ${
+            formatDuration(idleTimeoutMs)
+          }`
+          : `TIMEOUT: iteration ${iterationNum} exceeded ${
+            formatDuration(hardTimeoutMs)
+          }`,
       });
       return { status: "timeout" };
     }

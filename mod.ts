@@ -48,7 +48,8 @@ import { DEFAULT_FILE_PATHS, parseScenarioIds } from "./src/progress.ts";
 import type { FilePaths } from "./src/progress.ts";
 export type { FilePaths } from "./src/progress.ts";
 import { parseProgressRows } from "./src/parsers/progress-rows.ts";
-import { computeStatusDiff } from "./src/status-diff.ts";
+import { computeStatusDiff, lookupScenarioDetail } from "./src/status-diff.ts";
+import { updateProgressRow } from "./src/parsers/progress-update.ts";
 import {
   CLAUDE_CODER,
   CLAUDE_ESCALATED,
@@ -173,20 +174,37 @@ const main = async (): Promise<number> => {
       writeOrchestratorEvent(event);
     });
     log = createGuiLogger(log, bus);
+    const readSpecAndProgress = async () => {
+      const [specRaw, progressRaw] = await Promise.all([
+        Deno.readTextFile(filePaths.specFile).catch(() => ""),
+        Deno.readTextFile(filePaths.progressFile).catch(() => ""),
+      ]);
+      const specIds = parseScenarioIds(specRaw);
+      const specResult = parseProgressRows(specRaw);
+      const specRows = specResult.isOk() ? specResult.value : [];
+      const progressResult = parseProgressRows(progressRaw);
+      const progressRows = progressResult.isOk() ? progressResult.value : [];
+      return { specIds, specRows, progressRows };
+    };
     startGuiServer({
       port: guiPort,
       log,
       signal: guiController.signal,
       agentInputBus,
       statusProvider: async () => {
-        const [specRaw, progressRaw] = await Promise.all([
-          Deno.readTextFile(filePaths.specFile).catch(() => ""),
-          Deno.readTextFile(filePaths.progressFile).catch(() => ""),
-        ]);
-        const specIds = parseScenarioIds(specRaw);
-        const progressResult = parseProgressRows(progressRaw);
-        const progressRows = progressResult.isOk() ? progressResult.value : [];
+        const { specIds, progressRows } = await readSpecAndProgress();
         return computeStatusDiff(specIds, progressRows);
+      },
+      scenarioDetailProvider: async (id) => {
+        const { specRows, progressRows } = await readSpecAndProgress();
+        return lookupScenarioDetail(id, specRows, progressRows);
+      },
+      progressRowUpdater: async (update) => {
+        const raw = await Deno.readTextFile(filePaths.progressFile);
+        const result = updateProgressRow(raw, update);
+        if (!result.isOk()) return { ok: false, error: result.error };
+        await Deno.writeTextFile(filePaths.progressFile, result.value);
+        return { ok: true };
       },
     }).then((h) => h.finished).catch((): void => {});
   }

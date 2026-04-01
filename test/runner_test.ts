@@ -118,6 +118,30 @@ Deno.test("pipeStream handles empty stream", async () => {
   assertEquals(found, false);
 });
 
+Deno.test("pipeStream calls onActivity for each non-empty chunk", async () => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller: ReadableStreamDefaultController<Uint8Array>): void {
+      controller.enqueue(encoder.encode("a"));
+      controller.enqueue(new Uint8Array());
+      controller.enqueue(encoder.encode("b"));
+      controller.close();
+    },
+  });
+  let activityCount = 0;
+  const output = {
+    write: (d: Uint8Array): Promise<number> => Promise.resolve(d.length),
+  };
+  await pipeStream({
+    stream,
+    output,
+    onActivity: () => {
+      activityCount++;
+    },
+  });
+  assertEquals(activityCount, 2);
+});
+
 Deno.test("extractNdjsonResult extracts .result from success result", () => {
   assertEquals(
     extractNdjsonResult(
