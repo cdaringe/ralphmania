@@ -920,7 +920,7 @@ const ensureReceiptsDir = async (): Promise<Result<void, string>> => {
  */
 const main = async (log: Logger): Promise<void> => {
   const dirResult = await ensureReceiptsDir();
-  if (!dirResult.ok) {
+  if (dirResult.isErr()) {
     log({ tags: ["error", "receipt"], message: dirResult.error });
     return;
   }
@@ -941,7 +941,7 @@ const main = async (log: Logger): Promise<void> => {
     scenarioNumbers.map((id) => readScenario({ id, log })),
   );
   const scenarios = results.flatMap((r) => {
-    if (r.ok) return [r.value];
+    if (r.isOk()) return [r.value];
     log({ tags: ["error", "receipt"], message: r.error });
     return [];
   });
