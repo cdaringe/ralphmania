@@ -58,7 +58,7 @@ export default function LogPanel(): preact.JSX.Element {
     () =>
       subscribe(() => {
         setEvents([...getLogEvents()]);
-      }),
+      }, ["logs"]),
     [],
   );
 

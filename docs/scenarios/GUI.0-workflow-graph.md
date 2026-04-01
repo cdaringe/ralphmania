@@ -9,22 +9,23 @@
 
 ## Implementation
 
-- **Visualization stack**: `src/gui/pages/main-page.tsx` mounts the `WorkflowGraph`
-  island alongside the log panel. `GRAPH_PANEL_CSS` defines the `pulse`
-  keyframes used for live highlighting. Islands are compiled at startup by
-  `startGuiServer` (`src/gui/server.tsx`) and loaded from `/islands/*.js`.
-- **Event flow**: `createGuiLogger` (`src/gui/logger.ts`) tees every log into the
-  `GuiEventBus`, emitting structured `state`, `worker_active/done`,
+- **Visualization stack**: `src/gui/pages/main-page.tsx` mounts the
+  `WorkflowGraph` island alongside the log panel. `GRAPH_PANEL_CSS` defines the
+  `pulse` keyframes used for live highlighting. Islands are compiled at startup
+  by `startGuiServer` (`src/gui/server.tsx`) and loaded from `/islands/*.js`.
+- **Event flow**: `createGuiLogger` (`src/gui/logger.ts`) tees every log into
+  the `GuiEventBus`, emitting structured `state`, `worker_active/done`,
   `merge_start/done`, and `log` events. `mod.ts` subscribes the bus to
-  `writeOrchestratorEvent` so events land in `.ralph/worker-logs/` and are tailed
-  by `/events` SSE (`src/gui/log-dir.ts`, `src/gui/server.tsx`). On the client,
-  `event-store.ts` consumes SSE, maintains orchestrator state + active workers,
-  and feeds islands.
+  `writeOrchestratorEvent` so events land in `.ralph/worker-logs/` and are
+  tailed by `/events` SSE (`src/gui/log-dir.ts`, `src/gui/server.tsx`). On the
+  client, `event-store.ts` consumes SSE, maintains orchestrator state + active
+  workers, and feeds islands.
 - **Graph behavior** (`src/gui/islands/workflow-graph.tsx`):
-  - Static orchestrator nodes: `init → reading_progress → finding_actionable →
-    running_workers → validating → checking_doneness → done` with an
-    `aborted` branch and dashed loop-back edge. Active node pulses; visited nodes
-    turn solid green; inactive nodes are muted gray.
+  - Static orchestrator nodes:
+    `init → reading_progress → finding_actionable →
+    running_workers → validating → checking_doneness → done`
+    with an `aborted` branch and dashed loop-back edge. Active node pulses;
+    visited nodes turn solid green; inactive nodes are muted gray.
   - Dynamic workers: `worker_active` events create `W{i} {scenario}` nodes that
     pulse while running, turn amber during `merge_start`, and settle green after
     `worker_done/merge_done`. Worker nodes fan out from `running_workers` into a

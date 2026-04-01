@@ -32,7 +32,7 @@ export default function Sidebar(): preact.JSX.Element {
         setState(newState);
         setIter(getIteration());
         setWorkers(new Map(getActiveWorkers()));
-      }),
+      }, ["graph", "iteration"]),
     [state],
   );
 

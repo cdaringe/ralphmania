@@ -73,11 +73,11 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   (`gui/html.ts`) has a Progress sidebar that fetches `/api/status` on load and
   on every state/worker_done SSE event. E2E tests in
   `test/gui_status_e2e_test.ts` (10 tests, DI adapters, no real file I/O).
-- **Workflow graph (GUI.0)**: `src/gui/pages/main-page.tsx` mounts
-  React Flow graph island `src/gui/islands/workflow-graph.tsx` fed by
-  `event-store.ts` SSE state. Dynamic worker nodes/merge node pulse with
-  activity; clicking opens `worker-modal.tsx` (log replay + /input POST). SSE
-  tails `.ralph/worker-logs/*` via `src/gui/log-dir.ts` and `server.tsx`.
+- **Workflow graph (GUI.0)**: `src/gui/pages/main-page.tsx` mounts React Flow
+  graph island `src/gui/islands/workflow-graph.tsx` fed by `event-store.ts` SSE
+  state. Dynamic worker nodes/merge node pulse with activity; clicking opens
+  `worker-modal.tsx` (log replay + /input POST). SSE tails
+  `.ralph/worker-logs/*` via `src/gui/log-dir.ts` and `server.tsx`.
 
 ## Scenarios Index
 

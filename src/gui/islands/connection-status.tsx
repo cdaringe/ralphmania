@@ -8,7 +8,10 @@ import { getConnected, subscribe } from "./event-store.ts";
 
 export default function ConnectionStatus(): preact.JSX.Element {
   const [connected, setLocal] = useState(getConnected());
-  useEffect(() => subscribe(() => setLocal(getConnected())), []);
+  useEffect(
+    () => subscribe(() => setLocal(getConnected()), ["connection"]),
+    [],
+  );
 
   return (
     <>

@@ -43,6 +43,13 @@ export type SelectedWorker = {
 type GuiEvent = { readonly type: string; [k: string]: any };
 
 type Subscriber = () => void;
+type StoreTopic =
+  | "connection"
+  | "graph"
+  | "iteration"
+  | "logs"
+  | "selection"
+  | "worker_logs";
 
 // --- Mutable store ---
 let connected = false;
@@ -54,10 +61,19 @@ const activeWorkers = new Map<number, WorkerInfo>();
 let selectedWorker: SelectedWorker = null;
 /** Scenarios whose workers have finished (worker_done received). */
 const finishedWorkers = new Set<string>();
-const subscribers = new Set<Subscriber>();
+const subscribers = new Map<Subscriber, ReadonlySet<StoreTopic> | null>();
 
-const notify = (): void => {
-  for (const fn of subscribers) fn();
+const notify = (...topics: StoreTopic[]): void => {
+  const changed = new Set(topics);
+  for (const [fn, subscribedTopics] of subscribers) {
+    if (
+      subscribedTopics === null ||
+      topics.length === 0 ||
+      [...subscribedTopics].some((topic) => changed.has(topic))
+    ) {
+      fn();
+    }
+  }
 };
 
 // --- Public read API ---
@@ -75,8 +91,11 @@ export const getWorkerLogBuffer = (
 ): readonly LogEvent[] => workerLogBuffers.get(workerId) ?? [];
 
 // --- Public write API ---
-export const subscribe = (fn: Subscriber): () => void => {
-  subscribers.add(fn);
+export const subscribe = (
+  fn: Subscriber,
+  topics?: readonly StoreTopic[],
+): () => void => {
+  subscribers.set(fn, topics ? new Set(topics) : null);
   return (): void => {
     subscribers.delete(fn);
   };
@@ -84,17 +103,17 @@ export const subscribe = (fn: Subscriber): () => void => {
 
 export const setConnected = (v: boolean): void => {
   connected = v;
-  notify();
+  notify("connection");
 };
 
 export const setSelectedWorker = (w: SelectedWorker): void => {
   selectedWorker = w;
-  notify();
+  notify("selection");
 };
 
 export const clearLogEvents = (): void => {
   logEvents.length = 0;
-  notify();
+  notify("logs");
 };
 
 /** Dispatch an SSE event into the store. */
@@ -102,6 +121,7 @@ export const dispatch = (ev: GuiEvent): void => {
   if (ev.type === "log") {
     const logEv = ev as LogEvent;
     logEvents.push(logEv);
+    let iterationChanged = false;
     // Buffer worker-originated events for modal replay.
     if (logEv.workerId !== undefined) {
       const buf = workerLogBuffers.get(logEv.workerId) ?? [];
@@ -110,15 +130,29 @@ export const dispatch = (ev: GuiEvent): void => {
     }
     // Track iteration from log message.
     const m = logEv.message.match(/Round (\d+):/);
-    if (m) iteration = `iteration ${m[1]}`;
+    if (m) {
+      const nextIteration = `iteration ${m[1]}`;
+      iterationChanged = nextIteration !== iteration;
+      iteration = nextIteration;
+    }
+    notify(
+      "logs",
+      ...(logEv.workerId !== undefined ? ["worker_logs"] as const : []),
+      ...(iterationChanged ? ["iteration"] as const : []),
+    );
+    return;
   } else if (ev.type === "state") {
     orchestratorState = ev.to as string;
     if (ev.to === "done" || ev.to === "aborted") activeWorkers.clear();
+    notify("graph");
+    return;
   } else if (ev.type === "worker_active") {
     activeWorkers.set(ev.workerIndex as number, {
       scenario: ev.scenario as string,
       status: "running",
     });
+    notify("graph");
+    return;
   } else if (ev.type === "worker_done") {
     const scenario = (ev.scenario as string | undefined) ??
       activeWorkers.get(ev.workerIndex as number)?.scenario;
@@ -130,6 +164,8 @@ export const dispatch = (ev: GuiEvent): void => {
         status: "done",
       });
     }
+    notify("graph", "worker_logs");
+    return;
   } else if (ev.type === "merge_start") {
     const existing = activeWorkers.get(ev.workerIndex as number);
     if (existing) {
@@ -138,6 +174,8 @@ export const dispatch = (ev: GuiEvent): void => {
         status: "merging",
       });
     }
+    notify("graph");
+    return;
   } else if (ev.type === "merge_done") {
     const existing = activeWorkers.get(ev.workerIndex as number);
     if (existing) {
@@ -146,6 +184,7 @@ export const dispatch = (ev: GuiEvent): void => {
         status: "merged",
       });
     }
+    notify("graph");
+    return;
   }
-  notify();
 };

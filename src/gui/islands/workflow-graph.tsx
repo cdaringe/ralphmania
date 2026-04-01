@@ -380,9 +380,7 @@ const buildGraph = (
     });
 
     // Remove direct rw→val edge when workers exist
-    const rwValIdx = edges.findIndex((e: { id: string }) =>
-      e.id === "e-rw-val"
-    );
+    const rwValIdx = edges.findIndex((e) => e.id === "e-rw-val");
     if (rwValIdx >= 0) edges.splice(rwValIdx, 1);
   }
 
@@ -395,8 +393,10 @@ export default function WorkflowGraph(): preact.JSX.Element {
   useEffect(() => {
     if (!containerRef.current) return;
     let disposed = false;
+    let frameId: number | null = null;
     // deno-lint-ignore no-explicit-any
     let reactRoot: any;
+    let unsubscribe: (() => void) | undefined;
 
     (async (): Promise<void> => {
       // Load real React + React Flow from esm.sh.
@@ -457,12 +457,22 @@ export default function WorkflowGraph(): preact.JSX.Element {
         );
       };
 
+      const queueRender = (): void => {
+        if (frameId !== null) return;
+        frameId = globalThis.requestAnimationFrame(() => {
+          frameId = null;
+          if (!disposed) render();
+        });
+      };
+
       render();
-      subscribe(render);
+      unsubscribe = subscribe(queueRender, ["graph"]);
     })();
 
     return (): void => {
       disposed = true;
+      unsubscribe?.();
+      if (frameId !== null) globalThis.cancelAnimationFrame(frameId);
       reactRoot?.unmount();
     };
   }, []);

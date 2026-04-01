@@ -18,8 +18,8 @@ const GRAPH_PANEL_CSS = `
 #graph-panel{background:var(--bg);flex:1;overflow:hidden;position:relative}
 #graph-root{position:absolute;inset:0}
 @keyframes pulse{
-  0%,100%{box-shadow:0 0 3px rgba(34,197,94,.2)}
-  50%{box-shadow:0 0 12px rgba(34,197,94,.5)}
+  0%,100%{opacity:1}
+  50%{opacity:.82}
 }
 `;
 

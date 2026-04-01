@@ -56,7 +56,7 @@ export default function WorkerModal(): preact.JSX.Element | null {
           setEvents([...getWorkerLogBuffer(w.scenario)]);
           setFinished(isWorkerFinished(w.scenario));
         }
-      }),
+      }, ["selection", "worker_logs", "graph"]),
     [],
   );
 
