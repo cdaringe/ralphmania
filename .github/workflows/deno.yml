@@ -31,5 +31,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Install Chrome for Puppeteer
+        run: npx -y @puppeteer/browsers install chrome@147.0.7727.24 --path ~/.cache/puppeteer
       - name: Run tests
         run: deno task test
