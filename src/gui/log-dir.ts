@@ -84,17 +84,39 @@ export const resetWorkerLog = async (
   f.close();
 };
 
+const listLogFiles = async (): Promise<string[]> => {
+  const files: string[] = [];
+  try {
+    for await (const entry of Deno.readDir(LOG_DIR)) {
+      if (entry.isFile && entry.name.endsWith(".log")) {
+        files.push(`${LOG_DIR}/${entry.name}`);
+      }
+    }
+  } catch {
+    // Directory doesn't exist yet
+  }
+  return files.sort((a, b) => {
+    if (a.endsWith("/orchestrator.log")) return -1;
+    if (b.endsWith("/orchestrator.log")) return 1;
+    return a.localeCompare(b);
+  });
+};
+
 /**
  * Tail all log files in the log directory, calling `onEvent` for each
  * NDJSON line. Watches for new files appearing and starts tailing those
- * too. Returns a cleanup function.
+ * too.
  *
- * On start, reads all existing file contents (replay), then watches
- * for new data via `Deno.watchFs`.
+ * Initial-sync contract:
+ * 1. start `watchFs` first, so no writes can land in a replay/watch gap
+ * 2. replay all existing log content in deterministic order
+ * 3. call `onSnapshotComplete` once initial replay is fully drained
+ * 4. continue streaming live updates from the watcher
  */
 export const tailLogDir = async (
   onEvent: (event: GuiEvent) => void,
   signal: AbortSignal,
+  onSnapshotComplete?: () => void,
 ): Promise<void> => {
   // Track file read positions
   const positions = new Map<string, number>();
@@ -119,21 +141,30 @@ export const tailLogDir = async (
     }
   };
 
-  // Initial scan: read all existing files
+  // Start the watcher before replaying files so the client cannot miss
+  // writes that happen during the initial sync window.
+  let watcher: Deno.FsWatcher | undefined;
   try {
-    for await (const entry of Deno.readDir(LOG_DIR)) {
-      if (entry.isFile && entry.name.endsWith(".log")) {
-        await readNewLines(`${LOG_DIR}/${entry.name}`);
-      }
-    }
+    await Deno.mkdir(LOG_DIR, { recursive: true });
+    watcher = Deno.watchFs(LOG_DIR);
+    signal.addEventListener("abort", () => watcher?.close(), { once: true });
   } catch {
-    // Directory doesn't exist yet
+    watcher = undefined;
   }
 
-  // Watch for file changes
+  // Replay the authoritative current history first. `orchestrator.log`
+  // is ordered ahead of worker logs so the client sees the latest global
+  // orchestrator state before worker-local history.
+  for (const path of await listLogFiles()) {
+    await readNewLines(path);
+  }
+  // Signal that initial replay is complete; after this point the client
+  // can safely render the hydrated GUI state.
+  onSnapshotComplete?.();
+
+  if (!watcher) return;
+
   try {
-    const watcher = Deno.watchFs(LOG_DIR);
-    signal.addEventListener("abort", () => watcher.close(), { once: true });
     for await (const event of watcher) {
       if (signal.aborted) break;
       for (const path of event.paths) {

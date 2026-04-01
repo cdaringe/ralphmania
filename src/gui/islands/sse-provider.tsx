@@ -8,7 +8,12 @@
  * @module
  */
 import { useEffect } from "preact/hooks";
-import { dispatch, setConnected } from "./event-store.ts";
+import {
+  dispatch,
+  resetStore,
+  setConnected,
+  setHydrated,
+} from "./event-store.ts";
 import type { ComponentChildren } from "preact";
 
 type Props = { readonly children?: ComponentChildren };
@@ -19,15 +24,20 @@ export default function SseProvider({ children }: Props): ComponentChildren {
     let reconnectTimer: number | undefined;
 
     const connect = (): void => {
+      // Clear any stale UI state before starting a fresh initial sync.
+      resetStore();
       es = new EventSource("/events");
       es.onopen = (): void => setConnected(true);
+      es.addEventListener("initial_sync_complete", () => {
+        setHydrated(true);
+      });
       es.onmessage = (e: MessageEvent): void => {
         try {
           dispatch(JSON.parse(e.data));
         } catch { /* malformed event */ }
       };
       es.onerror = (): void => {
-        setConnected(false);
+        resetStore();
         es.close();
         reconnectTimer = setTimeout(connect, 3000) as unknown as number;
       };
@@ -37,6 +47,7 @@ export default function SseProvider({ children }: Props): ComponentChildren {
     return (): void => {
       es?.close();
       clearTimeout(reconnectTimer);
+      resetStore();
     };
   }, []);
 

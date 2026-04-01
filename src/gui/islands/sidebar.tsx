@@ -5,6 +5,8 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   getActiveWorkers,
+  getConnected,
+  getHydrated,
   getIteration,
   getOrchestratorState,
   setSelectedWorker,
@@ -17,6 +19,7 @@ const escHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export default function Sidebar(): preact.JSX.Element {
+  const [hydrated, setHydrated] = useState(getHydrated());
   const [state, setState] = useState(getOrchestratorState());
   const [iter, setIter] = useState(getIteration());
   const [workers, setWorkers] = useState<ReadonlyMap<number, WorkerInfo>>(
@@ -29,10 +32,13 @@ export default function Sidebar(): preact.JSX.Element {
       subscribe(() => {
         const newState = getOrchestratorState();
         if (newState !== state) fetchStatus();
+        const nextHydrated = getHydrated();
+        setHydrated(nextHydrated);
+        if (!getConnected() || !nextHydrated) setStatus(undefined);
         setState(newState);
         setIter(getIteration());
         setWorkers(new Map(getActiveWorkers()));
-      }, ["graph", "iteration"]),
+      }, ["graph", "hydration", "iteration"]),
     [state],
   );
 
@@ -76,7 +82,7 @@ export default function Sidebar(): preact.JSX.Element {
     <aside>
       <div>
         <div class="pt">Orchestrator</div>
-        <div id="state-val">{state}</div>
+        <div id="state-val">{hydrated ? state : "loading..."}</div>
       </div>
       <div>
         <div class="pt">
@@ -90,9 +96,13 @@ export default function Sidebar(): preact.JSX.Element {
           </a>
         </div>
         <div id="status-summary" style="font-size:11px;color:var(--muted)">
-          {summaryParts.length > 0 ? summaryParts.join(" \u00b7 ") : "\u2014"}
+          {!hydrated
+            ? "loading..."
+            : summaryParts.length > 0
+            ? summaryParts.join(" \u00b7 ")
+            : "\u2014"}
         </div>
-        {status && (
+        {hydrated && status && (
           <div id="status-list">
             {status.shared.map((s) => (
               <div class="srow" key={s.id}>

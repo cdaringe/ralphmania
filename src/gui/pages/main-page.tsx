@@ -56,7 +56,7 @@ export const MainPage = (): any => (
       />
     </head>
     <body>
-      <div id="app-root" />
+      <div id="app-root">Loading GUI...</div>
       <script type="module" src="/islands/boot.js" />
     </body>
   </html>

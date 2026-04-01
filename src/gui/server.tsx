@@ -103,9 +103,10 @@ export const startGuiServer = async (
   });
 
   // GET /events — SSE stream backed by tailing .ralph/worker-logs/*.log.
-  // On connect: replays all existing log file contents, then watches for
-  // new data. This means late-joiners receive the full event history and
-  // arrive at the correct state.
+  // Each new connection receives:
+  // 1. a full replay of current log-backed GUI state/history
+  // 2. one transport marker indicating initial sync is complete
+  // 3. live incremental events going forward
   app.get("/events", (_ctx) => {
     const clientAc = new AbortController();
     const clientSignal = clientAc.signal;
@@ -125,6 +126,17 @@ export const startGuiServer = async (
             }
           },
           clientSignal,
+          (): void => {
+            try {
+              controller.enqueue(
+                enc.encode(
+                  "event: initial_sync_complete\ndata: {}\n\n",
+                ),
+              );
+            } catch {
+              clientAc.abort();
+            }
+          },
         ).then(() => {
           try {
             controller.close();

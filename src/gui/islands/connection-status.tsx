@@ -4,24 +4,33 @@
  * @module
  */
 import { useEffect, useState } from "preact/hooks";
-import { getConnected, subscribe } from "./event-store.ts";
+import { getConnected, getHydrated, subscribe } from "./event-store.ts";
 
 export default function ConnectionStatus(): preact.JSX.Element {
   const [connected, setLocal] = useState(getConnected());
+  const [hydrated, setHydrated] = useState(getHydrated());
   useEffect(
-    () => subscribe(() => setLocal(getConnected()), ["connection"]),
+    () =>
+      subscribe(() => {
+        setLocal(getConnected());
+        setHydrated(getHydrated());
+      }, ["connection", "hydration"]),
     [],
   );
 
+  const live = connected && hydrated;
+
   return (
     <>
-      <span class={connected ? "badge" : "badge off"}>
-        {connected ? "live" : "disconnected"}
+      <span class={live ? "badge" : "badge off"}>
+        {live ? "live" : connected ? "loading" : "disconnected"}
       </span>
-      {!connected && (
+      {!live && (
         <div id="conn-status">
           <span class="dot" />
-          <span>connecting to server...</span>
+          <span>
+            {connected ? "loading current state..." : "reconnecting..."}
+          </span>
         </div>
       )}
     </>

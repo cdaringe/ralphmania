@@ -46,6 +46,7 @@ type Subscriber = () => void;
 type StoreTopic =
   | "connection"
   | "graph"
+  | "hydration"
   | "iteration"
   | "logs"
   | "selection"
@@ -53,6 +54,7 @@ type StoreTopic =
 
 // --- Mutable store ---
 let connected = false;
+let hydrated = false;
 let orchestratorState = "init";
 let iteration = "";
 const logEvents: LogEvent[] = [];
@@ -78,6 +80,7 @@ const notify = (...topics: StoreTopic[]): void => {
 
 // --- Public read API ---
 export const getConnected = (): boolean => connected;
+export const getHydrated = (): boolean => hydrated;
 export const getOrchestratorState = (): string => orchestratorState;
 export const getIteration = (): string => iteration;
 export const getLogEvents = (): readonly LogEvent[] => logEvents;
@@ -106,6 +109,11 @@ export const setConnected = (v: boolean): void => {
   notify("connection");
 };
 
+export const setHydrated = (v: boolean): void => {
+  hydrated = v;
+  notify("hydration");
+};
+
 export const setSelectedWorker = (w: SelectedWorker): void => {
   selectedWorker = w;
   notify("selection");
@@ -114,6 +122,28 @@ export const setSelectedWorker = (w: SelectedWorker): void => {
 export const clearLogEvents = (): void => {
   logEvents.length = 0;
   notify("logs");
+};
+
+/** Reset client-side GUI state while preserving active subscriptions. */
+export const resetStore = (): void => {
+  connected = false;
+  hydrated = false;
+  orchestratorState = "init";
+  iteration = "";
+  logEvents.length = 0;
+  workerLogBuffers.clear();
+  activeWorkers.clear();
+  selectedWorker = null;
+  finishedWorkers.clear();
+  notify(
+    "connection",
+    "graph",
+    "hydration",
+    "iteration",
+    "logs",
+    "selection",
+    "worker_logs",
+  );
 };
 
 /** Dispatch an SSE event into the store. */

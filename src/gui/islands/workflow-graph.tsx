@@ -11,6 +11,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import {
   getActiveWorkers,
+  getHydrated,
   getOrchestratorState,
   setSelectedWorker,
   subscribe,
@@ -414,6 +415,25 @@ export default function WorkflowGraph(): preact.JSX.Element {
       reactRoot = ReactDOMClient.createRoot(containerRef.current!);
 
       const render = (): void => {
+        if (!getHydrated()) {
+          reactRoot.render(
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "grid",
+                  placeItems: "center",
+                  height: "100%",
+                  color: MUTED,
+                  fontFamily: "'Cascadia Code','SF Mono','Fira Code',monospace",
+                  fontSize: 13,
+                },
+              },
+              "Loading workflow...",
+            ),
+          );
+          return;
+        }
         const as = getOrchestratorState();
         const workers = getActiveWorkers();
         const { nodes, edges } = buildGraph(as, workers, rf);
@@ -466,7 +486,7 @@ export default function WorkflowGraph(): preact.JSX.Element {
       };
 
       render();
-      unsubscribe = subscribe(queueRender, ["graph"]);
+      unsubscribe = subscribe(queueRender, ["graph", "hydration"]);
     })();
 
     return (): void => {
