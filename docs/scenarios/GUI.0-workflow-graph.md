@@ -1,129 +1,58 @@
-# GUI.0 — Visual Workflow Graph with Live Node Highlighting
+# GUI.0 — Live Workflow Graph with Worker Drill-In
 
 ## Scenario
 
-> The workflow loops (the task graphs) SHALL be modelled and presented visually.
-> Active nodes SHALL pulse. When workers are spawned, new nodes SHALL appear
-> with edges pointing to the merge/validating state. Workers SHALL be drillable
-> — clicking shows their streaming output and allows sending messages to them.
+> Model and present the workflow loop visually. Active nodes pulse; downstream
+> nodes stay inactive. When workers spawn, new nodes appear with edges into the
+> merge/validation path. Workers must be drillable to view streaming output and
+> send messages.
 
 ## Implementation
 
-### Architecture
-
-The graph is a **React Flow** application loaded via ESM (`esm.sh`) and mounted
-into `#graph-root` inside the `#graph-panel` tab of the main GUI page.
-
-```
-src/gui/client/main-script.ts  — GRAPH_MODULE_SCRIPT (React Flow app as string)
-src/gui/pages/main-page.tsx    — embeds the module as <script type="module">
-src/gui/logger.ts              — detects orchestrator log patterns → emits GuiEvents
-src/gui/events.ts              — GuiEventBus with merge_start/merge_done event types
-```
-
-### State Machine Graph (Static Topology)
-
-`makeStaticNodes` / `makeStaticEdges` hardcode all eight orchestrator states:
-
-| Node                 | Position                |
-| -------------------- | ----------------------- |
-| `init`               | top                     |
-| `reading_progress`   | main loop               |
-| `finding_actionable` | main loop               |
-| `running_workers`    | main loop               |
-| `validating`         | main loop               |
-| `checking_doneness`  | main loop               |
-| `done`               | terminal                |
-| `aborted`            | terminal (right branch) |
-
-The back-edge `checking_doneness → reading_progress` is drawn as a dashed purple
-`smoothstep` curve to make the loop visible. The `reading_progress → aborted`
-edge is a gray branch off to the right.
-
-### Active Node Pulsing
-
-`stateNodeStyle(state, activeState)` returns inline styles:
-
-- **Active**: bright green (`#22c55e`), 2px border, `box-shadow` glow,
-  `animation: pulse 1.5s ease-in-out infinite`
-- **Visited** (index < active in `STATE_ORDER`): darker green (`#16a34a`)
-- **Inactive**: gray with `opacity: 0.7`
-
-The `@keyframes pulse` animation cycles box-shadow intensity to create the
-pulsing effect.
-
-### Dynamic Worker Nodes
-
-When workers spawn (`worker_active` events arrive), `makeWorkerNodes` creates:
-
-1. **Worker node** per worker — label `W{i} {scenario}`, pulsing green while
-   running, amber while merging, solid green when done/merged
-2. **Merge pseudo-node** — appears between workers and `validating`; shows amber
-   pulse while any worker is merging
-3. **Edges**: `running_workers → worker-{i}`, `worker-{i} → merge`,
-   `merge → validating`
-
-The direct `running_workers → validating` edge is hidden when workers exist,
-replaced by the fan-out through worker nodes and the merge node.
-
-### Event Wiring
-
-The vanilla JS bridge (`window._onGraphEvent`) passes SSE events from the
-`/events` stream to the React component:
-
-| Event           | Effect                                               |
-| --------------- | ---------------------------------------------------- |
-| `state`         | `setActiveState(ev.to)` — highlights the target node |
-| `worker_active` | Adds worker to map with `status: 'running'`          |
-| `worker_done`   | Updates worker to `status: 'done'`                   |
-| `merge_start`   | Updates worker to `status: 'merging'`                |
-| `merge_done`    | Updates worker to `status: 'merged'`                 |
-
-`createGuiLogger` in `src/gui/logger.ts` detects four log patterns:
-
-```
-"Merging worker N (scenarioId)"      → merge_start event
-"Worker N merge: merged|conflict|no-changes"  → merge_done event
-```
-
-These patterns match exactly what `transitionRunningWorkers` logs in
-`src/machines/state-machine.ts` (lines 595, 604, 627, 632).
-
-### Worker Drill-in
-
-Clicking a worker node calls `window._openWorkerModal(workerIndex, scenario)`,
-which opens a modal with:
-
-- Filtered log stream (lines prefixed `[W{i}]`)
-- Textarea + Send button → `POST /input/{workerIndex}` → `AgentInputBus` → agent
-  stdin
-
-A "pop out" link navigates to `/worker/{id}` for a dedicated full-page view.
-
-### SSE Snapshot Replay
-
-Late-joining browsers receive the current state immediately: `createEventBus`
-tracks `lastState` and `activeWorkers` and replays them via `bus.snapshot()` in
-the SSE `start` handler of `src/gui/server.tsx`.
+- **Visualization stack**: `src/gui/pages/main-page.tsx` mounts the `WorkflowGraph`
+  island alongside the log panel. `GRAPH_PANEL_CSS` defines the `pulse`
+  keyframes used for live highlighting. Islands are compiled at startup by
+  `startGuiServer` (`src/gui/server.tsx`) and loaded from `/islands/*.js`.
+- **Event flow**: `createGuiLogger` (`src/gui/logger.ts`) tees every log into the
+  `GuiEventBus`, emitting structured `state`, `worker_active/done`,
+  `merge_start/done`, and `log` events. `mod.ts` subscribes the bus to
+  `writeOrchestratorEvent` so events land in `.ralph/worker-logs/` and are tailed
+  by `/events` SSE (`src/gui/log-dir.ts`, `src/gui/server.tsx`). On the client,
+  `event-store.ts` consumes SSE, maintains orchestrator state + active workers,
+  and feeds islands.
+- **Graph behavior** (`src/gui/islands/workflow-graph.tsx`):
+  - Static orchestrator nodes: `init → reading_progress → finding_actionable →
+    running_workers → validating → checking_doneness → done` with an
+    `aborted` branch and dashed loop-back edge. Active node pulses; visited nodes
+    turn solid green; inactive nodes are muted gray.
+  - Dynamic workers: `worker_active` events create `W{i} {scenario}` nodes that
+    pulse while running, turn amber during `merge_start`, and settle green after
+    `worker_done/merge_done`. Worker nodes fan out from `running_workers` into a
+    `merge` node, which only appears once workers exist; the direct
+    `running_workers → validating` edge is removed in that case to show the full
+    merge loop.
+  - **Drill-in**: clicking a worker node calls `setSelectedWorker`, opening
+    `WorkerModal` (`src/gui/islands/worker-modal.tsx`). The modal replays worker
+    log lines (buffered by `event-store.ts`), streams new ones, and posts user
+    input to `/input/:workerId` where `AgentInputBus` delivers it to the live
+    agent. Finished workers disable input and show an “inactive” badge. A “pop
+    out” link goes to `/worker/:id`.
+- **Late joiners**: `GuiEventBus.snapshot()` replays the latest state and active
+  workers into new SSE connections so the graph starts in the correct state even
+  mid-iteration.
 
 ## Evidence
 
-Key files:
-
-- `src/gui/client/main-script.ts` — `GRAPH_MODULE_SCRIPT`: complete React Flow
-  app with static nodes, edges, worker nodes, event subscriptions, animations
-- `src/gui/logger.ts` — `createGuiLogger` detects state transitions, worker
-  launches, worker completions, merge start/done
-- `src/gui/events.ts` — `GuiMergeStartEvent`, `GuiMergeDoneEvent` types;
-  `createEventBus` with snapshot replay
-- `src/machines/state-machine.ts:595,604,627,632` — logs matching merge patterns
-
-Tests:
-
-- `src/gui/client/main-script.test.ts` — 6 tests: all state nodes present,
-  worker lifecycle events handled, pulse animation, worker drill-in, loop
-  back-edge, dynamic merge node
-- `src/gui/server.test.ts` — `GET /` includes `#graph-root`, `#graph-panel`, tab
-  controls, `ReactFlow`, `running_workers`
-- `src/gui/logger.test.ts` — 7 tests: log emit, state transition, worker_active
-  (2 workers), worker_done, merge_start, merge_done, all merge outcomes
+- `src/gui/islands/workflow-graph.tsx` — React Flow graph with dynamic worker +
+  merge nodes, pulse styling, worker-click handler.
+- `src/gui/islands/event-store.ts` — SSE-backed store tracking orchestrator
+  state, worker lifecycle, and modal selection.
+- `src/gui/server.tsx` + `src/gui/log-dir.ts` — SSE over tailed
+  `.ralph/worker-logs/*`, `/input/:workerId` input endpoint, island compilation.
+- `test/gui_browser_e2e_test.ts` — browser tests validate node/edge rendering,
+  pulsing active nodes, worker lifecycle (active→merge→done), modal input
+  enabled/disabled, and sidebar/log updates.
+- `test/gui_graph_e2e_test.ts` — ensures islands exist, graph includes all
+  states, merge events flow through SSE, and logger emits merge events.
+- `test/gui_logger_test.ts` — structured events for state transitions, worker
+  launch/done, and merge start/done.
