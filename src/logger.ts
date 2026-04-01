@@ -1,4 +1,6 @@
 import type { Logger } from "./types.ts";
+import type { LoggerOutput } from "./ports/types.ts";
+import { defaultLoggerOutput } from "./ports/impl.ts";
 import {
   blue,
   bold,
@@ -9,19 +11,7 @@ import {
   red,
   yellow,
 } from "./colors.ts";
-
-/** Injectable output deps for the logger. */
-export type LoggerOutput = {
-  writeSync: (data: Uint8Array) => number;
-  writeErrSync: (data: Uint8Array) => number;
-};
-
-/* c8 ignore start — thin Deno I/O wiring */
-const defaultOutput: LoggerOutput = {
-  writeSync: (d) => Deno.stdout.writeSync(d),
-  writeErrSync: (d) => Deno.stderr.writeSync(d),
-};
-/* c8 ignore stop */
+export type { LoggerOutput } from "./ports/types.ts";
 
 const tagColor: Record<string, (s: string) => string> = {
   error: red,
@@ -39,7 +29,7 @@ const tagColor: Record<string, (s: string) => string> = {
 const colorizeTag = (tag: string): string => (tagColor[tag] ?? dim)(tag);
 
 export const createLogger = (
-  output: LoggerOutput = defaultOutput,
+  output: LoggerOutput = defaultLoggerOutput,
 ): Logger => {
   const encoder = new TextEncoder();
   return ({ tags, message }) => {

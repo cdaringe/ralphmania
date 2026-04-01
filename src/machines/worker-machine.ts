@@ -22,11 +22,13 @@ import type {
   Logger,
   ModelSelection,
 } from "../types.ts";
+import type { AgentRunDeps } from "../ports/types.ts";
 import type { HookContext, Plugin } from "../plugin.ts";
 import { getModel, resolveModelSelection } from "../model.ts";
 import { CLAUDE_CODER, CLAUDE_ESCALATED } from "../constants.ts";
 import { buildCommandSpec, buildPrompt } from "../command.ts";
 import type { AgentInputBus } from "../gui/input-bus.ts";
+export type { AgentRunDeps } from "../ports/types.ts";
 
 // ---------------------------------------------------------------------------
 // Model resolution
@@ -245,27 +247,6 @@ export const transitionPromptBuilt = async (
     selection: state.selection,
     spec,
   };
-};
-
-/**
- * Dependencies for the agent execution step — the only I/O boundary
- * in the worker pipeline. Injectable for testing.
- */
-export type AgentRunDeps = {
-  /** Spawn the agent, stream output, return the iteration result. */
-  readonly execute: (opts: {
-    spec: CommandSpec;
-    agent: Agent;
-    selection: ModelSelection;
-    iterationNum: number;
-    signal: AbortSignal;
-    log: Logger;
-    cwd: string | undefined;
-    /** Worker index used to build a colored per-line stdio prefix. */
-    workerIndex?: number;
-    /** When provided, the agent subprocess stdin is piped and registered here. */
-    agentInputBus?: AgentInputBus;
-  }) => Promise<IterationResult>;
 };
 
 export const transitionCommandBuilt = (

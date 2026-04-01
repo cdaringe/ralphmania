@@ -1,4 +1,6 @@
 import type { Logger, Result, ValidationResult } from "./types.ts";
+import type { ValidationHookDeps } from "./ports/types.ts";
+import { defaultValidationHookDeps } from "./ports/impl.ts";
 import { err, ok } from "./types.ts";
 import {
   nonInteractiveEnv,
@@ -8,24 +10,11 @@ import {
   VALIDATE_TEMPLATE,
 } from "./constants.ts";
 
-/** Injectable filesystem deps for ensureValidationHook. */
-export type ValidationHookDeps = {
-  exists: (path: string) => Promise<boolean>;
-  writeTextFile: (path: string, content: string) => Promise<void>;
-  chmod: (path: string, mode: number) => Promise<void>;
-};
-
-/* c8 ignore start — thin Deno I/O wiring */
-const defaultHookDeps: ValidationHookDeps = {
-  exists: (p) => Deno.stat(p).then(() => true, () => false),
-  writeTextFile: (p, c) => Deno.writeTextFile(p, c),
-  chmod: (p, m) => Deno.chmod(p, m),
-};
-/* c8 ignore stop */
+export type { ValidationHookDeps } from "./ports/types.ts";
 
 export const ensureValidationHook = async (
   log: Logger,
-  deps: ValidationHookDeps = defaultHookDeps,
+  deps: ValidationHookDeps = defaultValidationHookDeps,
 ): Promise<Result<void, string>> => {
   try {
     if (await deps.exists(VALIDATE_SCRIPT)) return ok(undefined);

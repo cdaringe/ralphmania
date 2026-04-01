@@ -7,6 +7,12 @@
 
 See @ARCHITECTURE.md for full system diagram. Key concepts:
 
+- **Ports/Adapters (ARCH.1)**:
+  - `src/ports/types.ts` = port contracts only (`MachineDeps`, `AgentRunDeps`,
+    `ModelIODeps`, `ProgressFileDeps`, `ValidationHookDeps`, `LoggerOutput`)
+  - `src/ports/impl.ts` = default Deno adapter implementations only
+  - Domain modules consume these ports and keep logic pure: `src/machines/*.ts`,
+    `src/model.ts`, `src/progress.ts`, `src/validation.ts`, `src/logger.ts`
 - **Orchestrator** (`src/orchestrator/mod.ts`) drives `runParallelLoop` via
   `src/machines/state-machine.ts`; `src/orchestrator/escalation.ts` manages
   escalation state; `src/orchestrator/progress-queries.ts` provides progress
@@ -74,13 +80,9 @@ See `docs/scenarios/` for all scenario write-ups. Scenario status tracked in
 
 Notable implementations:
 
-- ARCH.1: Hexagonal arch via ports (`MachineDeps`, `AgentRunDeps`,
-  `ValidationHookDeps`, `ModelIODeps`, `ProgressFileDeps`) + pure domain modules
-  in `src/machines/`, `src/parsers/`, `src/model.ts`, `src/command.ts` +
-  adapters wired by `orchestrator.ts`. Structural enforcement in
-  `test/arch_1_test.ts` (Deno-call purity checks + port shape + in-memory
-  adapter). In-memory fakes in `test/fixtures.ts` (`stubDeps`,
-  `createProgressStore`).
+- ARCH.1: contracts in `src/ports/types.ts`; default adapters in
+  `src/ports/impl.ts`; domain modules import ports. Enforced by
+  `test/arch_1_test.ts` (purity + contract centralization + integration + e2e).
 - ARCH.2: `src/model.ts` owns all derivations — `orderActionableScenarios`
   (rework-first ordering) and `computeEffectiveLevel` (escalation merge);
   pipeline stages in `src/machines/state-machine.ts` are thin orchestrators only
@@ -95,3 +97,10 @@ Notable implementations:
 - Scenario 22: `src/state.ts` checkpoint serialization
   (`.ralph/loop-state.json`)
 - Scenario 8/19: escalation ladder in `src/model.ts` + `.ralph/escalation.json`
+
+## Ops Quicklinks
+
+- Spec: `specification.md`
+- Progress: `progress.md`
+- Architecture: `ARCHITECTURE.md`
+- Runtime state dir: `.ralph/` (currently no `.ralph/*.md` docs in this branch)

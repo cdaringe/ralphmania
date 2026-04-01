@@ -20,7 +20,8 @@ import {
   readLoopCheckpoint,
   writeLoopCheckpoint,
 } from "../state.ts";
-import type { MachineContext, MachineDeps } from "../machines/state-machine.ts";
+import type { MachineContext } from "../machines/state-machine.ts";
+import type { MachineDeps } from "../ports/types.ts";
 import { isTerminal, transition } from "../machines/state-machine.ts";
 import type { OrchestratorState } from "../machines/state-machine.ts";
 export type { WorkerResult } from "../machines/state-machine.ts";

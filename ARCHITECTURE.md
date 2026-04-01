@@ -148,11 +148,29 @@ graph TD
 
         model.ts --> constants.ts
         model.ts --> types.ts
+        model.ts --> ports/types.ts
+        model.ts --> ports/impl.ts
 
         command.ts --> types.ts
         command.ts --> constants.ts
 
         logger.ts --> colors.ts
+        logger.ts --> ports/types.ts
+        logger.ts --> ports/impl.ts
+
+        progress.ts --> ports/types.ts
+        progress.ts --> ports/impl.ts
+
+        validation.ts --> ports/types.ts
+        validation.ts --> ports/impl.ts
+
+        state-machine.ts --> ports/types.ts
+        worker-machine.ts --> ports/types.ts
+
+        subgraph Ports ["src/ports/"]
+            portsTypes[types.ts]
+            portsImpl[impl.ts]
+        end
     end
 
     subgraph Runtime ["Runtime Files"]

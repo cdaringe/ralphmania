@@ -9,7 +9,15 @@
  * @module
  */
 
-import { assert } from "jsr:@std/assert@^1.0.11";
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+} from "jsr:@std/assert@^1.0.11";
+import { runParallelLoop } from "../src/orchestrator/mod.ts";
+import { defaultProgressFileDeps } from "../src/ports/impl.ts";
+import { ensureProgressFile } from "../src/progress.ts";
+import { createProgressStore, integrationDeps, noopLog } from "./fixtures.ts";
 
 // ---------------------------------------------------------------------------
 // Helper: strip c8-ignored wiring blocks then scan for Deno.* usage
@@ -133,4 +141,87 @@ Deno.test("ARCH.1: ProgressFileDeps in-memory adapter runs ensureProgressFile wi
     io,
   );
   assert("out.md" in files, "progress file written via in-memory adapter");
+});
+
+Deno.test("ARCH.1: contracts are centralized in src/ports/types.ts", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../src/ports/types.ts", import.meta.url),
+  );
+  const expected = [
+    "export type ProgressFileDeps",
+    "export type ValidationHookDeps",
+    "export type LoggerOutput",
+    "export type ModelIODeps",
+    "export type AgentRunDeps",
+    "export type MachineDeps",
+  ] as const;
+  for (const token of expected) {
+    assertStringIncludes(src, token);
+  }
+});
+
+Deno.test("ARCH.1: port type declarations are not duplicated in domain modules", async () => {
+  const files = [
+    "../src/logger.ts",
+    "../src/model.ts",
+    "../src/progress.ts",
+    "../src/validation.ts",
+    "../src/machines/state-machine.ts",
+    "../src/machines/worker-machine.ts",
+  ] as const;
+  const pattern =
+    /export type (ProgressFileDeps|ValidationHookDeps|LoggerOutput|ModelIODeps|AgentRunDeps|MachineDeps)\s*=/;
+  for (const relPath of files) {
+    const src = await Deno.readTextFile(new URL(relPath, import.meta.url));
+    assert(
+      !pattern.test(src),
+      `${relPath} still declares a port contract inline`,
+    );
+  }
+});
+
+Deno.test("ARCH.1 [integration]: orchestrator runs against injected MachineDeps end-to-end", async () => {
+  const progress = createProgressStore("| ARCH.1 |          |      |");
+  let iterations = 0;
+
+  const iterationsUsed = await runParallelLoop({
+    agent: "claude",
+    iterations: 3,
+    parallelism: 1,
+    expectedScenarioIds: ["ARCH.1"],
+    signal: AbortSignal.timeout(10_000),
+    log: noopLog,
+    plugin: {},
+    level: undefined,
+    deps: integrationDeps({
+      progress,
+      onIteration: ({ progress }) => {
+        iterations++;
+        progress.set("| ARCH.1 | VERIFIED | done |");
+      },
+    }),
+  });
+
+  assertEquals(iterationsUsed, 1);
+  assertEquals(iterations, 1);
+  assertEquals(progress.get().includes("VERIFIED"), true);
+});
+
+Deno.test("ARCH.1 [e2e]: default Deno port adapter round-trips real filesystem I/O", async () => {
+  const dir = await Deno.makeTempDir({ prefix: "arch1-ports-" });
+  try {
+    const specFile = `${dir}/spec.md`;
+    const progressFile = `${dir}/progress.md`;
+    await defaultProgressFileDeps.writeTextFile(
+      specFile,
+      "| ARCH.1 | Architecture | hexagonal architecture |\n",
+    );
+
+    await ensureProgressFile(noopLog, { specFile, progressFile });
+    const content = await defaultProgressFileDeps.readTextFile(progressFile);
+
+    assertStringIncludes(content, "| ARCH.1");
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
 });

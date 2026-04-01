@@ -6,6 +6,8 @@ import type {
   ModelSelection,
   Result,
 } from "./types.ts";
+import type { ModelIODeps } from "./ports/types.ts";
+import { defaultModelIODeps } from "./ports/impl.ts";
 import { err, ok } from "./types.ts";
 import {
   CLAUDE_CODER,
@@ -28,20 +30,7 @@ import {
   parseTotalCount,
 } from "./orchestrator/progress-queries.ts";
 
-/** Injectable I/O deps for model resolution functions. */
-export type ModelIODeps = {
-  readTextFile: (path: string) => Promise<string>;
-  writeTextFile: (path: string, content: string) => Promise<void>;
-  mkdir: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
-};
-
-/* c8 ignore start — thin Deno I/O wiring */
-const defaultModelIO: ModelIODeps = {
-  readTextFile: (p) => Deno.readTextFile(p),
-  writeTextFile: (p, c) => Deno.writeTextFile(p, c),
-  mkdir: (p, o) => Deno.mkdir(p, o),
-};
-/* c8 ignore stop */
+export type { ModelIODeps } from "./ports/types.ts";
 
 export const getModel = (
   { agent, mode }: { agent: Agent; mode: "fast" | "general" | "strong" },
@@ -256,14 +245,19 @@ const resolveCodexSelection = (
 };
 
 export const resolveModelSelection = async (
-  { agent, log, minLevel, progressFile = "./progress.md", io = defaultModelIO }:
-    {
-      agent: Agent;
-      log: Logger;
-      minLevel?: EscalationLevel;
-      progressFile?: string;
-      io?: ModelIODeps;
-    },
+  {
+    agent,
+    log,
+    minLevel,
+    progressFile = "./progress.md",
+    io = defaultModelIODeps,
+  }: {
+    agent: Agent;
+    log: Logger;
+    minLevel?: EscalationLevel;
+    progressFile?: string;
+    io?: ModelIODeps;
+  },
 ): Promise<ModelSelection> => {
   const defaultMode = "fast" as const;
   const defaults: ModelSelection = {

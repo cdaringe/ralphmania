@@ -12,12 +12,10 @@ import type {
   EscalationState,
   IterationResult,
   Logger,
-  LoopCheckpoint,
-  Result,
-  ValidationResult,
 } from "../types.ts";
 import type { WorktreeInfo } from "../git/worktree.ts";
 import type { Plugin } from "../plugin.ts";
+import type { MachineDeps } from "../ports/types.ts";
 import {
   computeEffectiveLevel,
   updateEscalationState,
@@ -33,6 +31,7 @@ import { parseScenarioIds } from "../progress.ts";
 import { dim, green, yellow } from "../colors.ts";
 import { difference, xor } from "../set-fns.ts";
 import { Status } from "../constants.ts";
+export type { MachineDeps } from "../ports/types.ts";
 
 // ---------------------------------------------------------------------------
 // Deep completion verification — re-reads spec + progress from disk
@@ -88,73 +87,6 @@ const verifyCompletion = async (
     done: allVerifiedResult.isOk() && allVerifiedResult.value,
     freshSpecIds,
   };
-};
-
-// ---------------------------------------------------------------------------
-// Dependencies (same as ParallelDeps, re-exported for convenience)
-// ---------------------------------------------------------------------------
-
-/** Dependencies injectable for testing. */
-export type MachineDeps = {
-  readonly readProgress: () => Promise<string>;
-  readonly readSpec: () => Promise<string>;
-  readonly createWorktree: (
-    opts: { scenario: string; workerIndex: number; log: Logger },
-  ) => Promise<Result<WorktreeInfo, string>>;
-  readonly runIteration: (
-    opts: {
-      iterationNum: number;
-      agent: Agent;
-      signal: AbortSignal;
-      log: Logger;
-      validationFailurePath: string | undefined;
-      plugin: Plugin;
-      level: EscalationLevel | undefined;
-      cwd?: string;
-      targetScenarioOverride?: string;
-      specFile?: string;
-      progressFile?: string;
-      /** Worker index forwarded to the agent executor for stdio prefixing. */
-      workerIndex?: number;
-    },
-  ) => Promise<IterationResult>;
-  readonly runValidation: (
-    opts: { iterationNum: number; log: Logger; cwd?: string },
-  ) => Promise<ValidationResult>;
-  readonly hasNewCommits: (
-    opts: { worktree: WorktreeInfo; log: Logger },
-  ) => Promise<boolean>;
-  readonly mergeWorktree: (
-    opts: { worktree: WorktreeInfo; log: Logger },
-  ) => Promise<"merged" | "conflict">;
-  readonly cleanupWorktree: (
-    opts: { worktree: WorktreeInfo; log: Logger },
-  ) => Promise<Result<void, string>>;
-  readonly resetWorkingTree: (
-    opts: { log: Logger },
-  ) => Promise<Result<void, string>>;
-  readonly reconcileMerge: (
-    opts: {
-      worktree: WorktreeInfo;
-      agent: Agent;
-      signal: AbortSignal;
-      log: Logger;
-    },
-  ) => Promise<void>;
-  readonly readCheckpoint: () => Promise<LoopCheckpoint | undefined>;
-  readonly writeCheckpoint: (checkpoint: LoopCheckpoint) => Promise<void>;
-  readonly clearCheckpoint: () => Promise<void>;
-  readonly readEscalationState: (log: Logger) => Promise<EscalationState>;
-  readonly writeEscalationState: (
-    state: EscalationState,
-    log: Logger,
-  ) => Promise<void>;
-  readonly selectScenarioBatch: (opts: {
-    scenarioIds: readonly string[];
-    specFile: string | undefined;
-    parallelism: number;
-    log: Logger;
-  }) => Promise<readonly string[]>;
 };
 
 // ---------------------------------------------------------------------------

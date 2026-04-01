@@ -1,4 +1,6 @@
 import type { Logger } from "./types.ts";
+import type { ProgressFileDeps } from "./ports/types.ts";
+import { defaultProgressFileDeps } from "./ports/impl.ts";
 import { parseProgressRows } from "./parsers/progress-rows.ts";
 
 const PROGRESS_FILE = "progress.md";
@@ -42,25 +44,7 @@ export const DEFAULT_FILE_PATHS: FilePaths = {
   progressFile: PROGRESS_FILE,
 };
 
-/**
- * File I/O port for progress file operations.
- * Inject a custom implementation in tests to avoid real filesystem access
- * and keep domain logic portable (hexagonal architecture).
- */
-export type ProgressFileDeps = {
-  readonly readTextFile: (path: string) => Promise<string>;
-  readonly writeTextFile: (path: string, content: string) => Promise<void>;
-  /** Resolves if file exists, rejects if not. Return value is unused. */
-  readonly stat: (path: string) => Promise<unknown>;
-};
-
-/* c8 ignore start — thin Deno I/O wiring */
-const defaultProgressFileDeps: ProgressFileDeps = {
-  readTextFile: (path) => Deno.readTextFile(path),
-  writeTextFile: (path, content) => Deno.writeTextFile(path, content),
-  stat: (path) => Deno.stat(path),
-};
-/* c8 ignore stop */
+export type { ProgressFileDeps } from "./ports/types.ts";
 
 const writeProgressTemplate = async (
   log: Logger,

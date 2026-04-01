@@ -25,7 +25,7 @@ import {
   isWorkerTerminal,
   workerTransition,
 } from "./machines/worker-machine.ts";
-import type { AgentRunDeps } from "./machines/worker-machine.ts";
+import type { AgentRunDeps } from "./ports/types.ts";
 
 /**
  * Parse an NDJSON line from `claude --output-format=stream-json` and extract
