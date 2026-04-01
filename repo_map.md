@@ -80,6 +80,11 @@ See @ARCHITECTURE.md for full system diagram. Key concepts:
   state. Dynamic worker nodes/merge node pulse with activity; clicking opens
   `worker-modal.tsx` (log replay + /input POST). SSE tails
   `.ralph/worker-logs/*` via `src/gui/log-dir.ts` and `server.tsx`.
+- **Scenario editing (GUI.e)**: PATCH `/api/scenario/:id` validates allowed
+  statuses (NEEDS_REWORK requires notes; OBSOLETE clears them) and rewrites
+  `progress.md` via `updateProgressRow`. Scenario page island surfaces buttons
+  for NEEDS_REWORK and OBSOLETE. SSE tailer canonicalizes log paths and polls to
+  keep the GUI stream reliable.
 
 ## Scenarios Index
 

@@ -11,6 +11,7 @@ import type { GuiEvent } from "./events.ts";
 
 const LOG_DIR = ".ralph/worker-logs";
 const ORCHESTRATOR_LOG = `${LOG_DIR}/orchestrator.log`;
+const POLL_INTERVAL_MS = 200;
 
 /** Ensures the log directory exists and truncates all log files. */
 export const initLogDir = async (): Promise<void> => {
@@ -121,13 +122,23 @@ export const tailLogDir = async (
   // Track file read positions
   const positions = new Map<string, number>();
 
+  const canonicalPath = (path: string): string =>
+    path.startsWith("/") ? path : `${Deno.cwd()}/${path}`;
+
+  const readAllLogs = async (): Promise<void> => {
+    for (const path of await listLogFiles()) {
+      await readNewLines(path);
+    }
+  };
+
   const readNewLines = async (path: string): Promise<void> => {
+    const canonical = canonicalPath(path);
     try {
       const content = await Deno.readTextFile(path);
-      const pos = positions.get(path) ?? 0;
+      const pos = positions.get(canonical) ?? 0;
       if (content.length <= pos) return;
       const newContent = content.slice(pos);
-      positions.set(path, content.length);
+      positions.set(canonical, content.length);
       for (const line of newContent.split("\n")) {
         if (line.length === 0) continue;
         try {
@@ -152,6 +163,14 @@ export const tailLogDir = async (
     watcher = undefined;
   }
 
+  // Polling safety net: even if the watcher drops an event, periodic
+  // reads will eventually stream new lines to the client.
+  const pollId = setInterval(() => {
+    if (signal.aborted) return;
+    readAllLogs().catch(() => {});
+  }, POLL_INTERVAL_MS);
+  signal.addEventListener("abort", () => clearInterval(pollId), { once: true });
+
   // Replay the authoritative current history first. `orchestrator.log`
   // is ordered ahead of worker logs so the client sees the latest global
   // orchestrator state before worker-local history.
@@ -162,7 +181,13 @@ export const tailLogDir = async (
   // can safely render the hydrated GUI state.
   onSnapshotComplete?.();
 
-  if (!watcher) return;
+  if (!watcher) {
+    await new Promise<void>((resolve) => {
+      signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    clearInterval(pollId);
+    return;
+  }
 
   try {
     for await (const event of watcher) {
@@ -175,5 +200,7 @@ export const tailLogDir = async (
     }
   } catch {
     // Watcher closed or directory gone
+  } finally {
+    clearInterval(pollId);
   }
 };

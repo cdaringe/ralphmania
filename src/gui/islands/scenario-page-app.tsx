@@ -27,6 +27,7 @@ type State =
     readonly reworkText: string;
     readonly saving: boolean;
     readonly saveMessage: string;
+    readonly saveError: boolean;
   };
 
 type Action =
@@ -46,6 +47,7 @@ const reducer = (state: State, action: Action): State => {
         reworkText: action.detail.reworkNotes,
         saving: false,
         saveMessage: "",
+        saveError: false,
       };
     case "error":
       return { phase: "error", message: action.message };
@@ -55,7 +57,7 @@ const reducer = (state: State, action: Action): State => {
         : state;
     case "save_start":
       return state.phase === "loaded"
-        ? { ...state, saving: true, saveMessage: "" }
+        ? { ...state, saving: true, saveMessage: "", saveError: false }
         : state;
     case "save_done":
       return state.phase === "loaded"
@@ -65,11 +67,17 @@ const reducer = (state: State, action: Action): State => {
           reworkText: action.detail.reworkNotes,
           saving: false,
           saveMessage: "saved",
+          saveError: false,
         }
         : state;
     case "save_error":
       return state.phase === "loaded"
-        ? { ...state, saving: false, saveMessage: action.message }
+        ? {
+          ...state,
+          saving: false,
+          saveMessage: action.message,
+          saveError: true,
+        }
         : state;
   }
 };
@@ -112,13 +120,10 @@ export default function ScenarioPageApp(): preact.JSX.Element {
       .catch((e) => dispatch({ type: "error", message: String(e) }));
   }, [scenarioId]);
 
-  const submitRework = (): void => {
+  const submitUpdate = (status: string, reworkNotes: string): void => {
     if (state.phase !== "loaded" || state.saving) return;
     dispatch({ type: "save_start" });
-    patchScenario(scenarioId, {
-      status: "NEEDS_REWORK",
-      reworkNotes: state.reworkText,
-    })
+    patchScenario(scenarioId, { status, reworkNotes })
       .then((res) => {
         if (!res.ok) {
           dispatch({ type: "save_error", message: res.error ?? "unknown" });
@@ -130,6 +135,21 @@ export default function ScenarioPageApp(): preact.JSX.Element {
         );
       })
       .catch((e) => dispatch({ type: "save_error", message: String(e) }));
+  };
+
+  const submitRework = (): void => {
+    if (state.phase !== "loaded" || state.saving) return;
+    const notes = state.reworkText.trim();
+    if (!notes) {
+      dispatch({ type: "save_error", message: "Add rework notes first" });
+      return;
+    }
+    submitUpdate("NEEDS_REWORK", notes);
+  };
+
+  const submitObsolete = (): void => {
+    if (state.phase !== "loaded" || state.saving) return;
+    submitUpdate("OBSOLETE", "");
   };
 
   return (
@@ -196,7 +216,7 @@ export default function ScenarioPageApp(): preact.JSX.Element {
             </div>
 
             <div class="rework-form">
-              <h3>Mark as Needs Rework</h3>
+              <h3>Scenario Actions</h3>
               <textarea
                 value={state.reworkText}
                 onInput={(e): void =>
@@ -210,17 +230,22 @@ export default function ScenarioPageApp(): preact.JSX.Element {
                 <button
                   type="button"
                   class="rework-btn danger"
-                  disabled={state.saving}
+                  disabled={state.saving ||
+                    state.reworkText.trim().length === 0}
                   onClick={submitRework}
                 >
                   {state.saving ? "Saving..." : "Mark NEEDS_REWORK"}
                 </button>
+                <button
+                  type="button"
+                  class="rework-btn"
+                  disabled={state.saving}
+                  onClick={submitObsolete}
+                >
+                  {state.saving ? "Saving..." : "Mark OBSOLETE"}
+                </button>
                 <span
-                  class={`rework-status${
-                    state.saveMessage && state.saveMessage !== "saved"
-                      ? " error"
-                      : ""
-                  }`}
+                  class={`rework-status${state.saveError ? " error" : ""}`}
                 >
                   {state.saveMessage}
                 </span>

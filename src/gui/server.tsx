@@ -54,6 +54,14 @@ const htmlResponse = (jsx: preact.VNode): Response =>
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 
+const ALLOWED_STATUSES = new Set([
+  "WIP",
+  "WORK_COMPLETE",
+  "VERIFIED",
+  "NEEDS_REWORK",
+  "OBSOLETE",
+]);
+
 export type GuiServerHandle = {
   /** The actual port the server is listening on. */
   readonly port: number;
@@ -151,9 +159,7 @@ export const startGuiServer = async (
           (): void => {
             try {
               controller.enqueue(
-                enc.encode(
-                  "event: initial_sync_complete\ndata: {}\n\n",
-                ),
+                enc.encode(": initial_sync_complete\n\n"),
               );
             } catch {
               clientAc.abort();
@@ -213,13 +219,30 @@ export const startGuiServer = async (
     }
     try {
       const body = await ctx.req.json();
-      const status = typeof body.status === "string" ? body.status : "";
-      const reworkNotes = typeof body.reworkNotes === "string"
+      const status = typeof body.status === "string"
+        ? body.status.trim().toUpperCase()
+        : "";
+      const reworkNotesRaw = typeof body.reworkNotes === "string"
         ? body.reworkNotes
         : "";
       if (!status) {
         return Response.json(
           { ok: false, error: "status is required" },
+          { status: 400 },
+        );
+      }
+      if (!ALLOWED_STATUSES.has(status)) {
+        return Response.json(
+          { ok: false, error: "invalid status" },
+          { status: 400 },
+        );
+      }
+      const reworkNotes = status === "OBSOLETE"
+        ? ""
+        : reworkNotesRaw.replace(/\s+/g, " ").trim();
+      if (status === "NEEDS_REWORK" && reworkNotes.length === 0) {
+        return Response.json(
+          { ok: false, error: "reworkNotes required for NEEDS_REWORK" },
           { status: 400 },
         );
       }

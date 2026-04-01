@@ -28,5 +28,5 @@ Intent: make the port/adapter boundary obvious from module conventions.
   - no raw `Deno.*` in pure/domain modules
 - Integration coverage: `ARCH.1 [integration]` test in `test/arch_1_test.ts`
   validates orchestrator execution against injected `MachineDeps`.
-- E2E coverage: `ARCH.1 [e2e]` test in `test/arch_1_test.ts` validates
-  real filesystem adapter round-trip through `defaultProgressFileDeps`.
+- E2E coverage: `ARCH.1 [e2e]` test in `test/arch_1_test.ts` validates real
+  filesystem adapter round-trip through `defaultProgressFileDeps`.

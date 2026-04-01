@@ -27,10 +27,10 @@ export default function SseProvider({ children }: Props): ComponentChildren {
       // Clear any stale UI state before starting a fresh initial sync.
       resetStore();
       es = new EventSource("/events");
-      es.onopen = (): void => setConnected(true);
-      es.addEventListener("initial_sync_complete", () => {
+      es.onopen = (): void => {
+        setConnected(true);
         setHydrated(true);
-      });
+      };
       es.onmessage = (e: MessageEvent): void => {
         try {
           dispatch(JSON.parse(e.data));
