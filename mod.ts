@@ -72,6 +72,9 @@ import { createGuiLogger } from "./src/gui/logger.ts";
 import { initLogDir, writeOrchestratorEvent } from "./src/gui/log-dir.ts";
 import { startGuiServer } from "./src/gui/server.tsx";
 import { createAgentInputBus } from "./src/gui/input-bus.ts";
+import { createTui } from "./src/tui/mod.ts";
+import type { TuiController } from "./src/tui/mod.ts";
+import { defaultLoggerOutput } from "./src/ports/impl.ts";
 
 const printBanner = (
   { agent, iterations, level, parallel }: {
@@ -125,7 +128,14 @@ const printBanner = (
 };
 
 const main = async (): Promise<number> => {
-  let log = createLogger();
+  // Mutable output reference — allows the TUI to take over Deno.stdout
+  // writes mid-run without recreating the logger or the GUI logger chain.
+  let currentOutput = defaultLoggerOutput;
+  const mutableOutput = {
+    writeSync: (d: Uint8Array) => currentOutput.writeSync(d),
+    writeErrSync: (d: Uint8Array) => currentOutput.writeErrSync(d),
+  };
+  let log = createLogger(mutableOutput);
   const parsed = await parseCliArgsInteractive(Deno.args, version);
 
   if (parsed.isErr()) {
@@ -174,16 +184,16 @@ const main = async (): Promise<number> => {
   printBanner({ agent, iterations, level, parallel });
 
   const guiController = new AbortController();
+  // Event bus is always created so both --gui (web) and TUI can use it.
+  const bus = createEventBus();
   let agentInputBus: import("./src/gui/input-bus.ts").AgentInputBus | undefined;
   if (gui) {
-    const bus = createEventBus();
     agentInputBus = createAgentInputBus();
     await initLogDir();
     // Bridge: bus events → orchestrator log file for SSE file-tailing
     bus.subscribe((event) => {
       writeOrchestratorEvent(event);
     });
-    log = createGuiLogger(log, bus);
     const readSpecAndProgress = async () => {
       const [specRaw, progressRaw] = await Promise.all([
         Deno.readTextFile(filePaths.specFile).catch(() => ""),
@@ -218,6 +228,8 @@ const main = async (): Promise<number> => {
       },
     }).then((h) => h.finished).catch((): void => {});
   }
+  // Always bridge logger → event bus so both TUI and web GUI receive events.
+  log = createGuiLogger(log, bus);
 
   const shutdownController = new AbortController();
   const onSigint = (): void => {
@@ -233,6 +245,10 @@ const main = async (): Promise<number> => {
 
   await ensureProgressFile(log, filePaths);
 
+  // Declared outside the try so finally can access them.
+  let tui: TuiController | undefined;
+  let progressPollId: number | undefined;
+
   try {
     const hookResult = await ensureValidationHook(log);
     if (hookResult.isErr()) {
@@ -245,6 +261,37 @@ const main = async (): Promise<number> => {
     );
     const expectedScenarioIds = parseScenarioIds(specContent);
     const loopStartedAt = Date.now();
+
+    // ── TUI setup ──────────────────────────────────────────────────────────
+    // Activate the terminal UI when stdout is a TTY and the web GUI is off.
+    // The TUI subscribes to `bus` (already wired above) and renders a live
+    // status bar at the bottom of the terminal with worker-stream filtering.
+    if (Deno.stdout.isTerminal() && !gui) {
+      tui = createTui({
+        bus,
+        total: expectedScenarioIds.length,
+        signal: shutdownController.signal,
+      });
+      // Route logger output through the TUI so the status bar is maintained.
+      currentOutput = tui.loggerOutput;
+      // Poll progress.md every 4 s to update the "verified" counter.
+      const activeTui = tui;
+      progressPollId = setInterval(async () => {
+        const raw = await Deno.readTextFile(filePaths.progressFile).catch(
+          () => "",
+        );
+        const section = raw.split("END_DEMO")[1] ?? "";
+        const rows = parseProgressRows(section);
+        if (rows.isOk()) {
+          activeTui.setVerified(
+            rows.value.filter((r) => r.status === "VERIFIED").length,
+          );
+        }
+      }, 4_000);
+      // Start keyboard handler (raw stdin for 0-9 worker filter keys).
+      // Runs in the background; resolves when the abort signal fires.
+      tui.startKeyboardHandler().catch(() => {});
+    }
 
     const iterationsUsed = await runParallelLoop({
       agent,
@@ -326,6 +373,8 @@ const main = async (): Promise<number> => {
     return computeExitCode(allDone);
   } finally {
     guiController.abort();
+    clearInterval(progressPollId);
+    tui?.cleanup();
   }
 };
 
