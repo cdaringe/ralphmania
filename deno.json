@@ -1,6 +1,6 @@
 {
   "name": "@cdaringe/ralphmania",
-  "version": "0.47.0",
+  "version": "0.48.0",
   "license": "MIT",
   "exports": "./mod.ts",
   "compilerOptions": {
@@ -42,9 +42,10 @@
     "test:coverage:enforce": "deno task test --clean --coverage=coverage/ && bash -c 'deno coverage coverage/ 2>&1 | deno run --allow-read scripts/check-coverage.ts'",
     "fmt": "deno fmt",
     "check": "deno check mod.ts",
+    "gen-gui-manifest": "deno run --allow-read --allow-write scripts/gen-gui-manifest.ts",
     "ralph": "deno run -A mod.ts --iterations 30 --plugin plugin.ralph.ts",
     "ralph:debug": "deno run --inspect-brk -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
-    "yeet": "deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
+    "yeet": "deno task gen-gui-manifest && deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
   },
   "imports": {
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.2.87",

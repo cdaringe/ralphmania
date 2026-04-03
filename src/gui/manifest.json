@@ -1,0 +1,18 @@
+[
+  "islands/boot.tsx",
+  "islands/connection-status.tsx",
+  "islands/event-store.ts",
+  "islands/log-panel.tsx",
+  "islands/scenario-boot.tsx",
+  "islands/scenario-page-app.tsx",
+  "islands/sidebar.tsx",
+  "islands/sse-provider.tsx",
+  "islands/tab-switcher.tsx",
+  "islands/worker-boot.tsx",
+  "islands/worker-modal.tsx",
+  "islands/worker-page-app.tsx",
+  "islands/workflow-graph.tsx",
+  "client/ansi.ts",
+  "client/html.ts",
+  "client/log-entry.tsx"
+]
