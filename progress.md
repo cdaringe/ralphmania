@@ -59,5 +59,5 @@
 | DOCSSITE.2 | VERIFIED | [Architecture page with workflow visuals and annotations](docs/scenarios/DOCSSITE.2-architecture-visuals.md)                  |              |
 | DOCSSITE.3 | VERIFIED | [Light gray/white/green accent theme via CSS variables](docs/scenarios/DOCSSITE.3-theme.md)                                   |              |
 | GUI.g      |          |                                                                                                                               |              |
-| TUI.1      |          |                                                                                                                               |              |
+| TUI.1      | VERIFIED | [Live TUI status bar: phase, worker count, progress, and per-worker stream filter](docs/scenarios/TUI.1-tui-status-bar.md)    |              |
 | GUI.h      |          |                                                                                                                               |              |

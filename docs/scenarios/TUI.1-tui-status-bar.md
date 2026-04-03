@@ -13,8 +13,8 @@
 
 Two new modules under `src/tui/`:
 
-| Module                  | Role                                                                |
-| ----------------------- | ------------------------------------------------------------------- |
+| Module                  | Role                                                               |
+| ----------------------- | ------------------------------------------------------------------ |
 | `src/tui/status-bar.ts` | Pure state machine + renderer — no I/O, fully unit-testable        |
 | `src/tui/mod.ts`        | TUI orchestrator — subscribes to event bus, wraps stdout, keyboard |
 
@@ -39,11 +39,11 @@ redraw it below. This keeps the bar "sticky" at the bottom as content scrolls.
 
 ```typescript
 type TuiState = {
-  phase: string;                              // orchestrator FSM state
-  workers: ReadonlyMap<number, { scenario }>;  // active workers
-  verified: number;                           // VERIFIED scenario count
-  total: number;                              // total spec scenario count
-  selectedWorker: number | null;              // null = all, N = filter
+  phase: string; // orchestrator FSM state
+  workers: ReadonlyMap<number, { scenario }>; // active workers
+  verified: number; // VERIFIED scenario count
+  total: number; // total spec scenario count
+  selectedWorker: number | null; // null = all, N = filter
 };
 ```
 
@@ -54,9 +54,9 @@ new event types or bus plumbing required.
 ### Worker Stream Filtering
 
 Pressing `1`–`9` on the keyboard filters stdout to show only that worker's
-output; `0` clears the filter. The stdin is read in raw mode (so individual
-key presses register without Enter). Raw mode is enabled only after the
-interactive prompts complete (no interference with `parseCliArgsInteractive`).
+output; `0` clears the filter. The stdin is read in raw mode (so individual key
+presses register without Enter). Raw mode is enabled only after the interactive
+prompts complete (no interference with `parseCliArgsInteractive`).
 
 `shouldShowLine(line, selectedWorker)` strips ANSI codes then:
 
@@ -102,8 +102,8 @@ Because the `GuiEventBus` has no VERIFIED-count event, `mod.ts` starts a
 
 ### Event Bus Refactor
 
-Previously `createEventBus()` was created only inside the `if (gui)` branch.
-It is now always created so both the web GUI and the TUI can share the same bus.
+Previously `createEventBus()` was created only inside the `if (gui)` branch. It
+is now always created so both the web GUI and the TUI can share the same bus.
 `createGuiLogger(log, bus)` is also always applied — it's a cheap wrapper with
 no side-effects unless something subscribes to `bus`.
 
@@ -120,20 +120,21 @@ no side-effects unless something subscribes to `bus`.
 
 ### Tests — `test/tui_test.ts` (31 tests, all passing)
 
-| Group                             | Tests |
-| --------------------------------- | ----- |
-| `initialTuiState`                 | 1     |
-| `applyGuiEvent`                   | 5     |
-| `withVerifiedCount/SelectedWorker`| 2     |
-| `renderStatusBar`                 | 8     |
-| `shouldShowLine`                  | 6     |
-| `createTui` (DI integration)      | 9     |
+| Group                              | Tests |
+| ---------------------------------- | ----- |
+| `initialTuiState`                  | 1     |
+| `applyGuiEvent`                    | 5     |
+| `withVerifiedCount/SelectedWorker` | 2     |
+| `renderStatusBar`                  | 8     |
+| `shouldShowLine`                   | 6     |
+| `createTui` (DI integration)       | 9     |
 
 Key integration tests via `TuiIO` injection:
 
 - `loggerOutput writes content to stdout` — confirms write-through
 - `loggerOutput draws status bar after each write` — confirms bar rendered
-- `setVerified updates the verified count shown in status bar` — confirms poll contract
+- `setVerified updates the verified count shown in status bar` — confirms poll
+  contract
 - `reflects event bus worker_active in next render` — confirms bus subscription
 - `reflects event bus state transition in next render` — confirms phase tracking
 - `cleanup erases status bar` — confirms terminal restoration
