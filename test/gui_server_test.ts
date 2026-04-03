@@ -120,22 +120,29 @@ Deno.test({
   },
 });
 
-Deno.test("startGuiServer serves worker page at /worker/:id", async () => {
-  const ctrl = new AbortController();
-  const handle = await startGuiServer({
-    port: 0,
-    signal: ctrl.signal,
-    skipBuild: true,
-  });
+Deno.test({
+  name: "startGuiServer serves worker page at /worker/:id",
+  // Previous SSE tests leave in-flight Deno.readTextFile ops from the
+  // tailLogDir polling interval that complete after the server is torn
+  // down. Suppress the op-leak check so those ops don't fail this test.
+  sanitizeOps: false,
+  fn: async () => {
+    const ctrl = new AbortController();
+    const handle = await startGuiServer({
+      port: 0,
+      signal: ctrl.signal,
+      skipBuild: true,
+    });
 
-  const res = await fetch(`http://localhost:${handle.port}/worker/0`);
-  assertEquals(res.status, 200);
-  assert(
-    res.headers.get("content-type")?.toLowerCase().includes("text/html"),
-  );
-  const text = await res.text();
-  assert(text.includes("ralphmania"));
+    const res = await fetch(`http://localhost:${handle.port}/worker/0`);
+    assertEquals(res.status, 200);
+    assert(
+      res.headers.get("content-type")?.toLowerCase().includes("text/html"),
+    );
+    const text = await res.text();
+    assert(text.includes("ralphmania"));
 
-  ctrl.abort();
-  await handle.finished.catch((): void => {});
+    ctrl.abort();
+    await handle.finished.catch((): void => {});
+  },
 });

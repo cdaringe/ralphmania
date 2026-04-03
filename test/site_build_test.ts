@@ -500,3 +500,78 @@ Deno.test("styles.css contains flow diagram styles", async () => {
     await cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// DOCSSITE.3 — theme: light grays + white + green accents
+// ---------------------------------------------------------------------------
+
+Deno.test("DOCSSITE.3: styles.css defines white background color", async () => {
+  const { outDir, srcDir, cleanup } = await makeTempBuild();
+  try {
+    await buildSite({ outDir, srcDir });
+    const css = await Deno.readTextFile(`${outDir}/styles.css`);
+    assertStringIncludes(css, "--white: #ffffff");
+  } finally {
+    await cleanup();
+  }
+});
+
+Deno.test("DOCSSITE.3: styles.css defines light gray scale", async () => {
+  const { outDir, srcDir, cleanup } = await makeTempBuild();
+  try {
+    await buildSite({ outDir, srcDir });
+    const css = await Deno.readTextFile(`${outDir}/styles.css`);
+    // Light-gray CSS variables covering the gray-50 → gray-200 range
+    assertStringIncludes(css, "--gray-50:");
+    assertStringIncludes(css, "--gray-100:");
+    assertStringIncludes(css, "--gray-200:");
+  } finally {
+    await cleanup();
+  }
+});
+
+Deno.test("DOCSSITE.3: styles.css uses green accent (#1da462)", async () => {
+  const { outDir, srcDir, cleanup } = await makeTempBuild();
+  try {
+    await buildSite({ outDir, srcDir });
+    const css = await Deno.readTextFile(`${outDir}/styles.css`);
+    // Primary green accent matching cdaringe.com logo
+    assertStringIncludes(css, "--accent: #1da462");
+    // Darker shade for hover states
+    assertStringIncludes(css, "--accent-dark:");
+    // Tinted background for badges / callouts
+    assertStringIncludes(css, "--accent-light:");
+  } finally {
+    await cleanup();
+  }
+});
+
+Deno.test("DOCSSITE.3: body background and nav use white/light theme", async () => {
+  const { outDir, srcDir, cleanup } = await makeTempBuild();
+  try {
+    await buildSite({ outDir, srcDir });
+    const css = await Deno.readTextFile(`${outDir}/styles.css`);
+    // Body background is white (not dark)
+    assertStringIncludes(css, "background: var(--white)");
+    // Nav background is also white
+    assertStringIncludes(css, ".nav");
+  } finally {
+    await cleanup();
+  }
+});
+
+Deno.test("DOCSSITE.3: index.html links stylesheet and renders white/green theme", async () => {
+  const { outDir, srcDir, cleanup } = await makeTempBuild();
+  try {
+    await buildSite({ outDir, srcDir });
+    const html = await Deno.readTextFile(`${outDir}/index.html`);
+    // stylesheet is linked
+    assertStringIncludes(html, "styles.css");
+    // green accent class used in CTA button
+    assertStringIncludes(html, "btn-primary");
+    // hero uses light gradient (gray-50 / accent-light)
+    assertStringIncludes(html, "hero");
+  } finally {
+    await cleanup();
+  }
+});

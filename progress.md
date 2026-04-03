@@ -56,8 +56,8 @@
 | GUI.e      | VERIFIED | [GUI can mark scenarios NEEDS_REWORK with notes or OBSOLETE](docs/scenarios/GUI.e-scenario-editing.md)                        |              |
 | GUI.f      | VERIFIED | [GUI compiled self-contained bundle in publish step](docs/scenarios/GUI.f-publish-step.md)                                    |              |
 | DOCSSITE.1 | VERIFIED | [Beautiful static docs site for GitHub Pages via Deno+Preact](docs/scenarios/DOCSSITE.1-docs-site.md)                         |              |
-| DOCSSITE.2 | VERIFIED | [Architecture page with workflow visuals and annotations](docs/scenarios/DOCSSITE.2-architecture-visuals.md) |              |
-| DOCSSITE.3 |          |                                                                                                                               |              |
+| DOCSSITE.2 | VERIFIED | [Architecture page with workflow visuals and annotations](docs/scenarios/DOCSSITE.2-architecture-visuals.md)                  |              |
+| DOCSSITE.3 | VERIFIED | [Light gray/white/green accent theme via CSS variables](docs/scenarios/DOCSSITE.3-theme.md)                                   |              |
 | GUI.g      |          |                                                                                                                               |              |
 | TUI.1      |          |                                                                                                                               |              |
 | GUI.h      |          |                                                                                                                               |              |
