@@ -97,6 +97,11 @@ export type ClaudeSessionDeps = {
   readonly onLine: (text: string) => void | Promise<void>;
 };
 
+/** Check whether a raw SDK message is a turn-ending `result` event. */
+const isResultEvent = (v: unknown): boolean =>
+  typeof v === "object" && v !== null &&
+  (v as { type: string }).type === "result";
+
 type ExecuteOpts = {
   readonly prompt: string;
   readonly model: string;
@@ -161,6 +166,12 @@ export const executeClaudeSession = async (
     });
   }
 
+  // Close the input channel when any abort fires so that the SDK's prompt
+  // stream can drain and the inner CLI process exits instead of hanging.
+  const closeOnAbort = (): void => inputChannel.close();
+  watchdog.signal.addEventListener("abort", closeOnAbort, { once: true });
+  signal.addEventListener("abort", closeOnAbort, { once: true });
+
   try {
     const conversation = deps.query({
       prompt,
@@ -174,7 +185,7 @@ export const executeClaudeSession = async (
     let foundCompletionMarker = false;
 
     for await (const msg of conversation) {
-      if (signal.aborted) break;
+      if (signal.aborted || watchdog.signal.aborted) break;
       const extracted = extractSDKText(msg);
       if (extracted) {
         watchdog.touch();
@@ -182,6 +193,13 @@ export const executeClaudeSession = async (
         if (extracted.includes(COMPLETION_MARKER)) {
           foundCompletionMarker = true;
         }
+      }
+      // When the agent finishes its turn (result event) and no user input
+      // is queued, close the input channel so the SDK closes stdin and the
+      // CLI process can exit instead of hanging with
+      // "Reading additional input from stdin...".
+      if (isResultEvent(msg) && inputChannel.pending() === 0) {
+        inputChannel.close();
       }
     }
 

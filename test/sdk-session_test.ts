@@ -276,3 +276,57 @@ Deno.test(
     assertEquals(lines, ["[system: note]"]);
   },
 );
+
+Deno.test(
+  "executeClaudeSession: closes input channel on result event so CLI can exit",
+  async () => {
+    // Simulates the real SDK: after yielding a result event, the query
+    // generator blocks waiting for the next user message from inputMessages.
+    // Without the fix, this would deadlock (the conversation never ends).
+    const deps: ClaudeSessionDeps = {
+      async *query(qOpts): AsyncGenerator<unknown> {
+        yield {
+          type: "assistant",
+          session_id: "s1",
+          message: { content: [{ type: "text", text: "done" }] },
+        };
+        yield {
+          type: "result",
+          subtype: "success",
+          result: "finished",
+        };
+        // Mimic SDK: after result, try to pull next user message.
+        // If the input channel was closed by the fix, this returns done
+        // and the generator ends. Without the fix, this blocks forever.
+        const iter = qOpts.inputMessages[Symbol.asyncIterator]();
+        const next = await iter.next();
+        if (!next.done) {
+          // If user sent input, yield another turn (not expected in this test).
+          yield {
+            type: "assistant",
+            session_id: "s1",
+            message: {
+              content: [{ type: "text", text: `got: ${next.value}` }],
+            },
+          };
+        }
+      },
+      onLine: () => {},
+    };
+
+    const result = await executeClaudeSession({
+      prompt: "do work",
+      model: "claude-test",
+      effort: undefined,
+      iterationNum: 1,
+      signal: AbortSignal.timeout(2000),
+      log: noopLog,
+      cwd: "/tmp",
+      workerId: "SC.1",
+      agentInputBus: createAgentInputBus(),
+      deps,
+    });
+    // Should complete without timing out — the result event triggers channel close.
+    assertEquals(result.status, "continue");
+  },
+);
