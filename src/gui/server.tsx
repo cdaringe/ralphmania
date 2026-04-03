@@ -391,10 +391,25 @@ export const startGuiServer = async (
   app.get("/", (_ctx) => htmlResponse(<MainPage v={buildHash} />));
 
   const handler = await app.handler();
-  const server = Deno.serve(
-    { port, signal, onListen: (): void => {} },
-    handler,
-  );
+  let attemptPort = port;
+  let server: Deno.HttpServer<Deno.NetAddr> | undefined;
+  while (!server) {
+    try {
+      server = Deno.serve(
+        { port: attemptPort, signal, onListen: (): void => {} },
+        handler,
+      );
+    } catch (err) {
+      if (
+        err instanceof Deno.errors.AddrInUse &&
+        attemptPort < port + 10
+      ) {
+        attemptPort++;
+      } else {
+        throw err;
+      }
+    }
+  }
   const actualPort = server.addr.port;
   log({
     tags: ["info"],

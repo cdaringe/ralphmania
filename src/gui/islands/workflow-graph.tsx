@@ -57,7 +57,7 @@ const stateNodeStyle = (
       color: ACCENT,
       fontWeight: 700,
       boxShadow: "0 0 12px rgba(34,197,94,.4)",
-      animation: "pulse 1.5s ease-in-out infinite",
+      animation: "pulse 2.5s ease-in-out infinite",
     }
     : activeIdx >= 0 && thisIdx >= 0 && thisIdx < activeIdx
     ? {
@@ -249,6 +249,7 @@ const buildGraph = (
       markerEnd: { type: MT.ArrowClosed, color: PURPLE },
       sourcePosition: P.Right,
       targetPosition: P.Right,
+      pathOptions: { offset: 50 },
     },
     {
       id: "e-rp-abort",
@@ -287,7 +288,7 @@ const buildGraph = (
           color: "#92400e",
           cursor: "pointer",
           minWidth: 80,
-          animation: "pulse 1.5s ease-in-out infinite",
+          animation: "pulse 2.5s ease-in-out infinite",
         }
         : {
           ...baseNodeStyle,
@@ -298,7 +299,7 @@ const buildGraph = (
           cursor: "pointer",
           minWidth: 80,
           boxShadow: "0 0 12px rgba(34,197,94,.4)",
-          animation: "pulse 1.5s ease-in-out infinite",
+          animation: "pulse 2.5s ease-in-out infinite",
         };
 
       nodes.push({
@@ -354,7 +355,7 @@ const buildGraph = (
             background: "#fefce8",
             border: "2px solid #f59e0b",
             color: "#92400e",
-            animation: "pulse 1.5s ease-in-out infinite",
+            animation: "pulse 2.5s ease-in-out infinite",
           }
           : allDone
           ? {

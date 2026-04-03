@@ -3,7 +3,7 @@
  * and input textarea for sending feedback to the agent.
  * @module
  */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import {
   getSelectedWorker,
   getWorkerLogBuffer,
@@ -22,8 +22,35 @@ export default function WorkerModal(): preact.JSX.Element | null {
   );
   const [finished, setFinished] = useState(false);
   const [sendStatus, setSendStatus] = useState("");
+  const [drawerWidth, setDrawerWidth] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const onMouseDown = useCallback((e: MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMouseMove = (e: MouseEvent): void => {
+      const newWidth = window.innerWidth - e.clientX;
+      const clamped = Math.max(
+        320,
+        Math.min(newWidth, window.innerWidth * 0.95),
+      );
+      setDrawerWidth(clamped);
+    };
+    const onMouseUp = (): void => setIsDragging(false);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isDragging]);
 
   useEffect(
     () =>
@@ -84,7 +111,15 @@ export default function WorkerModal(): preact.JSX.Element | null {
         }
       }}
     >
-      <div class="modal-content">
+      <div
+        class="modal-content"
+        ref={contentRef}
+        style={drawerWidth ? { width: `${drawerWidth}px` } : undefined}
+      >
+        <div
+          class={`modal-resize-handle${isDragging ? " dragging" : ""}`}
+          onMouseDown={onMouseDown}
+        />
         <div class="modal-header">
           <h2>
             W{selected.workerIndex} → {escHtml(selected.scenario)}

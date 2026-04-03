@@ -53,16 +53,7 @@ export const createWorktree = async (
       tags: ["debug", "worktree"],
       message: `Removing stale worktree at ${path}`,
     });
-    const removeResult = await run(["worktree", "remove", "--force", path]);
-    if (removeResult.code !== 0) {
-      log({
-        tags: ["debug", "worktree"],
-        message:
-          `git worktree remove failed (${removeResult.stderr}), forcing cleanup`,
-      });
-      await Deno.remove(path, { recursive: true });
-      await run(["worktree", "prune"]);
-    }
+    await forceRemoveWorktree(path, log);
   } catch {
     // Path doesn't exist, which is fine
   }
@@ -127,6 +118,69 @@ const mergeWithTheirs = async (
 
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Best-effort worktree removal that handles permission and lock issues.
+ * 1. Remove stale lock files inside the worktree and .git/worktrees/ entry.
+ * 2. Unlock the worktree (git worktree unlock).
+ * 3. Try `git worktree remove --force`.
+ * 4. Fall back to manual directory removal + `git worktree prune`.
+ */
+const forceRemoveWorktree = async (
+  path: string,
+  log: Logger,
+): Promise<boolean> => {
+  // Remove index.lock inside the worktree itself
+  await Deno.remove(`${path}/.git/index.lock`).catch(() => {});
+  await Deno.remove(`${path}/index.lock`).catch(() => {});
+
+  // Find and unlock the corresponding .git/worktrees/ entry
+  const gitDirResult = await run(["rev-parse", "--git-dir"]);
+  if (gitDirResult.code === 0) {
+    const gitDir = gitDirResult.stdout;
+    try {
+      for await (const entry of Deno.readDir(`${gitDir}/worktrees`)) {
+        if (!entry.isDirectory) continue;
+        const wtGitDir = `${gitDir}/worktrees/${entry.name}`;
+        try {
+          const gitdirContent = await Deno.readTextFile(
+            `${wtGitDir}/gitdir`,
+          );
+          if (gitdirContent.trim().startsWith(path)) {
+            await Deno.remove(`${wtGitDir}/locked`).catch(() => {});
+            await Deno.remove(`${wtGitDir}/index.lock`).catch(() => {});
+          }
+        } catch {
+          // gitdir file missing or unreadable
+        }
+      }
+    } catch {
+      // worktrees dir missing
+    }
+  }
+
+  // Attempt unlock (may fail if not locked — that's fine)
+  await run(["worktree", "unlock", path]);
+
+  // Try the normal git removal
+  const removeResult = await run(["worktree", "remove", "--force", path]);
+  if (removeResult.code === 0) return true;
+
+  log({
+    tags: ["debug", "worktree"],
+    message:
+      `git worktree remove --force failed for ${path}: ${removeResult.stderr}, falling back to manual removal`,
+  });
+
+  // Manual fallback: delete the directory and prune git's internal refs
+  try {
+    await Deno.remove(path, { recursive: true });
+  } catch {
+    // Directory may already be gone
+  }
+  await run(["worktree", "prune"]);
+  return true;
+};
 
 export const mergeWorktree = async (
   { worktree, log }: { worktree: WorktreeInfo; log: Logger },
@@ -210,20 +264,12 @@ export const resetAllWorktrees = async (
     message: "Resetting all ralph worktrees...",
   });
 
-  // Remove each subdirectory in WORKTREE_BASE_DIR via git worktree remove
+  // Remove each subdirectory in WORKTREE_BASE_DIR via robust removal
   try {
     for await (const entry of Deno.readDir(WORKTREE_BASE_DIR)) {
       if (!entry.isDirectory) continue;
       const path = `${WORKTREE_BASE_DIR}/${entry.name}`;
-      const removeResult = await run(["worktree", "remove", "--force", path]);
-      if (removeResult.code !== 0) {
-        log({
-          tags: ["debug", "worktree"],
-          message:
-            `git worktree remove failed for ${path}: ${removeResult.stderr}`,
-        });
-        await Deno.remove(path, { recursive: true }).catch(() => {});
-      }
+      await forceRemoveWorktree(path, log);
       log({
         tags: ["info", "worktree"],
         message: `Removed worktree at ${path}`,
@@ -232,9 +278,6 @@ export const resetAllWorktrees = async (
   } catch {
     // WORKTREE_BASE_DIR does not exist — nothing to clean
   }
-
-  // Prune stale git worktree refs
-  await run(["worktree", "prune"]);
 
   // Delete local ralph/worker-* branches (in parallel — independent ops)
   const branchList = await run(["branch", "--list", "ralph/worker-*"]);
@@ -305,17 +348,7 @@ export const pruneOrphanedBranches = async (
 export const cleanupWorktree = async (
   { worktree, log }: { worktree: WorktreeInfo; log: Logger },
 ): Promise<Result<void, string>> => {
-  const removeResult = await run([
-    "worktree",
-    "remove",
-    "--force",
-    worktree.path,
-  ]);
-  removeResult.code !== 0 && log({
-    tags: ["error", "worktree"],
-    message:
-      `Failed to remove worktree ${worktree.path}: ${removeResult.stderr}`,
-  });
+  await forceRemoveWorktree(worktree.path, log);
 
   const branchResult = await run(["branch", "-D", worktree.branch]);
   branchResult.code !== 0 && log({
@@ -324,7 +357,5 @@ export const cleanupWorktree = async (
       `Failed to delete branch ${worktree.branch}: ${branchResult.stderr}`,
   });
 
-  return removeResult.code === 0
-    ? ok(undefined)
-    : err(`Failed to remove worktree: ${removeResult.stderr}`);
+  return ok(undefined);
 };

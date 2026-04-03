@@ -1,21 +1,53 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
   z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  animation: overlay-fade-in 0.25s ease-out;
+}
+@keyframes overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .modal-content {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(720px, 90vw);
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  width: min(800px, 90vw);
-  height: min(600px, 80vh);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  animation: drawer-slide-in 0.25s ease-out;
+}
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.modal-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+}
+.modal-resize-handle:hover,
+.modal-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.4;
 }
 .modal-header {
   background: var(--surface);
