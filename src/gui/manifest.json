@@ -1,4 +1,15 @@
 [
+  "client/ansi.ts",
+  "client/html.ts",
+  "client/log-entry.tsx",
+  "css/base.css",
+  "css/graph.css",
+  "css/log.css",
+  "css/modal.css",
+  "css/scenario.css",
+  "css/sidebar.css",
+  "css/tab.css",
+  "css/worker.css",
   "islands/boot.tsx",
   "islands/connection-status.tsx",
   "islands/event-store.ts",
@@ -12,7 +23,9 @@
   "islands/worker-modal.tsx",
   "islands/worker-page-app.tsx",
   "islands/workflow-graph.tsx",
-  "client/ansi.ts",
-  "client/html.ts",
-  "client/log-entry.tsx"
+  "pages/import-map.ts",
+  "pages/main-page.tsx",
+  "pages/page-shell.tsx",
+  "pages/scenario-page.tsx",
+  "pages/worker-page.tsx"
 ]
