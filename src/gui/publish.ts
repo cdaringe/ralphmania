@@ -3,13 +3,16 @@
  *
  * Artifacts are written into `.ralph/receipts/gui/` so publish output includes
  * a portable GUI snapshot that does not depend on runtime island compilation or
- * external CDN assets.
+ * a running server. Preact is loaded from esm.sh CDN via an inline importmap.
  */
+import * as esbuild from "npm:esbuild@~0.25.5";
+import type { OnResolveResult, Plugin, PluginBuild } from "npm:esbuild@~0.25.5";
 import * as path from "jsr:@std/path@^1";
 import type { Logger, Result } from "../types.ts";
 import { createLogger } from "../logger.ts";
 import { err, ok } from "../types.ts";
 import { loadCssFiles } from "./css.ts";
+import { PREACT_IMPORTS } from "./pages/import-map.ts";
 
 const GUI_DIR = path.dirname(path.fromFileUrl(import.meta.url));
 const ISLANDS_DIR = path.join(GUI_DIR, "islands");
@@ -17,19 +20,19 @@ const ISLANDS_DIR = path.join(GUI_DIR, "islands");
 const PAGE_CONFIG = [
   {
     output: "index.html",
-    title: "ralphmania · live",
+    title: "ralphmania \u00b7 live",
     entry: "boot.tsx",
     loading: "Loading GUI...",
   },
   {
     output: "worker.html",
-    title: "ralphmania · worker",
+    title: "ralphmania \u00b7 worker",
     entry: "worker-boot.tsx",
     loading: "Loading worker...",
   },
   {
     output: "scenario.html",
-    title: "ralphmania · scenario",
+    title: "ralphmania \u00b7 scenario",
     entry: "scenario-boot.tsx",
     loading: "Loading scenario...",
   },
@@ -40,36 +43,59 @@ type PageBundle = {
   readonly html: string;
 };
 
-const compileJsEntry = async (
-  entryFile: string,
-): Promise<Result<string, string>> => {
-  const entryPoint = path.join(ISLANDS_DIR, entryFile);
-  const cmd = new Deno.Command("deno", {
-    args: [
-      "bundle",
-      "--platform",
-      "browser",
-      "--format",
-      "esm",
-      "--minify",
-      entryPoint,
-    ],
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-  });
+/**
+ * JSR resolves import maps at publish time, rewriting bare specifiers like
+ * "preact" into "npm:preact@^10". esbuild doesn't understand the npm:
+ * protocol, so this plugin intercepts those imports, marks them external,
+ * and rewrites them back to bare specifiers for the browser importmap.
+ */
+const denoNpmExternalPlugin: Plugin = {
+  name: "deno-npm-external",
+  setup(build: PluginBuild): void {
+    build.onResolve({ filter: /^npm:preact/ }, (args): OnResolveResult => {
+      const bare = args.path
+        .replace(/^npm:/, "")
+        .replace(/@[^/]*/, "");
+      return { path: bare, external: true };
+    });
+  },
+};
+
+/**
+ * Compile all page entry points to browser ESM in a single esbuild pass.
+ * Returns a map of `basename.js → content`.
+ */
+const compileEntries = async (
+  entries: readonly string[],
+): Promise<Result<ReadonlyMap<string, string>, string>> => {
+  const entryPoints = entries.map((e) => path.join(ISLANDS_DIR, e));
   try {
-    const { code, stdout, stderr } = await cmd.output();
-    if (code !== 0) {
-      return err(
-        `Failed to compile ${entryFile}: ${
-          new TextDecoder().decode(stderr).trim()
-        }`,
-      );
+    const result = await esbuild.build({
+      entryPoints,
+      bundle: true,
+      splitting: false,
+      format: "esm",
+      platform: "browser",
+      target: "es2022",
+      outdir: "out",
+      write: false,
+      minify: true,
+      plugins: [denoNpmExternalPlugin],
+      // Preact is externalized — loaded via inline importmap in the HTML.
+      external: ["preact", "preact/*"],
+      define: { "process.env.NODE_ENV": '"production"' },
+      jsx: "automatic",
+      jsxImportSource: "preact",
+    });
+    const compiled = new Map<string, string>();
+    for (const file of result.outputFiles) {
+      compiled.set(path.basename(file.path), file.text);
     }
-    return ok(new TextDecoder().decode(stdout));
+    return ok(compiled);
   } catch (error) {
-    return err(`Failed to compile ${entryFile}: ${String(error)}`);
+    return err(`esbuild compilation failed: ${String(error)}`);
+  } finally {
+    await esbuild.stop();
   }
 };
 
@@ -80,14 +106,16 @@ const renderContainedHtml = (
     css: string;
     js: string;
   },
-): string =>
-  `<!DOCTYPE html>
+): string => {
+  const importMapJson = JSON.stringify({ imports: PREACT_IMPORTS });
+  return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>${title}</title>
     <style>${css}</style>
+    <script type="importmap">${importMapJson}</script>
   </head>
   <body>
     <div id="app-root">${loading}</div>
@@ -95,6 +123,7 @@ const renderContainedHtml = (
   </body>
 </html>
 `;
+};
 
 export const publishContainedGui = async (
   { outDir, log: inputLog }: { outDir: string; log?: Logger },
@@ -106,19 +135,23 @@ export const publishContainedGui = async (
     .map(([, content]) => content)
     .join("\n\n");
 
+  const entries = PAGE_CONFIG.map((p) => p.entry);
+  const compiledResult = await compileEntries(entries);
+  if (compiledResult.isErr()) return err(compiledResult.error);
+  const compiled = compiledResult.value;
+
   try {
     const bundles: PageBundle[] = [];
-
     for (const page of PAGE_CONFIG) {
-      const jsResult = await compileJsEntry(page.entry);
-      if (jsResult.isErr()) return err(jsResult.error);
+      const jsName = page.entry.replace(/\.tsx$/, ".js");
+      const js = compiled.get(jsName) ?? "";
       bundles.push({
         output: page.output,
         html: renderContainedHtml({
           title: page.title,
           loading: page.loading,
           css,
-          js: jsResult.value,
+          js,
         }),
       });
     }
@@ -153,6 +186,6 @@ export const publishContainedGui = async (
 
     return ok(written);
   } catch (error) {
-    return err(`Failed to publish GUI bundle: ${error}`);
+    return err(`Failed to publish GUI bundle: ${String(error)}`);
   }
 };

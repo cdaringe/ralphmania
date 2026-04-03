@@ -55,7 +55,7 @@
 | GUI.0      | VERIFIED | [Live workflow graph with pulsing states + drillable workers](docs/scenarios/GUI.0-workflow-graph.md)                         |              |
 | GUI.e      | VERIFIED | [GUI can mark scenarios NEEDS_REWORK with notes or OBSOLETE](docs/scenarios/GUI.e-scenario-editing.md)                        |              |
 | GUI.f      | WIP      | [GUI compiled self-contained bundle in publish step](docs/scenarios/GUI.f-publish-step.md)                                    |              |
-| DOCSSITE.1 | VERIFIED | [Beautiful static docs site for GitHub Pages via Deno+Preact](docs/scenarios/DOCSSITE.1-docs-site.md) |              |
+| DOCSSITE.1 | VERIFIED | [Beautiful static docs site for GitHub Pages via Deno+Preact](docs/scenarios/DOCSSITE.1-docs-site.md)                         |              |
 | DOCSSITE.2 |          |                                                                                                                               |              |
 | DOCSSITE.3 |          |                                                                                                                               |              |
 | GUI.g      |          |                                                                                                                               |              |

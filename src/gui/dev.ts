@@ -8,7 +8,7 @@
  * @module
  */
 import * as esbuild from "npm:esbuild@~0.25.5";
-import type { Plugin } from "npm:esbuild@~0.25.5";
+import type { OnResolveResult, Plugin, PluginBuild } from "npm:esbuild@~0.25.5";
 import * as path from "jsr:@std/path@^1";
 import manifest from "./manifest.json" with { type: "json" };
 
@@ -25,8 +25,8 @@ const GUI_DIR = IS_REMOTE
  */
 const denoNpmExternalPlugin: Plugin = {
   name: "deno-npm-external",
-  setup(build) {
-    build.onResolve({ filter: /^npm:preact/ }, (args) => {
+  setup(build: PluginBuild): void {
+    build.onResolve({ filter: /^npm:preact/ }, (args): OnResolveResult => {
       const bare = args.path
         .replace(/^npm:/, "")
         .replace(/@[^/]*/, "");

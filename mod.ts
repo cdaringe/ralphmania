@@ -41,6 +41,7 @@ import { createCli, parseCliArgsInteractive } from "./src/cli.ts";
 import { serveReceipts } from "./src/serve.ts";
 import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
+import { publishContainedGui } from "./src/gui/publish.ts";
 import { loadPlugin } from "./src/plugin.ts";
 import { getModel } from "./src/model.ts";
 import { isAllVerified } from "./src/orchestrator/progress-queries.ts";
@@ -55,7 +56,9 @@ import {
   CLAUDE_ESCALATED,
   CLAUDE_VERIFIER,
   formatDuration,
+  RALPH_RECEIPTS_DIRNAME,
 } from "./src/constants.ts";
+import * as path from "jsr:@std/path@^1";
 import { ensureProgressFile } from "./src/progress.ts";
 import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
 import { runParallelLoop } from "./src/orchestrator/mod.ts";
@@ -296,6 +299,22 @@ const main = async (): Promise<number> => {
 
     receiptsResult && receiptsResult.isErr() &&
       log({ tags: ["error"], message: receiptsResult.error });
+
+    if (allDone) {
+      const guiOutDir = path.join(RALPH_RECEIPTS_DIRNAME, "gui");
+      const guiResult = await publishContainedGui({ outDir: guiOutDir, log });
+      if (guiResult.isErr()) {
+        log({
+          tags: ["error"],
+          message: `GUI publish failed: ${guiResult.error}`,
+        });
+      } else {
+        log({
+          tags: ["info"],
+          message: `GUI bundle published to ${guiOutDir}`,
+        });
+      }
+    }
 
     !allDone &&
       log({
