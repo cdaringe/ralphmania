@@ -58,6 +58,6 @@
 | DOCSSITE.1 | VERIFIED | [Beautiful static docs site for GitHub Pages via Deno+Preact](docs/scenarios/DOCSSITE.1-docs-site.md)                         |              |
 | DOCSSITE.2 | VERIFIED | [Architecture page with workflow visuals and annotations](docs/scenarios/DOCSSITE.2-architecture-visuals.md)                  |              |
 | DOCSSITE.3 | VERIFIED | [Light gray/white/green accent theme via CSS variables](docs/scenarios/DOCSSITE.3-theme.md)                                   |              |
-| GUI.g      |          |                                                                                                                               |              |
+| GUI.g      | VERIFIED | [On-demand worker SSE: /events tails orchestrator only; /events/worker/:id on demand](docs/scenarios/GUI.g-on-demand-worker-sse.md) |              |
 | TUI.1      | VERIFIED | [Live TUI status bar: phase, worker count, progress, and per-worker stream filter](docs/scenarios/TUI.1-tui-status-bar.md)    |              |
 | GUI.h      |          |                                                                                                                               |              |
