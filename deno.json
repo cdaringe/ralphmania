@@ -1,17 +1,23 @@
 {
   "name": "@cdaringe/ralphmania",
-  "version": "0.51.0",
+  "version": "0.52.0",
   "license": "MIT",
   "exports": "./mod.ts",
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "exclude": [".ralph/"],
+  "exclude": [
+    ".ralph/"
+  ],
   "lint": {
-    "exclude": ["src/set-fns.ts"],
+    "exclude": [
+      "src/set-fns.ts"
+    ],
     "rules": {
-      "tags": ["recommended"],
+      "tags": [
+        "recommended"
+      ],
       "include": [
         "ban-untagged-todo",
         "default-param-last",
@@ -45,7 +51,8 @@
     "gen-gui-manifest": "deno run --allow-read --allow-write scripts/gen-gui-manifest.ts",
     "ralph": "deno run -A mod.ts --iterations 30 --plugin plugin.ralph.ts",
     "ralph:debug": "deno run --inspect-brk -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
-    "yeet": "deno task gen-gui-manifest && deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
+    "yeet:bump": "deno eval \"const f='deno.json';const j=JSON.parse(Deno.readTextFileSync(f));const[a,b,c]=j.version.split('.').map(Number);j.version=[a,b+1,0].join('.');Deno.writeTextFileSync(f,JSON.stringify(j,null,2)+'\\n');console.log('Bumped to',j.version)\"",
+    "yeet": "deno task yeet:bump && deno task gen-gui-manifest && deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
   },
   "imports": {
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.2.87",
