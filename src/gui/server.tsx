@@ -9,6 +9,7 @@
  * @module
  */
 import { App } from "@fresh/core";
+import { extname } from "jsr:@std/path@1";
 import { renderToString } from "preact-render-to-string";
 import type { AgentInputBus } from "./input-bus.ts";
 import type { Logger } from "../types.ts";
@@ -304,6 +305,31 @@ export const startGuiServer = async (
         { ok: false, error: "Failed to update scenario" },
         { status: 500 },
       );
+    }
+  });
+
+  // GET /docs/* — serve project doc files so summary links resolve.
+  app.get("/docs/:path*", async (ctx) => {
+    const docsMime: Record<string, string> = {
+      ".md": "text/markdown; charset=utf-8",
+      ".html": "text/html; charset=utf-8",
+      ".txt": "text/plain; charset=utf-8",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".svg": "image/svg+xml",
+    };
+    const filePath = `docs/${ctx.params.path}`;
+    try {
+      const data = await Deno.readFile(filePath);
+      const ext = extname(filePath).toLowerCase();
+      return new Response(data, {
+        headers: {
+          "content-type": docsMime[ext] ?? "application/octet-stream",
+        },
+      });
+    } catch {
+      return new Response("not found", { status: 404 });
     }
   });
 

@@ -322,7 +322,7 @@ export const executeAgent: AgentRunDeps["execute"] = async (
             await writeWorkerLine(workerId, {
               type: "log",
               level: "info",
-              tags: ["info", "agent-stream"],
+              tags: ["info", "agent-stream", workerId],
               message: text,
               ts: Date.now(),
               workerId,
@@ -411,7 +411,7 @@ const executeSubprocess = async (
         writeWorkerLine(workerId, {
           type: "log",
           level: "info",
-          tags: ["info", "agent-stream"],
+          tags: ["info", "agent-stream", workerId],
           message: line,
           ts: Date.now(),
           workerId,

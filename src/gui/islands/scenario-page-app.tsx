@@ -258,9 +258,16 @@ export default function ScenarioPageApp(): preact.JSX.Element {
   );
 }
 
+/** Make a relative path root-relative so it resolves correctly from any page. */
+const ensureAbsolute = (href: string): string =>
+  /^https?:\/\/|^\//.test(href) ? href : `/${href}`;
+
 /** Convert `[text](url)` markdown links to `<a>` tags. */
 const linkifyMarkdownLinks = (text: string): string =>
   text.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" style="color:var(--accent)" target="_blank">$1</a>',
+    (_, label: string, href: string) =>
+      `<a href="${
+        ensureAbsolute(href)
+      }" style="color:var(--accent)" target="_blank">${label}</a>`,
   );

@@ -66,16 +66,33 @@ export const writeOrchestratorEvent = (event: GuiEvent): Promise<void> => {
   return orchestratorWriteChain;
 };
 
-/** Write a worker output line to its log file, keyed by scenario ID. */
+/**
+ * Per-worker serialized write queues. Like the orchestrator write chain,
+ * this ensures concurrent stdout/stderr pipeStream calls don't interleave
+ * partial JSON lines into the same log file.
+ */
+const workerWriteChains = new Map<string | number, Promise<void>>();
+
+/** Write a worker output line to its log file, keyed by scenario ID (serialized). */
 export const writeWorkerLine = (
   workerId: string | number,
   event: GuiEvent,
-): Promise<void> => appendLine(`${LOG_DIR}/worker-${workerId}.log`, event);
+): Promise<void> => {
+  const prev = workerWriteChains.get(workerId) ?? Promise.resolve();
+  const next = prev.then(() =>
+    appendLine(`${LOG_DIR}/worker-${workerId}.log`, event)
+  );
+  workerWriteChains.set(workerId, next);
+  return next;
+};
 
 /** Truncate a worker log file (called when a new round starts). */
 export const resetWorkerLog = async (
   workerId: string | number,
 ): Promise<void> => {
+  // Drain any pending writes before truncating.
+  await (workerWriteChains.get(workerId) ?? Promise.resolve());
+  workerWriteChains.delete(workerId);
   const path = `${LOG_DIR}/worker-${workerId}.log`;
   const f = await Deno.open(path, {
     create: true,
