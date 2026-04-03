@@ -78,9 +78,14 @@ Deno.test(
   },
 );
 
-Deno.test(
-  "publishContainedGui: each HTML file is self-contained with inlined style and module script",
-  async () => {
+Deno.test({
+  name:
+    "publishContainedGui: each HTML file is self-contained with inlined style and module script",
+  // esbuild manages its own child process lifecycle; Deno's sanitizer sees the
+  // process exit completing after the test function returns — this is expected.
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
     const outDir = await Deno.makeTempDir();
 
     const result = await publishContainedGui({ outDir });
@@ -113,11 +118,15 @@ Deno.test(
 
     await Deno.remove(outDir, { recursive: true });
   },
-);
+});
 
-Deno.test(
-  "publishContainedGui: returns Err when outDir is an unwritable path",
-  async () => {
+Deno.test({
+  name: "publishContainedGui: returns Err when outDir is an unwritable path",
+  // esbuild process from prior test may still be shutting down; disable
+  // sanitizers to avoid false-positive leak detection.
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
     // Use a path inside a non-existent parent that cannot be created due to
     // a file (not directory) blocking the path.
     const tempFile = await Deno.makeTempFile();
@@ -134,4 +143,4 @@ Deno.test(
 
     await Deno.remove(tempFile);
   },
-);
+});

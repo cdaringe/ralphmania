@@ -34,6 +34,9 @@ export const Layout = ({
               <a href="quickstart.html">Quick Start</a>
             </li>
             <li>
+              <a href="architecture.html">Architecture</a>
+            </li>
+            <li>
               <a href="reference.html">Reference</a>
             </li>
             <li>

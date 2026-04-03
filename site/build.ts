@@ -10,6 +10,7 @@
 import { renderToString } from "preact-render-to-string";
 import * as path from "jsr:@std/path@^1";
 import type * as preact from "preact";
+import { ArchitecturePage } from "./src/pages/architecture.tsx";
 import { IndexPage } from "./src/pages/index.tsx";
 import { QuickstartPage } from "./src/pages/quickstart.tsx";
 import { ReferencePage } from "./src/pages/reference.tsx";
@@ -38,6 +39,7 @@ export async function buildSite(opts: BuildOpts): Promise<void> {
     { filename: "index.html", vnode: IndexPage() },
     { filename: "quickstart.html", vnode: QuickstartPage() },
     { filename: "reference.html", vnode: ReferencePage() },
+    { filename: "architecture.html", vnode: ArchitecturePage() },
   ];
 
   await Promise.all(

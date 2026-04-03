@@ -538,6 +538,113 @@ tr:hover td {
   color: var(--accent);
 }
 
+/* ─── Flow Diagrams ──────────────────────────────────────── */
+.flow-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+}
+
+.flow-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.flow-node {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: var(--white);
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  min-width: 100px;
+  text-align: center;
+}
+
+.flow-node--active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent-dark);
+}
+
+.flow-node--decision {
+  border-radius: 2px;
+  transform: none;
+  border-style: dashed;
+}
+
+.flow-node--terminal {
+  background: var(--gray-100);
+  border-color: var(--gray-400);
+  color: var(--gray-600);
+  border-radius: 20px;
+}
+
+.flow-node-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.flow-annotation {
+  font-size: 0.65rem;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  color: var(--accent);
+  background: var(--white);
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  border: 1px solid var(--accent);
+  white-space: nowrap;
+}
+
+.flow-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.15rem 0;
+}
+
+.flow-arrow-line {
+  width: 2px;
+  height: 20px;
+  background: var(--gray-400);
+  position: relative;
+}
+
+.flow-arrow-line::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--gray-400);
+}
+
+.flow-arrow-label {
+  font-size: 0.7rem;
+  color: var(--gray-600);
+  margin-top: 0.1rem;
+  font-style: italic;
+}
+
 /* ─── Responsive ─────────────────────────────────────────── */
 @media (max-width: 768px) {
   .hero h1 {
