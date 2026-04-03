@@ -42,6 +42,7 @@
     }
   },
   "tasks": {
+    "site:build": "deno run -A site/build.ts",
     "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net",
     "test:coverage": "deno task test --clean --coverage=coverage/ && deno coverage coverage/",
     "test:coverage:html": "deno task test --clean --coverage=coverage/ && deno coverage --html coverage/",
