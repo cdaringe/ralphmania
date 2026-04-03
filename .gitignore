@@ -2,3 +2,4 @@
 coverage/
 .codex
 site/dist/
+.claude
