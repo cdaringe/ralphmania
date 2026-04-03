@@ -16,7 +16,11 @@ import type { Logger } from "../types.ts";
 import { createLogger } from "../logger.ts";
 import type { ScenarioDetail, StatusDiff } from "../status-diff.ts";
 import { generateStatusHtml } from "../status-diff.ts";
-import { tailLogDir, writeWorkerLine } from "./log-dir.ts";
+import {
+  tailOrchestratorLog,
+  tailWorkerLog,
+  writeWorkerLine,
+} from "./log-dir.ts";
 import { MainPage } from "./pages/main-page.tsx";
 import { ScenarioPage } from "./pages/scenario-page.tsx";
 import { WorkerPage } from "./pages/worker-page.tsx";
@@ -177,37 +181,36 @@ export const startGuiServer = async (
     );
   });
 
-  // GET /events — SSE stream backed by tailing .ralph/worker-logs/*.log.
-  // Each new connection receives:
-  // 1. a full replay of current log-backed GUI state/history
-  // 2. one transport marker indicating initial sync is complete
-  // 3. live incremental events going forward
-  app.get("/events", (_ctx) => {
-    const clientAc = new AbortController();
-    const clientSignal = clientAc.signal;
-    signal?.addEventListener("abort", () => clientAc.abort(), { once: true });
-
+  /** Build an SSE ReadableStream backed by a tail function. */
+  const makeSseStream = (
+    tail: (
+      onEvent: (event: GuiEvent) => void,
+      signal: AbortSignal,
+      onSnapshotComplete?: () => void,
+    ) => Promise<void>,
+    parentSignal?: AbortSignal,
+  ): { stream: ReadableStream<Uint8Array>; ac: AbortController } => {
+    const ac = new AbortController();
+    parentSignal?.addEventListener("abort", () => ac.abort(), { once: true });
     const enc = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller): void {
-        tailLogDir(
+        tail(
           (event: GuiEvent): void => {
             try {
               controller.enqueue(
                 enc.encode(`data: ${JSON.stringify(event)}\n\n`),
               );
             } catch {
-              clientAc.abort();
+              ac.abort();
             }
           },
-          clientSignal,
+          ac.signal,
           (): void => {
             try {
-              controller.enqueue(
-                enc.encode(": initial_sync_complete\n\n"),
-              );
+              controller.enqueue(enc.encode(": initial_sync_complete\n\n"));
             } catch {
-              clientAc.abort();
+              ac.abort();
             }
           },
         ).then(() => {
@@ -217,18 +220,43 @@ export const startGuiServer = async (
         }).catch(() => {});
       },
       cancel(): void {
-        clientAc.abort();
+        ac.abort();
       },
     });
+    return { stream, ac };
+  };
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
+  const sseHeaders = {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  } as const;
+
+  // GET /events — SSE stream for the orchestrator log only.
+  // Each new connection receives:
+  // 1. a full replay of current orchestrator log history
+  // 2. one transport marker indicating initial sync is complete
+  // 3. live incremental events going forward
+  //
+  // Worker logs are NOT included here (see GUI.g). Subscribe via
+  // /events/worker/:id to tail a specific worker's log on demand.
+  app.get("/events", (_ctx) => {
+    const { stream } = makeSseStream(tailOrchestratorLog, signal);
+    return new Response(stream, { headers: sseHeaders });
+  });
+
+  // GET /events/worker/:id — SSE stream for a single worker's log.
+  // Opened by the worker modal or worker detail page when the viewer is
+  // shown; the browser closes (or the component unmounts) to stop tailing,
+  // preventing I/O for idle logs (GUI.g).
+  app.get("/events/worker/:id", (ctx) => {
+    const workerId = decodeURIComponent(ctx.params.id);
+    const { stream } = makeSseStream(
+      (onEvent, sig, onSnap) => tailWorkerLog(workerId, onEvent, sig, onSnap),
+      signal,
+    );
+    return new Response(stream, { headers: sseHeaders });
   });
 
   // GET /api/scenario/:id — full detail for a single scenario.

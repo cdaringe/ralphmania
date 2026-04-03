@@ -1,29 +1,43 @@
 /**
  * Worker modal island — shows worker log replay, live streaming,
  * and input textarea for sending feedback to the agent.
+ *
+ * Opens a dedicated SSE connection to /events/worker/:id when the modal is
+ * shown and closes it when the modal is dismissed (GUI.g: on-demand tailing).
  * @module
  */
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import {
   getSelectedWorker,
-  getWorkerLogBuffer,
-  getWorkerLogVersion,
   isWorkerFinished,
   setSelectedWorker,
   subscribe,
 } from "./event-store.ts";
 import { escHtml } from "../client/html.ts";
 import { LogEntry } from "../client/log-entry.tsx";
+import type { LogEventLike } from "../client/log-entry.tsx";
+
+type LogEvent = LogEventLike & {
+  readonly type: "log";
+  readonly workerId?: string;
+  readonly seq: number;
+};
+
+// deno-lint-ignore no-explicit-any
+type GuiEvent = { readonly type: string; [k: string]: any };
+
+const MAX_MODAL_EVENTS = 800;
+const TRIMMED_MODAL_EVENTS = 600;
+let modalSeq = 0;
 
 export default function WorkerModal(): preact.JSX.Element | null {
   const [selected, setLocal] = useState(getSelectedWorker());
-  const [workerLogVersion, setWorkerLogVersion] = useState(
-    getWorkerLogVersion(),
-  );
   const [finished, setFinished] = useState(false);
   const [sendStatus, setSendStatus] = useState("");
   const [drawerWidth, setDrawerWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // Local log buffer — populated from the per-worker SSE stream (GUI.g).
+  const [events, setEvents] = useState<LogEvent[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -52,6 +66,7 @@ export default function WorkerModal(): preact.JSX.Element | null {
     };
   }, [isDragging]);
 
+  // Keep `selected` in sync with the global event-store selection.
   useEffect(
     () =>
       subscribe(() => {
@@ -60,18 +75,67 @@ export default function WorkerModal(): preact.JSX.Element | null {
         if (w) {
           setFinished(isWorkerFinished(w.scenario));
         }
-        setWorkerLogVersion(getWorkerLogVersion());
-      }, ["selection", "worker_logs", "graph"]),
+        // Clear local log buffer when a new worker is opened.
+        if (!w || w.scenario !== getSelectedWorker()?.scenario) {
+          setEvents([]);
+        }
+      }, ["selection", "graph"]),
     [],
   );
 
-  const events = selected ? getWorkerLogBuffer(selected.scenario) : [];
+  // Open a dedicated SSE stream for the active worker's log (GUI.g).
+  // The stream is opened when the modal becomes visible and closed when
+  // the modal is dismissed, stopping I/O for idle workers.
+  useEffect(() => {
+    if (!selected) return;
+    const scenario = selected.scenario;
+    // Reset the log buffer for the newly selected worker.
+    setEvents([]);
+
+    let es: EventSource | undefined;
+    let reconnectTimer: number | undefined;
+
+    const connect = (): void => {
+      es = new EventSource(
+        `/events/worker/${encodeURIComponent(scenario)}`,
+      );
+      es.onmessage = (e: MessageEvent): void => {
+        try {
+          const ev: GuiEvent = JSON.parse(e.data);
+          if (ev.type === "log") {
+            const logEv = {
+              ...ev,
+              tags: (ev.tags as readonly string[]) ?? [],
+              seq: modalSeq++,
+            } as LogEvent;
+            setEvents((prev) => {
+              const next = [...prev, logEv];
+              if (next.length > MAX_MODAL_EVENTS) {
+                next.splice(0, next.length - TRIMMED_MODAL_EVENTS);
+              }
+              return next;
+            });
+          }
+        } catch { /* malformed event */ }
+      };
+      es.onerror = (): void => {
+        es?.close();
+        reconnectTimer = setTimeout(connect, 3000) as unknown as number;
+      };
+    };
+
+    connect();
+    return (): void => {
+      es?.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, [selected?.scenario]);
 
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [workerLogVersion, selected]);
+  }, [events, selected]);
 
   if (!selected) return null;
 

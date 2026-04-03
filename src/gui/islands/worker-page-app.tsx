@@ -43,7 +43,8 @@ export default function WorkerPageApp(): preact.JSX.Element {
     let timer: number | undefined;
 
     const connect = (): void => {
-      es = new EventSource("/events");
+      // Connect to the worker-specific SSE stream (GUI.g: on-demand tailing).
+      es = new EventSource(`/events/worker/${encodeURIComponent(workerId)}`);
       es.onopen = (): void => {
         setConnected(true);
         setWorkerState("running");
@@ -52,20 +53,19 @@ export default function WorkerPageApp(): preact.JSX.Element {
         try {
           const ev: GuiEvent = JSON.parse(e.data);
           if (ev.type === "log") {
+            // Stream is already scoped to this worker — no filter needed.
             const logEv = {
               ...ev,
               tags: (ev.tags as readonly string[]) ?? [],
               seq: localSeq++,
             } as LogEvent;
-            if (logEv.workerId === workerId) {
-              setEvents((prev) => {
-                const next = [...prev, logEv];
-                if (next.length > MAX_EVENTS) {
-                  next.splice(0, next.length - TRIMMED_EVENTS);
-                }
-                return next;
-              });
-            }
+            setEvents((prev) => {
+              const next = [...prev, logEv];
+              if (next.length > MAX_EVENTS) {
+                next.splice(0, next.length - TRIMMED_EVENTS);
+              }
+              return next;
+            });
           } else if (
             ev.type === "worker_active" && ev.workerIndex === workerIndex
           ) {

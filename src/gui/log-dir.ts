@@ -13,6 +13,10 @@ const LOG_DIR = ".ralph/worker-logs";
 const ORCHESTRATOR_LOG = `${LOG_DIR}/orchestrator.log`;
 const POLL_INTERVAL_MS = 200;
 
+/** Path to a worker's log file. */
+const workerLogPath = (workerId: string): string =>
+  `${LOG_DIR}/worker-${workerId}.log`;
+
 /** Ensures the log directory exists and truncates all log files. */
 export const initLogDir = async (): Promise<void> => {
   await Deno.mkdir(LOG_DIR, { recursive: true });
@@ -121,6 +125,134 @@ const listLogFiles = async (): Promise<string[]> => {
 };
 
 /**
+ * Tail a single log file. Watches LOG_DIR for FS events but only reads the
+ * specified file path. Initial-sync contract matches {@link tailLogDir}.
+ *
+ * @internal Shared implementation used by {@link tailOrchestratorLog} and
+ * {@link tailWorkerLog}.
+ */
+const tailSingleFile = async (
+  filePath: string,
+  onEvent: (event: GuiEvent) => void,
+  signal: AbortSignal,
+  onSnapshotComplete?: () => void,
+): Promise<void> => {
+  // Honour a signal that was already aborted before the function was called.
+  if (signal.aborted) return;
+
+  let pos = 0;
+
+  const readNewLines = async (): Promise<void> => {
+    try {
+      const content = await Deno.readTextFile(filePath);
+      if (content.length <= pos) return;
+      const newContent = content.slice(pos);
+      pos = content.length;
+      for (const line of newContent.split("\n")) {
+        if (line.length === 0) continue;
+        try {
+          onEvent(JSON.parse(line) as GuiEvent);
+        } catch {
+          // Malformed JSON line — skip
+        }
+      }
+    } catch {
+      // File doesn't exist yet or was deleted
+    }
+  };
+
+  // Start watcher before initial replay so no writes fall in the gap.
+  let watcher: Deno.FsWatcher | undefined;
+  try {
+    await Deno.mkdir(LOG_DIR, { recursive: true });
+    if (signal.aborted) return;
+    watcher = Deno.watchFs(LOG_DIR);
+    // Close watcher if the signal fires after it was created.
+    if (signal.aborted) {
+      watcher.close();
+      return;
+    }
+    signal.addEventListener("abort", () => watcher?.close(), { once: true });
+  } catch {
+    watcher = undefined;
+  }
+
+  if (signal.aborted) return;
+
+  // Polling safety net: catches any events the watcher may miss.
+  const pollId = setInterval(() => {
+    if (signal.aborted) return;
+    readNewLines().catch(() => {});
+  }, POLL_INTERVAL_MS);
+  signal.addEventListener("abort", () => clearInterval(pollId), { once: true });
+
+  // Initial replay.
+  await readNewLines();
+  onSnapshotComplete?.();
+
+  if (signal.aborted) {
+    clearInterval(pollId);
+    return;
+  }
+
+  if (!watcher) {
+    await new Promise<void>((resolve) => {
+      if (signal.aborted) { resolve(); return; }
+      signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    clearInterval(pollId);
+    return;
+  }
+
+  // Resolve the canonical absolute path so we can compare against FS events.
+  const canonical = filePath.startsWith("/")
+    ? filePath
+    : `${Deno.cwd()}/${filePath}`;
+
+  try {
+    for await (const fsEv of watcher) {
+      if (signal.aborted) break;
+      if (fsEv.paths.some((p) => p === canonical || p.endsWith(filePath))) {
+        await readNewLines();
+      }
+    }
+  } catch {
+    // Watcher closed or directory gone
+  } finally {
+    clearInterval(pollId);
+  }
+};
+
+/**
+ * Tail only the orchestrator log (`.ralph/worker-logs/orchestrator.log`).
+ *
+ * The `/events` SSE endpoint uses this so that the default stream contains
+ * only orchestrator-level events — worker logs are never sent until a client
+ * explicitly subscribes via `/events/worker/:id`.
+ */
+export const tailOrchestratorLog = (
+  onEvent: (event: GuiEvent) => void,
+  signal: AbortSignal,
+  onSnapshotComplete?: () => void,
+): Promise<void> =>
+  tailSingleFile(ORCHESTRATOR_LOG, onEvent, signal, onSnapshotComplete);
+
+/**
+ * Tail a single worker's log file on demand.
+ *
+ * Called only when a client opens a worker viewer (modal or dedicated page).
+ * The connection is closed by aborting `signal` when the viewer closes,
+ * preventing unnecessary I/O for idle worker logs.
+ */
+export const tailWorkerLog = (
+  workerId: string,
+  onEvent: (event: GuiEvent) => void,
+  signal: AbortSignal,
+  onSnapshotComplete?: () => void,
+): Promise<void> =>
+  tailSingleFile(workerLogPath(workerId), onEvent, signal, onSnapshotComplete);
+
+/**
  * Tail all log files in the log directory, calling `onEvent` for each
  * NDJSON line. Watches for new files appearing and starts tailing those
  * too.
@@ -130,6 +262,8 @@ const listLogFiles = async (): Promise<string[]> => {
  * 2. replay all existing log content in deterministic order
  * 3. call `onSnapshotComplete` once initial replay is fully drained
  * 4. continue streaming live updates from the watcher
+ * @deprecated Use {@link tailOrchestratorLog} for the main SSE stream and
+ * {@link tailWorkerLog} for per-worker streams (see GUI.g).
  */
 export const tailLogDir = async (
   onEvent: (event: GuiEvent) => void,
