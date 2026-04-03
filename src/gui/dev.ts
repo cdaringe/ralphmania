@@ -8,6 +8,7 @@
  * @module
  */
 import * as esbuild from "npm:esbuild@~0.25.5";
+import type { Plugin } from "npm:esbuild@~0.25.5";
 import * as path from "jsr:@std/path@^1";
 import manifest from "./manifest.json" with { type: "json" };
 
@@ -15,6 +16,24 @@ const IS_REMOTE = !import.meta.url.startsWith("file:");
 const GUI_DIR = IS_REMOTE
   ? new URL(".", import.meta.url).href
   : path.dirname(path.fromFileUrl(import.meta.url));
+
+/**
+ * JSR resolves import maps at publish time, rewriting bare specifiers like
+ * "preact" into "npm:preact@^10". esbuild doesn't understand the npm:
+ * protocol, so this plugin intercepts those imports, marks them external,
+ * and rewrites them back to bare specifiers for the browser import map.
+ */
+const denoNpmExternalPlugin: Plugin = {
+  name: "deno-npm-external",
+  setup(build) {
+    build.onResolve({ filter: /^npm:preact/ }, (args) => {
+      const bare = args.path
+        .replace(/^npm:/, "")
+        .replace(/@[^/]*/, "");
+      return { path: bare, external: true };
+    });
+  },
+};
 
 /** Compiled island JS keyed by island name (e.g., "sse-provider"). */
 export type CompiledIslands = ReadonlyMap<string, string>;
@@ -63,6 +82,7 @@ export const compileIslands = async (): Promise<CompiledIslands> => {
     target: "es2022",
     outdir: "out",
     write: false,
+    plugins: [denoNpmExternalPlugin],
     // Preact is externalized — loaded via import map in the HTML.
     external: ["preact", "preact/*"],
     define: {
