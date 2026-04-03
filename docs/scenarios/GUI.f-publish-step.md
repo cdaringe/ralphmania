@@ -7,44 +7,39 @@
 ## How it is satisfied
 
 When the orchestrator loop completes with all scenarios VERIFIED, `mod.ts` calls
-`publishContainedGui` (from `src/gui/publish.ts`) immediately after generating
-evidence receipts.
+`publishContainedGui` (from `src/gui/publish.ts`) which produces standalone HTML
+pages with **all JS and CSS inlined** — no CDN, importmap, or external
+dependencies required at runtime.
 
-Key call site in `mod.ts`:
+Call site in `mod.ts`:
 
 ```typescript
 if (allDone) {
   const guiOutDir = path.join(RALPH_RECEIPTS_DIRNAME, "gui");
   const guiResult = await publishContainedGui({ outDir: guiOutDir, log });
-  ...
 }
 ```
 
-`RALPH_RECEIPTS_DIRNAME` is `.ralph/receipts`, so the bundle lands at
-`.ralph/receipts/gui/`.
-
 ## What `publishContainedGui` produces
 
-`src/gui/publish.ts` compiles all island entry points with esbuild
-(`npm:esbuild@~0.25.5`) in a single pass — `bundle: true, splitting: false` —
-producing one self-contained ESM file per page. CSS is loaded from
-`src/gui/css/*.css` and inlined. Preact is externalized and served from `esm.sh`
-CDN via an inline `<script type="importmap">`. It writes:
+`src/gui/publish.ts` compiles all island entry points via esbuild
+(`npm:esbuild@~0.25.5`) in a single pass — `bundle: true, splitting: false,
+minify: true`. Preact is **bundled inline** via a `denoNpmBundlePlugin` that
+resolves `preact` imports to their Deno npm cache paths using
+`import.meta.resolve()`. CSS from `src/gui/css/*.css` is concatenated and
+inlined in a `<style>` tag. Output:
 
 - `index.html` — main orchestrator view
 - `worker.html` — per-worker detail page
 - `scenario.html` — per-scenario detail page
-- `manifest.json` — includes `fullyContained: true` and `generatedAt` timestamp
+- `manifest.json` — `{ fullyContained: true, generatedAt, assets }`
 
-No server-side compilation is required to view the output.
+No server, CDN, or importmap needed to view the output — fully offline-capable.
 
 ## Evidence
 
-- Call site: `mod.ts` — `publishContainedGui` called when `allDone`
-- Implementation: `src/gui/publish.ts` — esbuild-based single-pass compilation
-- Tests: `src/gui/publish.test.ts`
-  - happy path creates all four files
-  - `manifest.json` has `fullyContained: true`
-  - each HTML contains `<style>`, `<script type="importmap">`, and
-    `<script type="module">`
-  - returns `Err` when the output directory cannot be created
+- Call site: `mod.ts` line ~304 — `publishContainedGui` called when `allDone`
+- Implementation: `src/gui/publish.ts` — `denoNpmBundlePlugin` resolves preact to file paths; no `external` config
+- Co-located tests: `src/gui/publish.test.ts` (4 tests) — happy path, manifest check, self-contained assertion (no importmap), error case
+- Integration test: `test/gui_publish_test.ts` — asserts no importmap, no external URLs, app-root present
+- E2E test: `test/gui_publish_e2e_test.ts` — serves published output as static site, verifies all pages load

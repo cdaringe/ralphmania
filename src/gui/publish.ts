@@ -3,7 +3,7 @@
  *
  * Artifacts are written into `.ralph/receipts/gui/` so publish output includes
  * a portable GUI snapshot that does not depend on runtime island compilation or
- * a running server. Preact is loaded from esm.sh CDN via an inline importmap.
+ * a running server. Preact is bundled inline — no CDN or importmap needed.
  */
 import * as esbuild from "npm:esbuild@~0.25.5";
 import type { OnResolveResult, Plugin, PluginBuild } from "npm:esbuild@~0.25.5";
@@ -12,7 +12,6 @@ import type { Logger, Result } from "../types.ts";
 import { createLogger } from "../logger.ts";
 import { err, ok } from "../types.ts";
 import { loadCssFiles } from "./css.ts";
-import { PREACT_IMPORTS } from "./pages/import-map.ts";
 
 const GUI_DIR = path.dirname(path.fromFileUrl(import.meta.url));
 const ISLANDS_DIR = path.join(GUI_DIR, "islands");
@@ -44,20 +43,25 @@ type PageBundle = {
 };
 
 /**
- * JSR resolves import maps at publish time, rewriting bare specifiers like
- * "preact" into "npm:preact@^10". esbuild doesn't understand the npm:
- * protocol, so this plugin intercepts those imports, marks them external,
- * and rewrites them back to bare specifiers for the browser importmap.
+ * Resolve bare "preact" and JSR-rewritten "npm:preact@^10" specifiers to
+ * their actual file paths in the Deno npm cache so esbuild bundles them
+ * inline rather than externalizing to a CDN importmap.
  */
-const denoNpmExternalPlugin: Plugin = {
-  name: "deno-npm-external",
+const denoNpmBundlePlugin: Plugin = {
+  name: "deno-npm-bundle",
   setup(build: PluginBuild): void {
-    build.onResolve({ filter: /^npm:preact/ }, (args): OnResolveResult => {
-      const bare = args.path
-        .replace(/^npm:/, "")
-        .replace(/@[^/]*/, "");
-      return { path: bare, external: true };
-    });
+    build.onResolve(
+      { filter: /^(?:npm:)?preact/ },
+      (args): OnResolveResult | undefined => {
+        try {
+          const resolved = import.meta.resolve(args.path);
+          if (resolved.startsWith("file:")) {
+            return { path: new URL(resolved).pathname };
+          }
+        } catch { /* unresolvable — fall through to default */ }
+        return undefined;
+      },
+    );
   },
 };
 
@@ -80,9 +84,8 @@ const compileEntries = async (
       outdir: "out",
       write: false,
       minify: true,
-      plugins: [denoNpmExternalPlugin],
-      // Preact is externalized — loaded via inline importmap in the HTML.
-      external: ["preact", "preact/*"],
+      plugins: [denoNpmBundlePlugin],
+      // Preact is bundled inline — no CDN or importmap needed at runtime.
       define: { "process.env.NODE_ENV": '"production"' },
       jsx: "automatic",
       jsxImportSource: "preact",
@@ -106,16 +109,14 @@ const renderContainedHtml = (
     css: string;
     js: string;
   },
-): string => {
-  const importMapJson = JSON.stringify({ imports: PREACT_IMPORTS });
-  return `<!DOCTYPE html>
+): string =>
+  `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>${title}</title>
     <style>${css}</style>
-    <script type="importmap">${importMapJson}</script>
   </head>
   <body>
     <div id="app-root">${loading}</div>
@@ -123,7 +124,6 @@ const renderContainedHtml = (
   </body>
 </html>
 `;
-};
 
 export const publishContainedGui = async (
   { outDir, log: inputLog }: { outDir: string; log?: Logger },

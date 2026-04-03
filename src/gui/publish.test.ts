@@ -79,7 +79,7 @@ Deno.test(
 );
 
 Deno.test(
-  "publishContainedGui: each HTML file contains inlined style, importmap, and module script",
+  "publishContainedGui: each HTML file is self-contained with inlined style and module script",
   async () => {
     const outDir = await Deno.makeTempDir();
 
@@ -102,8 +102,8 @@ Deno.test(
         `Expected <script type="module"> in ${filename}`,
       );
       assert(
-        html.includes('type="importmap"'),
-        `Expected importmap in ${filename}`,
+        !html.includes("importmap"),
+        `${filename} should not require importmap (preact is bundled inline)`,
       );
       assert(
         html.includes("<!DOCTYPE html>"),

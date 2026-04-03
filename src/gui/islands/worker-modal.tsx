@@ -36,19 +36,19 @@ export default function WorkerModal(): preact.JSX.Element | null {
   useEffect(() => {
     if (!isDragging) return;
     const onMouseMove = (e: MouseEvent): void => {
-      const newWidth = window.innerWidth - e.clientX;
+      const newWidth = globalThis.innerWidth - e.clientX;
       const clamped = Math.max(
         320,
-        Math.min(newWidth, window.innerWidth * 0.95),
+        Math.min(newWidth, globalThis.innerWidth * 0.95),
       );
       setDrawerWidth(clamped);
     };
     const onMouseUp = (): void => setIsDragging(false);
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    globalThis.document.addEventListener("mousemove", onMouseMove);
+    globalThis.document.addEventListener("mouseup", onMouseUp);
     return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      globalThis.document.removeEventListener("mousemove", onMouseMove);
+      globalThis.document.removeEventListener("mouseup", onMouseUp);
     };
   }, [isDragging]);
 
