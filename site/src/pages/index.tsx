@@ -151,7 +151,9 @@ export const IndexPage = (): preact.VNode => (
           Get started in under a minute.
         </p>
         <div class="hero-cta">
-          <a href="quickstart.html" class="btn btn-primary">Read the Quick Start</a>
+          <a href="quickstart.html" class="btn btn-primary">
+            Read the Quick Start
+          </a>
           <a
             href="https://jsr.io/@cdaringe/ralphmania"
             class="btn btn-secondary"

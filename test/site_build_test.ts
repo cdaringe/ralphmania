@@ -12,8 +12,7 @@ const makeTempBuild = async (): Promise<{
 }> => {
   const outDir = await Deno.makeTempDir();
   const srcDir = new URL("../site/src", import.meta.url).pathname;
-  const cleanup = (): Promise<void> =>
-    Deno.remove(outDir, { recursive: true });
+  const cleanup = (): Promise<void> => Deno.remove(outDir, { recursive: true });
   return { outDir, srcDir, cleanup };
 };
 

@@ -58,7 +58,9 @@ export const ReferencePage = (): preact.VNode => (
                   <code>-a</code>
                 </td>
                 <td>string</td>
-                <td>AI agent to use (default: <code>claude</code>)</td>
+                <td>
+                  AI agent to use (default: <code>claude</code>)
+                </td>
               </tr>
               <tr>
                 <td>
@@ -81,8 +83,9 @@ export const ReferencePage = (): preact.VNode => (
                 </td>
                 <td>string</td>
                 <td>
-                  Path to a plugin file exporting a{" "}
-                  <code>RalphPlugin</code> default
+                  Path to a plugin file exporting a <code>RalphPlugin</code>
+                  {" "}
+                  default
                 </td>
               </tr>
               <tr>
@@ -109,9 +112,9 @@ export const ReferencePage = (): preact.VNode => (
 
         <h2 id="plugin-hooks">Plugin Hooks</h2>
         <p>
-          Plugins export a named <code>plugin</code>{" "}
-          object conforming to the <code>Plugin</code>{" "}
-          type. All hooks are optional and async-friendly.
+          Plugins export a named <code>plugin</code> object conforming to the
+          {" "}
+          <code>Plugin</code> type. All hooks are optional and async-friendly.
         </p>
         <div class="table-wrap">
           <table>

@@ -39,8 +39,8 @@ export const QuickstartPage = (): preact.VNode => (
       <main class="content">
         <h2 id="installation">Installation</h2>
         <p>
-          ralphmania runs on <strong>Deno v2</strong>. No install required — run
-          directly from JSR:
+          ralphmania runs on{" "}
+          <strong>Deno v2</strong>. No install required — run directly from JSR:
         </p>
         <pre><code>deno run -A jsr:@cdaringe/ralphmania -i 10</code></pre>
         <p>Or cache it for repeated use:</p>
@@ -64,8 +64,8 @@ ralphmania -i 10</code></pre>
         <div class="callout">
           <p>
             <strong>Tip:</strong> Scenario IDs can be any string —{" "}
-            <code>1</code>, <code>ARCH.1</code>, <code>GUI.a</code>, etc.
-            ralphmania tracks them exactly as written.
+            <code>1</code>, <code>ARCH.1</code>,{" "}
+            <code>GUI.a</code>, etc. ralphmania tracks them exactly as written.
           </p>
         </div>
 

@@ -45,8 +45,7 @@ export const Layout = ({
       {children}
       <footer class="footer">
         <p>
-          Built with{" "}
-          <a href="https://deno.com">Deno</a> &amp;{" "}
+          Built with <a href="https://deno.com">Deno</a> &amp;{" "}
           <a href="https://preactjs.com">Preact</a>. MIT licensed.
         </p>
       </footer>
