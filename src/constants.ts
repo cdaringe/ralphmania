@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const WORKER_IDLE_TIMEOUT_MS = 90 * 1000;
 /** Hard timeout for the validation script (10 minutes). */
@@ -41,7 +43,9 @@ export const VALID_STATUSES = Object.values(Status);
 
 export type ScenarioStatus = (typeof VALID_STATUSES)[number];
 
-export const WORKTREE_BASE_DIR = ".ralph/worktrees";
+export const WORKTREE_BASE_DIR = `${tmpdir()}/ralph-worktrees${
+  Deno.cwd().replaceAll("/", "_")
+}`;
 export const RECONCILE_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const COMPLETION_MARKER = "<promise>COMPLETE</promise>";
