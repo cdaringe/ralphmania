@@ -184,6 +184,7 @@ const main = async (): Promise<number> => {
   printBanner({ agent, iterations, level, parallel });
 
   const guiController = new AbortController();
+  let guiFinished: Promise<void> | undefined;
   // Event bus is always created so both --gui (web) and TUI can use it.
   const bus = createEventBus();
   let agentInputBus: import("./src/gui/input-bus.ts").AgentInputBus | undefined;
@@ -206,7 +207,7 @@ const main = async (): Promise<number> => {
       const progressRows = progressResult.isOk() ? progressResult.value : [];
       return { specIds, specRows, progressRows };
     };
-    startGuiServer({
+    guiFinished = startGuiServer({
       port: guiPort,
       log,
       signal: guiController.signal,
@@ -226,7 +227,7 @@ const main = async (): Promise<number> => {
         await Deno.writeTextFile(filePaths.progressFile, result.value);
         return { ok: true };
       },
-    }).then((h) => h.finished).catch((): void => {});
+    }).then((h) => h.finished);
   }
   // Always bridge logger → event bus so both TUI and web GUI receive events.
   log = createGuiLogger(log, bus);
@@ -373,6 +374,7 @@ const main = async (): Promise<number> => {
     return computeExitCode(allDone);
   } finally {
     guiController.abort();
+    await guiFinished?.catch(() => {});
     clearInterval(progressPollId);
     tui?.cleanup();
   }
