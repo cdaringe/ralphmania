@@ -61,7 +61,9 @@ Deno.test(
 
     // Must contain the orchestrator event
     assertEquals(
-      collected.some((e) => e.type === "log" && e.message === "orchestrator message"),
+      collected.some((e) =>
+        e.type === "log" && e.message === "orchestrator message"
+      ),
       true,
       "orchestrator event should be present",
     );
@@ -91,12 +93,16 @@ Deno.test(
     );
 
     assertEquals(
-      collected.some((e) => e.type === "log" && e.message === "target worker log"),
+      collected.some((e) =>
+        e.type === "log" && e.message === "target worker log"
+      ),
       true,
       "should receive events for the targeted worker",
     );
     assertEquals(
-      collected.some((e) => e.type === "log" && e.message === "other worker log"),
+      collected.some((e) =>
+        e.type === "log" && e.message === "other worker log"
+      ),
       false,
       "must not receive events from a different worker",
     );
@@ -131,7 +137,9 @@ Deno.test(
 
     assertEquals(snapshotFired, true, "onSnapshotComplete should have fired");
     assertEquals(
-      collected.some((e) => e.type === "log" && e.message === "pre-existing log line"),
+      collected.some((e) =>
+        e.type === "log" && e.message === "pre-existing log line"
+      ),
       true,
       "historical content must be replayed",
     );
@@ -158,7 +166,10 @@ Deno.test(
     });
 
     const raceResult = await Promise.race([
-      tailPromise.then(() => { clearTimeout(timeoutId); return "done" as const; }),
+      tailPromise.then(() => {
+        clearTimeout(timeoutId);
+        return "done" as const;
+      }),
       timeout,
     ]);
     clearTimeout(timeoutId);

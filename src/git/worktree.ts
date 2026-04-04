@@ -54,6 +54,14 @@ export const createWorktree = async (
       message: `Removing stale worktree at ${path}`,
     });
     await forceRemoveWorktree(path, log);
+    // Verify the path is actually gone — forceRemoveWorktree swallows errors
+    try {
+      await Deno.stat(path);
+      // Still exists after cleanup; force-remove the directory directly
+      await Deno.remove(path, { recursive: true });
+    } catch {
+      // Gone — expected
+    }
   } catch {
     // Path doesn't exist, which is fine
   }
@@ -178,6 +186,22 @@ const forceRemoveWorktree = async (
   } catch {
     // Directory may already be gone
   }
+
+  // Also remove .git/worktrees/<name> entry directly — git worktree prune
+  // may not clean it if the entry is in an inconsistent state.
+  if (gitDirResult.code === 0) {
+    const worktreeName = path.split("/").pop();
+    if (worktreeName) {
+      try {
+        await Deno.remove(`${gitDirResult.stdout}/worktrees/${worktreeName}`, {
+          recursive: true,
+        });
+      } catch {
+        // Entry may already be gone
+      }
+    }
+  }
+
   await run(["worktree", "prune"]);
   return true;
 };
