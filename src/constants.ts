@@ -29,16 +29,19 @@ export const DEFAULT_MODEL_LADDER: ModelLadder = {
 } as const;
 
 /**
- * Parse a "provider/model" spec string into a ModelRoleConfig.
- * Returns err if the format is invalid.
+ * Parse a model spec string into a ModelRoleConfig.
+ * Accepts either "provider/model" or "provider:model", with only the first
+ * delimiter splitting provider from model so model names may contain ":".
  */
 export const parseModelSpec = (
   spec: string,
 ): Result<ModelRoleConfig, string> => {
-  const idx = spec.indexOf("/");
+  const slashIdx = spec.indexOf("/");
+  const colonIdx = spec.indexOf(":");
+  const idx = slashIdx >= 1 ? slashIdx : colonIdx >= 1 ? colonIdx : -1;
   return idx < 1
     ? err(
-      `Invalid model spec "${spec}": expected "provider/model" format (e.g., "anthropic/claude-sonnet-4-5-20250514")`,
+      `Invalid model spec "${spec}": expected "provider/model" or "provider:model" format (e.g., "anthropic/claude-sonnet-4-5-20250514" or "ollama:gemma:4eb")`,
     )
     : ok({ provider: spec.slice(0, idx), model: spec.slice(idx + 1) });
 };

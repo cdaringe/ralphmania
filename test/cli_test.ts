@@ -59,6 +59,15 @@ Deno.test("parseCliArgs with --coder override", async () => {
   }
 });
 
+Deno.test("parseCliArgs with colon-form --coder override", async () => {
+  const result = await parseCliArgs(["-i", "1", "--coder", "ollama:gemma:4eb"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.ladder.coder.provider, "ollama");
+    assertEquals(result.value.ladder.coder.model, "gemma:4eb");
+  }
+});
+
 Deno.test("parseCliArgs with --verifier override", async () => {
   const result = await parseCliArgs(["-i", "1", "--verifier", "openai/gpt-4o"]);
   assertEquals(result.isOk(), true);

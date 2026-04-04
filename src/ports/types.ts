@@ -77,6 +77,7 @@ export type MachineDeps = {
       level: EscalationLevel | undefined;
       cwd?: string;
       targetScenarioOverride?: string;
+      promptOverride?: string;
       specFile?: string;
       progressFile?: string;
       /** Worker index forwarded to the agent executor for stdio prefixing. */

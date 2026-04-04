@@ -339,6 +339,7 @@ export const runIteration = async (
     level,
     cwd,
     targetScenarioOverride,
+    promptOverride,
     specFile,
     progressFile,
     workerIndex,
@@ -353,6 +354,7 @@ export const runIteration = async (
     level: EscalationLevel | undefined;
     cwd?: string;
     targetScenarioOverride?: string;
+    promptOverride?: string;
     specFile?: string;
     progressFile?: string;
     workerIndex?: number;
@@ -365,6 +367,7 @@ export const runIteration = async (
       ladder,
       level,
       targetScenarioOverride,
+      promptOverride,
       validationFailurePath,
       specFile,
       progressFile,
