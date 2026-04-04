@@ -216,10 +216,10 @@ export const ArchitecturePage = (): preact.VNode => (
           <FlowNode
             label="prompt_built"
             active
-            annotation="plugin:onCommandBuilt"
+            annotation="plugin:onSessionConfigBuilt"
           />
-          <FlowArrow label="build command" />
-          <FlowNode label="command_built" active annotation="state change" />
+          <FlowArrow label="build session config" />
+          <FlowNode label="config_built" active annotation="state change" />
           <FlowArrow label="spawn agent subprocess" />
           <FlowNode
             label="running_agent"
@@ -382,7 +382,7 @@ export const ArchitecturePage = (): preact.VNode => (
           />
           <FlowArrow />
           <FlowNode
-            label="onCommandBuilt"
+            label="onSessionConfigBuilt"
             active
             annotation="per worker"
           />

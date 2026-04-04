@@ -1,31 +1,51 @@
 import { tmpdir } from "node:os";
+import type { ModelLadder, ModelRoleConfig, Result } from "./types.ts";
+import { err, ok } from "./types.ts";
 
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const WORKER_IDLE_TIMEOUT_MS = 90 * 1000;
 /** Hard timeout for the validation script (10 minutes). */
 export const VALIDATION_TIMEOUT_MS = 10 * 60 * 1000;
-export const REWORK_THRESHOLD = 1;
 export const ESCALATION_FILE = ".ralph/escalation.json";
 export const LOOP_STATE_FILE = ".ralph/loop-state.json";
 
-/** Coder config: unimplemented scenarios remain. */
-export const CLAUDE_CODER = {
-  model: "sonnet",
-  mode: "general",
-  effort: "high",
+/** Default model ladder: Anthropic Claude models with role-appropriate thinking. */
+export const DEFAULT_MODEL_LADDER: ModelLadder = {
+  coder: {
+    provider: "anthropic",
+    model: "claude-sonnet-4-5-20250514",
+    thinkingLevel: "high",
+  },
+  verifier: {
+    provider: "anthropic",
+    model: "claude-opus-4-5-20250514",
+    thinkingLevel: "low",
+  },
+  escalated: {
+    provider: "anthropic",
+    model: "claude-opus-4-5-20250514",
+    thinkingLevel: "high",
+  },
 } as const;
-/** Verifier config: all scenarios implemented, verifying. */
-export const CLAUDE_VERIFIER = {
-  model: "opus",
-  mode: "general",
-  effort: "low",
-} as const;
-/** Escalated config: NEEDS_REWORK present. */
-export const CLAUDE_ESCALATED = {
-  model: "opus",
-  mode: "strong",
-  effort: "high",
-} as const;
+
+/**
+ * Parse a "provider/model" spec string into a ModelRoleConfig.
+ * Returns err if the format is invalid.
+ */
+export const parseModelSpec = (
+  spec: string,
+): Result<ModelRoleConfig, string> => {
+  const idx = spec.indexOf("/");
+  return idx < 1
+    ? err(
+      `Invalid model spec "${spec}": expected "provider/model" format (e.g., "anthropic/claude-sonnet-4-5-20250514")`,
+    )
+    : ok({ provider: spec.slice(0, idx), model: spec.slice(idx + 1) });
+};
+
+/** Format a ModelRoleConfig as "provider/model" for display. */
+export const formatModelSpec = (config: ModelRoleConfig): string =>
+  `${config.provider}/${config.model}`;
 
 /**
  * The only statuses allowed in the progress.md Status column.
@@ -78,7 +98,7 @@ export const RALPH_RECEIPTS_DIRNAME = ".ralph/receipts";
 /**
  * Environment variable overrides that suppress interactive password/passphrase
  * prompts from common tools. Programs that open `/dev/tty` directly (git, ssh,
- * gpg, sudo) bypass stdin:"null" — these env vars cause them to fail fast
+ * gpg, sudo) bypass stdin:"null" -- these env vars cause them to fail fast
  * instead of hanging.
  *
  * Use {@link nonInteractiveEnv} to merge these with the inherited environment.
@@ -100,7 +120,7 @@ export const nonInteractiveEnv = (): Record<string, string> => ({
 });
 
 export const AUTONOMOUS_PROMPT = `
-1. Read @specification.md & @progress.md files. Read .ralph/repo_map.md if it exists.
+1. Read {SPEC_FILE} & {PROGRESS_FILE} files. Read .ralph/repo_map.md if it exists.
 2. Find the next NEEDS_REWORK scenario. If none, find the highest leverage unimplemented scenario. Implement & add tests.
    2.1. Document your scenario implementation in docs/scenarios/:name.md. Write maximally concise detail, justifying how the scenario is fully completed. Reference key details as evidence for a reviewer.
    2.2. Commit.
@@ -109,13 +129,13 @@ export const AUTONOMOUS_PROMPT = `
   3.1. Ensure e2e & integration tests are present for the scenario.
   3.2. All referenced documents & modules should be verified existing and up-to-date.
   3.3. Assess if the user's scenario outcomes met--not just if the prior agent's tasks are completed.
-  3.4. Update @progress.md status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
+  3.4. Update {PROGRESS_FILE} status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
 4. Update repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
 `.trim();
 
 export const buildTargetedPrompt = (scenario: string): string =>
   `
-1. Read @specification.md & @progress.md files. Read .ralph/repo_map.md if it exists.
+1. Read {SPEC_FILE} & {PROGRESS_FILE} files. Read .ralph/repo_map.md if it exists.
 2. Implement scenario ${scenario}. Do NOT work on any other scenario. Add tests.
    2.1. Document your scenario implementation in docs/scenarios/:name.md. Write maximally concise detail, justifying how the scenario is fully completed. Reference key details as evidence for a reviewer.
    2.2. Commit.
@@ -124,7 +144,7 @@ export const buildTargetedPrompt = (scenario: string): string =>
   3.1. Ensure e2e & integration tests are present for the scenario.
   3.2. All referenced documents & modules should be verified existing and up-to-date.
   3.3. Assess if the user's scenario outcomes met--not just if the prior agent's tasks are completed.
-  3.4. Update @progress.md status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
+  3.4. Update {PROGRESS_FILE} status to VERIFIED or NEEDS_REWORK. If NEEDS_REWORK, add rework notes to the notes cell, otherwise clear it.
 4. Update repo_map.md with any new design or ops info. Keep it maximally concise and link out to other .ralph/*.md documents to help subsequent agent runs re contextualize efficiently.
 `.trim();
 

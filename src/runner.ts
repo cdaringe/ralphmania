@@ -1,26 +1,22 @@
 import type {
-  Agent,
   EscalationLevel,
   IterationResult,
   Logger,
-  ModelSelection,
+  ModelLadder,
   Result,
 } from "./types.ts";
 import type { AgentInputBus } from "./gui/input-bus.ts";
 import { resetWorkerLog, writeWorkerLine } from "./gui/log-dir.ts";
 import { err, ok } from "./types.ts";
-import { extractSDKText } from "./agents/claude/sdk-text.ts";
 import {
   COMPLETION_MARKER,
   formatDuration,
-  nonInteractiveEnv,
   RALPH_RECEIPTS_DIRNAME,
   TIMEOUT_MS,
   WORKER_IDLE_TIMEOUT_MS,
 } from "./constants.ts";
 import { blue, cyan, green, magenta, yellow } from "./colors.ts";
-import { getModel } from "./model.ts";
-import { buildCommandSpec } from "./command.ts";
+import { selectFromLadder } from "./model.ts";
 import type { HookContext, Plugin } from "./plugin.ts";
 import { createIdleWatchdog } from "./idle-watchdog.ts";
 import {
@@ -29,56 +25,6 @@ import {
   workerTransition,
 } from "./machines/worker-machine.ts";
 import type { AgentRunDeps } from "./ports/types.ts";
-
-/**
- * Parse an NDJSON line from `claude --output-format=stream-json` and extract
- * displayable text. Returns `undefined` for events with no user-facing content.
- *
- * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
- */
-export const extractNdjsonResult = (line: string): string | undefined => {
-  try {
-    return extractSDKText(JSON.parse(line));
-  } catch {
-    return line;
-  }
-};
-
-/** TransformStream that extracts `.result` from each NDJSON line. */
-export const ndjsonResultTransform = (): TransformStream<
-  Uint8Array,
-  Uint8Array
-> => {
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  let buffer = "";
-  return new TransformStream({
-    transform(
-      chunk: Uint8Array,
-      controller: TransformStreamDefaultController<Uint8Array>,
-    ): void {
-      buffer += decoder.decode(chunk, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      lines.forEach((line) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        const result = extractNdjsonResult(trimmed);
-        if (result !== undefined) {
-          controller.enqueue(encoder.encode(result + "\n"));
-        }
-      });
-    },
-    flush(controller: TransformStreamDefaultController<Uint8Array>): void {
-      const trimmed = buffer.trim();
-      if (!trimmed) return;
-      const result = extractNdjsonResult(trimmed);
-      if (result !== undefined) {
-        controller.enqueue(encoder.encode(result + "\n"));
-      }
-    },
-  });
-};
 
 const WORKER_COLORS: ReadonlyArray<(s: string) => string> = [
   green,
@@ -90,9 +36,7 @@ const WORKER_COLORS: ReadonlyArray<(s: string) => string> = [
 
 /**
  * Build a fixed-width colored prefix string for a worker's stdio output.
- * Format: `[wN/sNN] ` — worker index + zero-padded scenario number.
- * Colors cycle through {@link WORKER_COLORS} so each worker is visually
- * distinct. Only colored when writing to a TTY (controlled by colors.ts).
+ * Format: `[wN/sNN] ` -- worker index + scenario number.
  */
 export const workerPrefix = (
   workerIndex: number,
@@ -105,8 +49,8 @@ export const workerPrefix = (
 
 /**
  * TransformStream that prepends `prefix` to the start of every line in the
- * byte stream. Applies ONLY when writing to the terminal — disk writes bypass
- * this transform to keep logs clean (scenario 33).
+ * byte stream. Applies ONLY when writing to the terminal -- disk writes bypass
+ * this transform to keep logs clean.
  */
 export const linePrefixTransform = (
   prefix: string,
@@ -193,14 +137,13 @@ export const pipeStream = async ({
       }
     }
   } catch (error: unknown) {
-    // Stream closed or aborted — expected during cancellation.
-    // Log unexpected errors so they don't vanish silently.
+    // Stream closed or aborted -- expected during cancellation.
     const isAbort = error instanceof DOMException &&
       error.name === "AbortError";
     const isResourceClosed = error instanceof TypeError &&
       String(error).includes("resource closed");
     if (!isAbort && !isResourceClosed) {
-      console.error("[pipeStream] unexpected error:", error);
+      throw error;
     }
   }
   // Flush remaining line buffer
@@ -213,33 +156,22 @@ export const pipeStream = async ({
 // Re-export from worker-machine for backward compatibility.
 export { resolveWorkerModelSelection } from "./machines/worker-machine.ts";
 
-/** Only backends with a true multi-turn session API should accept live input. */
-export const supportsInteractiveAgentInput = (
-  agent: import("./types.ts").Agent,
-): boolean => agent === "claude";
-
-/* c8 ignore start — real subprocess execution, tested via integration */
+/* c8 ignore start -- real pi-mono session execution, tested via integration */
 /**
- * Execute an agent — the I/O boundary of the worker pipeline.
- * This is the default {@link AgentRunDeps.execute} implementation.
- *
- * For claude: uses the Agent SDK session API for interactive multi-turn input.
- * For other agents: uses a subprocess with stdin disabled.
+ * Execute a pi-mono agent session -- the I/O boundary of the worker pipeline.
+ * This is the default AgentRunDeps.execute implementation.
  */
 export const executeAgent: AgentRunDeps["execute"] = async (
   {
-    spec,
-    agent,
+    config,
+    prompt,
     selection,
     iterationNum,
     signal,
     log,
-    cwd,
     workerIndex,
     agentInputBus,
-  }: Parameters<
-    AgentRunDeps["execute"]
-  >[0],
+  }: Parameters<AgentRunDeps["execute"]>[0],
 ): Promise<IterationResult> => {
   const workerId = selection.targetScenario;
 
@@ -248,255 +180,130 @@ export const executeAgent: AgentRunDeps["execute"] = async (
     await resetWorkerLog(workerId).catch(() => {});
   }
 
-  // Claude uses the Agent SDK for interactive multi-turn sessions.
-  if (agent === "claude") {
-    const { executeClaudeSession } = await import(
-      "./agents/claude/sdk-session.ts"
-    );
-    const { query } = await import("@anthropic-ai/claude-agent-sdk");
+  const prefix = workerIndex !== undefined
+    ? workerPrefix(workerIndex, workerId)
+    : undefined;
+  const enc = new TextEncoder();
 
-    const prefix = workerIndex !== undefined
-      ? workerPrefix(workerIndex, workerId)
-      : undefined;
-    const enc = new TextEncoder();
+  const hardTimeoutMs = TIMEOUT_MS;
+  const idleTimeoutMs = WORKER_IDLE_TIMEOUT_MS;
+  const watchdog = createIdleWatchdog(signal, { hardTimeoutMs, idleTimeoutMs });
 
-    return executeClaudeSession({
-      prompt: spec.args[spec.args.length - 1],
-      model: selection.model,
-      effort: selection.effort,
-      iterationNum,
-      signal,
-      log,
-      cwd: cwd ?? Deno.cwd(),
-      workerId,
-      agentInputBus,
-      deps: {
-        query: (qOpts) => {
-          const ac = new AbortController();
-          qOpts.signal.addEventListener("abort", () => ac.abort(), {
-            once: true,
-          });
-          // Merge initial prompt + follow-up input into a single async
-          // iterable that the SDK's V1 query consumes as multi-turn input.
-          const userMsg = (text: string) => ({
-            type: "user" as const,
-            message: {
-              role: "user" as const,
-              content: [{ type: "text" as const, text }],
-            },
-            parent_tool_use_id: null,
-          });
-          // deno-lint-ignore explicit-function-return-type
-          async function* promptStream() {
-            yield userMsg(qOpts.prompt);
-            for await (const text of qOpts.inputMessages) {
-              yield userMsg(text);
-            }
-          }
-          return query({
-            prompt: promptStream(),
-            options: {
-              model: qOpts.model,
-              cwd: qOpts.cwd,
-              // deno-lint-ignore no-explicit-any
-              permissionMode: "bypassPermissions" as any,
-              allowedTools: [
-                "Bash",
-                "Read",
-                "Write",
-                "Edit",
-                "Glob",
-                "Grep",
-              ],
-              ...(qOpts.effort
-                ? { effort: qOpts.effort as "low" | "medium" | "high" }
-                : {}),
-              abortController: ac,
-            },
-          });
-        },
-        onLine: async (text) => {
-          const prefixed = prefix ? `${prefix}${text}` : text;
-          Deno.stdout.writeSync(enc.encode(prefixed + "\n"));
-          if (workerId !== undefined) {
-            await writeWorkerLine(workerId, {
-              type: "log",
-              level: "info",
-              tags: ["info", "agent-stream", workerId],
-              message: text,
-              ts: Date.now(),
-              workerId,
-            });
-          }
-        },
-      },
+  const onLine = async (text: string): Promise<void> => {
+    const prefixed = prefix ? `${prefix}${text}` : text;
+    Deno.stdout.writeSync(enc.encode(prefixed + "\n"));
+    if (workerId !== undefined) {
+      await writeWorkerLine(workerId, {
+        type: "log",
+        level: "info",
+        tags: ["info", "agent-stream", workerId],
+        message: text,
+        ts: Date.now(),
+        workerId,
+      });
+    }
+  };
+
+  // Register on input bus for GUI interactive steer/followUp.
+  if (agentInputBus && workerId) {
+    agentInputBus.registerSession(workerId, async (text, mode) => {
+      await onLine(
+        `[${mode} queued] "${text.substring(0, 60)}${
+          text.length > 60 ? "..." : ""
+        }"`,
+      );
     });
   }
 
-  // Non-claude agents use a subprocess with optional stdin piping.
-  return executeSubprocess({
-    spec,
-    selection,
-    iterationNum,
-    signal,
-    log,
-    cwd,
-    workerIndex,
-    workerId,
-    agentInputBus: supportsInteractiveAgentInput(agent)
-      ? agentInputBus
-      : undefined,
-  });
-};
-
-/** Subprocess executor for non-claude agents (codex, etc.). */
-const executeSubprocess = async (
-  {
-    spec,
-    selection,
-    iterationNum,
-    signal,
-    log,
-    cwd,
-    workerIndex,
-    workerId,
-    agentInputBus,
-  }: {
-    spec: import("./types.ts").CommandSpec;
-    selection: import("./types.ts").ModelSelection;
-    iterationNum: number;
-    signal: AbortSignal;
-    log: import("./types.ts").Logger;
-    cwd: string | undefined;
-    workerIndex: number | undefined;
-    workerId: string | undefined;
-    agentInputBus: import("./gui/input-bus.ts").AgentInputBus | undefined;
-  },
-): Promise<IterationResult> => {
-  const hardTimeoutMs = TIMEOUT_MS;
-  const idleTimeoutMs = WORKER_IDLE_TIMEOUT_MS;
-  const watchdog = createIdleWatchdog(signal, {
-    hardTimeoutMs,
-    idleTimeoutMs,
-  });
+  // Close input bus registration when any abort fires.
+  const cleanupBus = (): void => {
+    if (agentInputBus && workerId) agentInputBus.unregister(workerId);
+  };
+  watchdog.signal.addEventListener("abort", cleanupBus, { once: true });
+  signal.addEventListener("abort", cleanupBus, { once: true });
 
   try {
-    const useInputBus = agentInputBus !== undefined &&
-      workerIndex !== undefined && workerId !== undefined;
-    const child = new Deno.Command(spec.command, {
-      args: spec.args,
-      stdin: useInputBus ? "piped" : "null",
-      stdout: "piped",
-      stderr: "piped",
-      cwd,
-      env: {
-        ...nonInteractiveEnv(),
-        ...(selection.effort
-          ? { CLAUDE_CODE_EFFORT_LEVEL: selection.effort }
-          : {}),
-      },
-      signal: watchdog.signal,
-    }).spawn();
+    const { createAgentSession } = await import(
+      "@mariozechner/pi-coding-agent"
+    );
+    const { getModel } = await import("@mariozechner/pi-ai");
 
-    if (useInputBus) {
-      agentInputBus.register(workerId, child.stdin);
+    // deno-lint-ignore no-explicit-any
+    const model = getModel(config.provider as any, config.model as any);
+
+    const { session } = await createAgentSession({
+      model,
+      cwd: config.workingDir,
+      ...(config.thinkingLevel ? { thinkingLevel: config.thinkingLevel } : {}),
+    });
+
+    let foundCompletionMarker = false;
+
+    // Subscribe to session events for output streaming.
+    session.subscribe(
+      // deno-lint-ignore no-explicit-any
+      (event: any) => {
+        watchdog.touch();
+        const text = event.type === "message_update" &&
+            event.assistantMessageEvent?.type === "text_delta"
+          ? event.assistantMessageEvent.delta
+          : undefined;
+        if (text) {
+          onLine(text);
+          if (text.includes(COMPLETION_MARKER)) {
+            foundCompletionMarker = true;
+          }
+        }
+      },
+    );
+
+    // Wire up GUI input bus for steer/followUp.
+    if (agentInputBus && workerId) {
+      agentInputBus.registerSession(workerId, async (text, mode) => {
+        watchdog.touch();
+        session.prompt(text, { streamingBehavior: mode });
+        await onLine(`[${mode} sent] "${text.substring(0, 60)}..."`);
+      });
     }
 
-    const prefix = workerIndex !== undefined
-      ? workerPrefix(workerIndex, selection.targetScenario)
-      : undefined;
+    await session.prompt(prompt);
 
-    const guiOnLine = workerId !== undefined
-      ? (line: string): void => {
-        writeWorkerLine(workerId, {
-          type: "log",
-          level: "info",
-          tags: ["info", "agent-stream", workerId],
-          message: line,
-          ts: Date.now(),
-          workerId,
-        });
-      }
-      : undefined;
-
-    // Tee raw streams: one copy for GUI (clean), one for terminal (prefixed).
-    const [rawStdoutForTerminal, rawStdoutForGui] = guiOnLine
-      ? child.stdout.tee()
-      : [child.stdout, undefined];
-    const [rawStderrForTerminal, rawStderrForGui] = guiOnLine
-      ? child.stderr.tee()
-      : [child.stderr, undefined];
-
-    const stdoutStream = prefix
-      ? rawStdoutForTerminal.pipeThrough(linePrefixTransform(prefix))
-      : rawStdoutForTerminal;
-    const stderrStream = prefix
-      ? rawStderrForTerminal.pipeThrough(linePrefixTransform(prefix))
-      : rawStderrForTerminal;
-
-    const nullOutput = {
-      write: (_: Uint8Array): Promise<number> => Promise.resolve(0),
-    };
-
-    const [status, foundAllCompleteSigil] = await Promise.all([
-      child.status,
-      pipeStream({
-        stream: stdoutStream,
-        output: Deno.stdout,
-        marker: COMPLETION_MARKER,
-        onActivity: watchdog.touch,
-      }),
-      pipeStream({
-        stream: stderrStream,
-        output: Deno.stderr,
-        onActivity: watchdog.touch,
-      }),
-      ...(rawStdoutForGui
-        ? [
-          pipeStream({
-            stream: rawStdoutForGui,
-            output: nullOutput,
-            onLine: guiOnLine,
-          }),
-        ]
-        : []),
-      ...(rawStderrForGui
-        ? [
-          pipeStream({
-            stream: rawStderrForGui,
-            output: nullOutput,
-            onLine: guiOnLine,
-          }),
-        ]
-        : []),
-    ]);
-
-    if (useInputBus) agentInputBus.unregister(workerId);
+    cleanupBus();
     watchdog.stop();
 
-    if (status.code !== 0) {
+    if (signal.aborted || watchdog.timedOut() !== undefined) {
       log({
         tags: ["error"],
-        message:
-          `iteration ${iterationNum} failed with exit code ${status.code}`,
+        message: watchdog.timedOut() === "idle"
+          ? `TIMEOUT: iteration ${iterationNum} produced no new output for ${
+            formatDuration(idleTimeoutMs)
+          }`
+          : `TIMEOUT: iteration ${iterationNum} exceeded ${
+            formatDuration(hardTimeoutMs)
+          }`,
       });
-      return { status: "failed", code: status.code };
+      return { status: "timeout" };
     }
-    if (foundAllCompleteSigil) {
-      log({
+
+    return foundCompletionMarker
+      ? (log({
         tags: ["info"],
         message: `specification complete after ${iterationNum} iterations.`,
-      });
-      return { status: "complete" };
-    }
-    log({
-      tags: ["info"],
-      message: `Iteration ${iterationNum} complete.`,
-    });
-    return { status: "continue" };
+      }),
+        { status: "complete" })
+      : (log({
+        tags: ["info"],
+        message: `Iteration ${iterationNum} complete.`,
+      }),
+        { status: "continue" });
   } catch (error) {
+    cleanupBus();
     watchdog.stop();
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (
+      (error instanceof DOMException && error.name === "AbortError") ||
+      signal.aborted ||
+      watchdog.signal.aborted
+    ) {
       log({
         tags: ["error"],
         message: watchdog.timedOut() === "idle"
@@ -513,18 +320,18 @@ const executeSubprocess = async (
   }
 };
 
-/** Default agent deps using real subprocess execution. */
+/** Default agent deps using real pi-mono session execution. */
 const defaultAgentDeps: AgentRunDeps = { execute: executeAgent };
 /* c8 ignore stop */
 
 /**
  * Run a single agent iteration. Drives the worker state machine through
- * model resolution → prompt building → command building → agent execution.
+ * model resolution -> prompt building -> session config -> agent execution.
  */
 export const runIteration = async (
   {
     iterationNum,
-    agent,
+    ladder,
     signal,
     log,
     validationFailurePath,
@@ -538,7 +345,7 @@ export const runIteration = async (
     agentInputBus,
   }: {
     iterationNum: number;
-    agent: Agent;
+    ladder: ModelLadder;
     signal: AbortSignal;
     log: Logger;
     validationFailurePath: string | undefined;
@@ -555,7 +362,7 @@ export const runIteration = async (
   let current: import("./machines/worker-machine.ts").WorkerState =
     initialWorkerState({
       iterationNum,
-      agent,
+      ladder,
       level,
       targetScenarioOverride,
       validationFailurePath,
@@ -593,58 +400,53 @@ Requirements:
 1. Markdown SHALL be rendered
 2. Videos SHALL be embedded and playable from the receipt.`;
 
-/* c8 ignore start — real subprocess execution */
+/* c8 ignore start -- real pi-mono session execution */
 export const updateReceipts = async (
-  { agent, plugin, log }: { agent: Agent; plugin: Plugin; log: Logger },
+  { ladder, plugin, log }: {
+    ladder: ModelLadder;
+    plugin: Plugin;
+    log: Logger;
+  },
 ): Promise<Result<undefined, string>> => {
   const prompt = RECEIPTS_PROMPT;
-  const ctx: HookContext = { agent, log, iterationNum: -1 };
-  const rawSelection: ModelSelection = {
-    model: getModel({ agent, mode: "fast" }),
-    mode: "fast",
-    targetScenario: undefined,
-    effort: undefined,
-    actionableScenarios: [],
-  };
+  const ctx: HookContext = { ladder, log, iterationNum: -1 };
+  const rawSelection = selectFromLadder({ ladder, mode: "coder" });
   const selection = plugin.onModelSelected
     ? await plugin.onModelSelected({ selection: rawSelection, ctx })
     : rawSelection;
-  const rawSpec = buildCommandSpec({
-    agent,
-    model: selection.model,
-    prompt,
-  });
-  const spec = plugin.onCommandBuilt
-    ? await plugin.onCommandBuilt({ spec: rawSpec, selection, ctx })
-    : rawSpec;
-  const cmdString = [spec.command, ...spec.args].join(" ");
 
   try {
-    const child = new Deno.Command(spec.command, {
-      args: spec.args,
-      stdin: "null",
-      stdout: "piped",
-      stderr: "piped",
-      env: nonInteractiveEnv(),
-    }).spawn();
+    const { createAgentSession } = await import(
+      "@mariozechner/pi-coding-agent"
+    );
+    const { getModel } = await import("@mariozechner/pi-ai");
 
-    const stdoutStream = agent === "claude"
-      ? child.stdout.pipeThrough(ndjsonResultTransform())
-      : child.stdout;
+    // deno-lint-ignore no-explicit-any
+    const model = getModel(selection.provider as any, selection.model as any);
+    const { session } = await createAgentSession({
+      model,
+      cwd: Deno.cwd(),
+      ...(selection.thinkingLevel
+        ? { thinkingLevel: selection.thinkingLevel }
+        : {}),
+    });
 
-    const [status] = await Promise.all([
-      child.status,
-      pipeStream({ stream: stdoutStream, output: Deno.stdout }),
-      pipeStream({ stream: child.stderr, output: Deno.stderr }),
-    ]);
+    const enc = new TextEncoder();
+    session.subscribe(
+      // deno-lint-ignore no-explicit-any
+      (event: any) => {
+        const text = event.type === "message_update" &&
+            event.assistantMessageEvent?.type === "text_delta"
+          ? event.assistantMessageEvent.delta
+          : undefined;
+        if (text) Deno.stdout.writeSync(enc.encode(text));
+      },
+    );
 
-    return status.code
-      ? err(
-        `Failed to update receipts with exit code ${status.code} [${cmdString}]`,
-      )
-      : ok(undefined);
+    await session.prompt(prompt);
+    return ok(undefined);
   } catch (error) {
-    return err(`Failed to generate receipts: ${error} [${cmdString}]`);
+    return err(`Failed to generate receipts: ${error}`);
   }
 };
 /* c8 ignore stop */

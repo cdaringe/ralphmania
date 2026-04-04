@@ -18,6 +18,7 @@ import { runParallelLoop } from "../src/orchestrator/mod.ts";
 import { defaultProgressFileDeps } from "../src/ports/impl.ts";
 import { ensureProgressFile } from "../src/progress.ts";
 import { createProgressStore, integrationDeps, noopLog } from "./fixtures.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 
 // ---------------------------------------------------------------------------
 // Helper: strip c8-ignored wiring blocks then scan for Deno.* usage
@@ -227,7 +228,7 @@ Deno.test("ARCH.1 [integration]: orchestrator runs against injected MachineDeps 
   let iterations = 0;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["ARCH.1"],

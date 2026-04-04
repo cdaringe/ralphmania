@@ -7,11 +7,11 @@
  */
 
 import type {
-  Agent,
   EscalationLevel,
   EscalationState,
   IterationResult,
   Logger,
+  ModelLadder,
   RectifyAction,
 } from "../types.ts";
 import type { WorktreeInfo } from "../git/worktree.ts";
@@ -131,7 +131,7 @@ const logProgressDiff = (
 // ---------------------------------------------------------------------------
 
 export type MachineContext = {
-  readonly agent: Agent;
+  readonly ladder: ModelLadder;
   readonly iterations: number;
   readonly parallelism: number;
   readonly expectedScenarioIds: readonly string[];
@@ -518,7 +518,7 @@ export const transitionRunningWorkers = async (
         const startedAt = Date.now();
         return ctx.deps.runIteration({
           iterationNum: iterationsUsed,
-          agent: ctx.agent,
+          ladder: ctx.ladder,
           signal: ctx.signal,
           log: wLog,
           validationFailurePath: state.validationFailurePath,
@@ -562,7 +562,7 @@ export const transitionRunningWorkers = async (
             // Re-run iteration with the validation failure so the agent can fix
             await ctx.deps.runIteration({
               iterationNum: iterationsUsed,
-              agent: ctx.agent,
+              ladder: ctx.ladder,
               signal: ctx.signal,
               log: wLog,
               validationFailurePath: validation.outputPath,
@@ -625,7 +625,7 @@ export const transitionRunningWorkers = async (
         });
         await ctx.deps.reconcileMerge({
           worktree: wr.worktree,
-          agent: ctx.agent,
+          ladder: ctx.ladder,
           signal: ctx.signal,
           log: ctx.log,
         });
@@ -707,7 +707,7 @@ export const transitionValidating = async (
     ? await ctx.plugin.onValidationComplete({
       result: rawValidation,
       ctx: {
-        agent: ctx.agent,
+        ladder: ctx.ladder,
         log: ctx.log,
         iterationNum: state.iterationsUsed,
       },
@@ -785,7 +785,7 @@ export const transitionRectifying = async (
   });
 
   const hookCtx = {
-    agent: ctx.agent,
+    ladder: ctx.ladder,
     log: ctx.log,
     iterationNum: state.iterationsUsed,
   };
@@ -821,7 +821,7 @@ export const transitionRectifying = async (
   // Run the rectification agent on main (no worktree isolation).
   await ctx.deps.runIteration({
     iterationNum: state.iterationsUsed,
-    agent: ctx.agent,
+    ladder: ctx.ladder,
     signal: ctx.signal,
     log: ctx.log,
     validationFailurePath: state.validationFailurePath,
@@ -861,7 +861,7 @@ export const transitionReValidating = async (
     ? await ctx.plugin.onValidationComplete({
       result: rawValidation,
       ctx: {
-        agent: ctx.agent,
+        ladder: ctx.ladder,
         log: ctx.log,
         iterationNum: state.iterationsUsed,
       },

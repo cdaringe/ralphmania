@@ -1,21 +1,15 @@
 import type {
-  Agent,
-  EffortLevel,
   EscalationLevel,
   Logger,
+  ModelLadder,
   ModelSelection,
   Result,
+  ToolMode,
 } from "./types.ts";
 import type { ModelIODeps } from "./ports/types.ts";
 import { defaultModelIODeps } from "./ports/impl.ts";
 import { err, ok } from "./types.ts";
-import {
-  CLAUDE_CODER,
-  CLAUDE_ESCALATED,
-  CLAUDE_VERIFIER,
-  REWORK_THRESHOLD,
-  Status,
-} from "./constants.ts";
+import { DEFAULT_MODEL_LADDER, formatModelSpec, Status } from "./constants.ts";
 import {
   readEscalationState,
   updateEscalationState,
@@ -30,25 +24,25 @@ import {
   parseTotalCount,
 } from "./orchestrator/progress-queries.ts";
 
-export const getModel = (
-  { agent, mode }: { agent: Agent; mode: "fast" | "general" | "strong" },
-): string =>
-  (agent === "claude"
-    ? {
-      fast: "haiku",
-      general: "sonnet",
-      strong: "opus",
-    } as const
-    : {
-      fast: "gpt-5.1-codex",
-      general: "gpt-5.1-codex-max",
-      strong: "gpt-5.3-codex",
-    } as const)[mode];
+/** Build a ModelSelection from a ladder role. */
+export const selectFromLadder = (
+  { ladder, mode }: { ladder: ModelLadder; mode: ToolMode },
+): ModelSelection => {
+  const config = ladder[mode];
+  return {
+    provider: config.provider,
+    model: config.model,
+    mode,
+    targetScenario: undefined,
+    thinkingLevel: config.thinkingLevel,
+    actionableScenarios: [],
+  };
+};
 
 export const computeModelSelection = (
-  { content, agent, escalationLevel, isVerifierMode }: {
+  { content, ladder, escalationLevel, isVerifierMode }: {
     content: string;
-    agent: Agent;
+    ladder: ModelLadder;
     escalationLevel?: EscalationLevel;
     isVerifierMode?: boolean;
   },
@@ -59,51 +53,45 @@ export const computeModelSelection = (
   if (scenarioResult.isErr()) return err(scenarioResult.error);
   if (actionableResult.isErr()) return err(actionableResult.error);
 
-  if (agent === "claude" && escalationLevel !== undefined) {
-    const config = escalationLevel >= 1
-      ? CLAUDE_ESCALATED
+  const mode: ToolMode = escalationLevel !== undefined
+    ? (escalationLevel >= 1
+      ? "escalated"
       : isVerifierMode
-      ? CLAUDE_VERIFIER
-      : CLAUDE_CODER;
-    return ok({
-      ...config,
-      targetScenario: scenarioResult.value,
-      actionableScenarios: actionableResult.value,
-    });
-  }
+      ? "verifier"
+      : "coder")
+    : (() => {
+      const parsed = parseProgressRows(content);
+      if (parsed.isErr()) return "coder" as const;
+      const reworkCount =
+        parsed.value.filter((r) => r.status === Status.NEEDS_REWORK).length;
+      return reworkCount > 0 ? "escalated" as const : "coder" as const;
+    })();
 
-  const parsed = parseProgressRows(content);
-  if (parsed.isErr()) return err(parsed.error);
-  const reworkCount =
-    parsed.value.filter((r) => r.status === Status.NEEDS_REWORK).length;
-  const mode = reworkCount > REWORK_THRESHOLD
-    ? "strong" as const
-    : reworkCount > 0
-    ? "general" as const
-    : "fast" as const;
+  const config = ladder[mode];
   return ok({
-    model: getModel({ agent, mode }),
+    provider: config.provider,
+    model: config.model,
     mode,
+    thinkingLevel: config.thinkingLevel,
     targetScenario: scenarioResult.value,
-    effort: undefined,
     actionableScenarios: actionableResult.value,
   });
 };
 
 const formatStatusMessage = (
-  { reworkCount, model, implementedCount, totalCount, effort, level }: {
+  { reworkCount, model, implementedCount, totalCount, thinkingLevel, level }: {
     reworkCount: number;
     model: string;
     implementedCount: number;
     totalCount: number;
-    effort?: EffortLevel;
+    thinkingLevel?: string;
     level?: EscalationLevel;
   },
 ): string =>
   reworkCount > 0
     ? `${reworkCount} NEEDS_REWORK entries → ${
-      effort !== undefined
-        ? `${model} (effort: ${effort}, level: ${level})`
+      thinkingLevel !== undefined
+        ? `${model} (thinking: ${thinkingLevel}, level: ${level})`
         : `using ${model}`
     }`
     : `Status: ${implementedCount} of ${totalCount} implemented, finding next task...`;
@@ -112,23 +100,24 @@ const logStrongScope = (
   log: Logger,
   selection: ModelSelection,
 ): void => {
-  selection.mode === "strong" && selection.targetScenario !== undefined &&
+  selection.mode === "escalated" && selection.targetScenario !== undefined &&
     log({
       tags: ["info", "scenario"],
       message:
-        `strong-model pass scoped to scenario ${selection.targetScenario}`,
+        `escalated-model pass scoped to scenario ${selection.targetScenario}`,
     });
 };
 
 const clampLevel = (n: number): EscalationLevel => n >= 1 ? 1 : 0;
 
-const resolveClaudeSelection = async (
-  { content, log, minLevel, defaults, io }: {
+const resolveSelection = async (
+  { content, log, minLevel, defaults, io, ladder }: {
     content: string;
     log: Logger;
     minLevel?: EscalationLevel;
     defaults: ModelSelection;
     io: ModelIODeps;
+    ladder: ModelLadder;
   },
 ): Promise<ModelSelection> => {
   const currentState = await readEscalationState(log, io);
@@ -174,7 +163,7 @@ const resolveClaudeSelection = async (
 
   const result = computeModelSelection({
     content,
-    agent: "claude",
+    ladder,
     escalationLevel: effectiveLevel,
     isVerifierMode,
   });
@@ -196,10 +185,10 @@ const resolveClaudeSelection = async (
     tags: ["info", "model"],
     message: formatStatusMessage({
       reworkCount: reworkScenarios.length,
-      model: selection.model,
+      model: formatModelSpec(ladder[selection.mode]),
       implementedCount: implementedResult.value,
       totalCount: totalResult.value,
-      effort: selection.effort,
+      thinkingLevel: selection.thinkingLevel,
       level: effectiveLevel,
     }),
   });
@@ -208,63 +197,22 @@ const resolveClaudeSelection = async (
   return selection;
 };
 
-const resolveCodexSelection = (
-  { content, agent, log, defaults }: {
-    content: string;
-    agent: Agent;
-    log: Logger;
-    defaults: ModelSelection;
-  },
-): ModelSelection => {
-  const result = computeModelSelection({ content, agent });
-  if (result.isErr()) {
-    log({ tags: ["error", "model"], message: result.error });
-    return defaults;
-  }
-
-  const parsed = parseProgressRows(content);
-  const reworkCount = parsed.isOk()
-    ? parsed.value.filter((r) => r.status === Status.NEEDS_REWORK).length
-    : 0;
-  const implementedResult = parseImplementedCount(content);
-  const totalResult = parseTotalCount(content);
-  log({
-    tags: ["info", "model"],
-    message: formatStatusMessage({
-      reworkCount,
-      model: result.value.model,
-      implementedCount: implementedResult.isOk() ? implementedResult.value : 0,
-      totalCount: totalResult.isOk() ? totalResult.value : 0,
-    }),
-  });
-  logStrongScope(log, result.value);
-
-  return result.value;
-};
-
 export const resolveModelSelection = async (
   {
-    agent,
+    ladder = DEFAULT_MODEL_LADDER,
     log,
     minLevel,
     progressFile = "./progress.md",
     io = defaultModelIODeps,
   }: {
-    agent: Agent;
+    ladder?: ModelLadder;
     log: Logger;
     minLevel?: EscalationLevel;
     progressFile?: string;
     io?: ModelIODeps;
   },
 ): Promise<ModelSelection> => {
-  const defaultMode = "fast" as const;
-  const defaults: ModelSelection = {
-    model: getModel({ agent, mode: defaultMode }),
-    mode: defaultMode,
-    targetScenario: undefined,
-    effort: undefined,
-    actionableScenarios: [],
-  };
+  const defaults = selectFromLadder({ ladder, mode: "coder" });
 
   const rawContent = await io.readTextFile(progressFile).catch(() => "");
   const content = rawContent.split("END_DEMO")[1];
@@ -277,7 +225,5 @@ export const resolveModelSelection = async (
     return defaults;
   }
 
-  return agent === "claude"
-    ? await resolveClaudeSelection({ content, log, minLevel, defaults, io })
-    : resolveCodexSelection({ content, agent, log, defaults });
+  return resolveSelection({ content, log, minLevel, defaults, io, ladder });
 };

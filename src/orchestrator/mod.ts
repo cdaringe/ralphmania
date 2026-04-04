@@ -1,4 +1,4 @@
-import type { EscalationLevel, Logger } from "../types.ts";
+import type { EscalationLevel, Logger, ModelLadder } from "../types.ts";
 import type { AgentInputBus } from "../gui/input-bus.ts";
 import { runIteration as runIterationImpl } from "../runner.ts";
 import { runValidation as runValidationImpl } from "../validation.ts";
@@ -29,12 +29,11 @@ import {
   clusterScenarios as clusterScenariosImpl,
   selectBatchFromClusters as selectBatchFromClustersImpl,
 } from "./cluster.ts";
-import { nonInteractiveEnv } from "../constants.ts";
 
-/** Dependencies injectable for testing. Alias for {@link MachineDeps}. */
+/** Dependencies injectable for testing. Alias for MachineDeps. */
 export type ParallelDeps = MachineDeps;
 
-/* c8 ignore start — default I/O wiring for real subprocess deps */
+/* c8 ignore start -- default I/O wiring for real subprocess deps */
 const readProgressContent = async (
   progressFile = "./progress.md",
 ): Promise<string> => {
@@ -49,7 +48,40 @@ const readSpecContent = async (
   return raw.split("END_DEMO")[1] ?? raw;
 };
 
-const defaultSelectScenarioBatch: MachineDeps["selectScenarioBatch"] = async ({
+/**
+ * Default fast-call implementation for scenario clustering. Uses pi-mono's
+ * completion API with the coder model from the ladder.
+ */
+const makeRunFastCall = (
+  ladder: ModelLadder,
+): (prompt: string) => Promise<string> =>
+async (prompt: string): Promise<string> => {
+  const { complete, getModel } = await import("@mariozechner/pi-ai");
+  // deno-lint-ignore no-explicit-any
+  const provider: any = ladder.coder.provider;
+  // deno-lint-ignore no-explicit-any
+  const modelId: any = ladder.coder.model;
+  const model = getModel(provider, modelId);
+  const result = await complete(model, {
+    messages: [{
+      role: "user",
+      content: prompt,
+      timestamp: Date.now(),
+    }],
+  });
+  // Extract text content from the AssistantMessage response.
+  return result.content
+    // deno-lint-ignore no-explicit-any
+    .filter((c: any) => c.type === "text")
+    // deno-lint-ignore no-explicit-any
+    .map((c: any) => c.text as string)
+    .join("");
+};
+
+const makeDefaultSelectScenarioBatch = (
+  ladder: ModelLadder,
+): MachineDeps["selectScenarioBatch"] =>
+async ({
   scenarioIds,
   specFile,
   parallelism,
@@ -67,37 +99,17 @@ const defaultSelectScenarioBatch: MachineDeps["selectScenarioBatch"] = async ({
   const specContent = await Deno.readTextFile(specFile ?? "specification.md")
     .catch(() => "");
 
-  const runFastClaudeCall = async (prompt: string): Promise<string> => {
-    const cmd = new Deno.Command("claude", {
-      args: ["-p", prompt, "--output-format", "json", "--model", "haiku"],
-      stdout: "piped",
-      stderr: "null",
-      stdin: "null",
-      env: nonInteractiveEnv(),
-    });
-    const { stdout, success } = await cmd.output();
-    if (!success) throw new Error("fast claude call failed");
-    const text = new TextDecoder().decode(stdout);
-    try {
-      const parsed = JSON.parse(text) as { result?: string; type?: string };
-      if (parsed.type === "result" && typeof parsed.result === "string") {
-        return parsed.result;
-      }
-    } catch { /* ignore */ }
-    return text;
-  };
-
   const clusters = await clusterScenariosImpl({
     scenarioIds: [...scenarioIds],
     specContent,
     log,
-    deps: { runFastCall: runFastClaudeCall },
+    deps: { runFastCall: makeRunFastCall(ladder) },
   });
 
   return selectBatchFromClustersImpl(clusters, scenarioIds, parallelism);
 };
 
-const defaultDeps: ParallelDeps = {
+const makeDefaultDeps = (ladder: ModelLadder): ParallelDeps => ({
   readProgress: readProgressContent,
   readSpec: readSpecContent,
   createWorktree: createWorktreeImpl,
@@ -113,13 +125,13 @@ const defaultDeps: ParallelDeps = {
   clearCheckpoint: clearLoopCheckpoint,
   readEscalationState: readEscalationStateImpl,
   writeEscalationState: writeEscalationStateImpl,
-  selectScenarioBatch: defaultSelectScenarioBatch,
-};
+  selectScenarioBatch: makeDefaultSelectScenarioBatch(ladder),
+});
 /* c8 ignore stop */
 
 export const runParallelLoop = async (
   {
-    agent,
+    ladder,
     iterations,
     parallelism,
     expectedScenarioIds,
@@ -132,7 +144,7 @@ export const runParallelLoop = async (
     agentInputBus,
     deps: depsOverride,
   }: {
-    agent: string;
+    ladder: ModelLadder;
     iterations: number;
     parallelism: number;
     expectedScenarioIds: readonly string[];
@@ -142,11 +154,12 @@ export const runParallelLoop = async (
     level: EscalationLevel | undefined;
     specFile?: string;
     progressFile?: string;
-    /** When provided, routes GUI text input to active agent subprocess stdin. */
+    /** When provided, routes GUI text input to active agent sessions. */
     agentInputBus?: AgentInputBus;
     deps?: Partial<ParallelDeps>;
   },
 ): Promise<number> => {
+  const defaultDeps = makeDefaultDeps(ladder);
   const deps: ParallelDeps = {
     ...defaultDeps,
     readProgress: () => readProgressContent(progressFile),
@@ -156,7 +169,7 @@ export const runParallelLoop = async (
   };
 
   const ctx: MachineContext = {
-    agent: agent as MachineContext["agent"],
+    ladder,
     iterations,
     parallelism,
     expectedScenarioIds,

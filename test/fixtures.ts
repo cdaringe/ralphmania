@@ -14,6 +14,7 @@ import { ok } from "../src/types.ts";
 import type { WorktreeInfo } from "../src/git/worktree.ts";
 import type { MachineContext } from "../src/machines/state-machine.ts";
 import type { MachineDeps } from "../src/ports/types.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -68,7 +69,7 @@ export const stubDeps = (
 export const makeCtx = (
   overrides: Partial<MachineContext> = {},
 ): MachineContext => ({
-  agent: "claude",
+  ladder: DEFAULT_MODEL_LADDER,
   iterations: 10,
   parallelism: 1,
   expectedScenarioIds: ["1.1", "1.2"],

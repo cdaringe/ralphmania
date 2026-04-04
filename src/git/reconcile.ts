@@ -1,9 +1,6 @@
-import type { Agent, Logger } from "../types.ts";
+import type { Logger, ModelLadder } from "../types.ts";
 import type { WorktreeInfo } from "./worktree.ts";
-import { nonInteractiveEnv, RECONCILE_TIMEOUT_MS } from "../constants.ts";
-import { getModel } from "../model.ts";
-import { buildCommandSpec } from "../command.ts";
-import { ndjsonResultTransform, pipeStream } from "../runner.ts";
+import { RECONCILE_TIMEOUT_MS } from "../constants.ts";
 import { MERGE_LOG_ID, writeWorkerLine } from "../gui/log-dir.ts";
 
 /** Extract file paths from `git status --porcelain` with unmerged markers. */
@@ -73,7 +70,7 @@ export type ReconcileDeps = {
     opts?: { cwd?: string },
   ) => Promise<{ code: number; stdout: string; stderr: string }>;
   spawnAgent: (opts: {
-    agent: Agent;
+    ladder: ModelLadder;
     prompt: string;
     signal: AbortSignal;
     log: Logger;
@@ -81,7 +78,7 @@ export type ReconcileDeps = {
   }) => Promise<{ code: number }>;
 };
 
-/* c8 ignore start — real git/agent subprocess wiring */
+/* c8 ignore start -- real git/agent subprocess wiring */
 const defaultRun: ReconcileDeps["run"] = async (args, opts) => {
   const output = await new Deno.Command("git", {
     args,
@@ -99,67 +96,76 @@ const defaultRun: ReconcileDeps["run"] = async (args, opts) => {
 };
 
 const defaultSpawnAgent: ReconcileDeps["spawnAgent"] = async (
-  { agent, prompt, signal, log, cwd },
+  { ladder, prompt, signal: _signal, log, cwd },
 ) => {
-  const model = getModel({ agent, mode: "general" });
-  const spec = buildCommandSpec({ agent, model, prompt });
+  const config = ladder.coder;
 
   log({
     tags: ["info", "reconcile"],
-    message: `Spawning ${agent} (${model}) for conflict resolution`,
+    message:
+      `Spawning ${config.provider}/${config.model} for conflict resolution`,
   });
 
-  const child = new Deno.Command(spec.command, {
-    args: spec.args,
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
-    cwd,
-    env: nonInteractiveEnv(),
-    signal,
-  }).spawn();
+  try {
+    const { createAgentSession } = await import(
+      "@mariozechner/pi-coding-agent"
+    );
+    const { getModel } = await import("@mariozechner/pi-ai");
 
-  const stdoutStream = agent === "claude"
-    ? child.stdout.pipeThrough(ndjsonResultTransform())
-    : child.stdout;
-
-  const mergeOnLine = (line: string): void => {
-    writeWorkerLine(MERGE_LOG_ID, {
-      type: "log",
-      level: "info",
-      tags: ["info", "reconcile", "agent-stream"],
-      message: line,
-      ts: Date.now(),
-      workerId: MERGE_LOG_ID,
+    // deno-lint-ignore no-explicit-any
+    const model = getModel(config.provider as any, config.model as any);
+    const { session } = await createAgentSession({
+      model,
+      cwd: cwd ?? Deno.cwd(),
+      ...(config.thinkingLevel ? { thinkingLevel: config.thinkingLevel } : {}),
     });
-  };
 
-  const [status] = await Promise.all([
-    child.status,
-    pipeStream({
-      stream: stdoutStream,
-      output: Deno.stdout,
-      onLine: mergeOnLine,
-    }),
-    pipeStream({
-      stream: child.stderr,
-      output: Deno.stderr,
-      onLine: mergeOnLine,
-    }),
-  ]);
+    const enc = new TextEncoder();
+    const mergeOnLine = (line: string): void => {
+      writeWorkerLine(MERGE_LOG_ID, {
+        type: "log",
+        level: "info",
+        tags: ["info", "reconcile", "agent-stream"],
+        message: line,
+        ts: Date.now(),
+        workerId: MERGE_LOG_ID,
+      });
+    };
 
-  return { code: status.code };
+    session.subscribe(
+      // deno-lint-ignore no-explicit-any
+      (event: any) => {
+        const text = event.type === "message_update" &&
+            event.assistantMessageEvent?.type === "text_delta"
+          ? event.assistantMessageEvent.delta
+          : undefined;
+        if (text) {
+          Deno.stdout.writeSync(enc.encode(text + "\n"));
+          mergeOnLine(text);
+        }
+      },
+    );
+
+    await session.prompt(prompt);
+    return { code: 0 };
+  } catch (error) {
+    log({
+      tags: ["error", "reconcile"],
+      message: `Agent session failed: ${error}`,
+    });
+    return { code: 1 };
+  }
 };
 /* c8 ignore stop */
 
 /**
  * Reconcile a merge conflict by looping an agent until resolution.
- * Never aborts — loops until the merge succeeds or the signal fires.
+ * Never aborts -- loops until the merge succeeds or the signal fires.
  */
 export const reconcileMerge = async (
-  { worktree, agent, signal, log, deps }: {
+  { worktree, ladder, signal, log, deps }: {
     worktree: WorktreeInfo;
-    agent: Agent;
+    ladder: ModelLadder;
     signal: AbortSignal;
     log: Logger;
     deps?: Partial<ReconcileDeps>;
@@ -186,7 +192,7 @@ export const reconcileMerge = async (
       `Merge ${worktree.branch} (scenario ${worktree.scenario}, reconciled)`,
     ]);
 
-    // Clean merge — done
+    // Clean merge -- done
     if (mergeResult.code === 0) {
       return void log({
         tags: ["info", "reconcile"],
@@ -200,7 +206,7 @@ export const reconcileMerge = async (
     const conflictedFiles = parseConflictedFiles(statusResult.stdout);
 
     if (conflictedFiles.length === 0) {
-      // Merge failed but no conflict markers — abort and let agent handle it
+      // Merge failed but no conflict markers -- abort and let agent handle it
       log({
         tags: ["info", "reconcile"],
         message:
@@ -209,7 +215,7 @@ export const reconcileMerge = async (
       await run(["merge", "--abort"]);
 
       await spawnAgent({
-        agent,
+        ladder,
         prompt: buildMergeRetryPrompt({ worktree }),
         signal: AbortSignal.any([
           signal,
@@ -228,7 +234,7 @@ export const reconcileMerge = async (
         });
       }
 
-      // Agent didn't land the merge — loop and retry
+      // Agent didn't land the merge -- loop and retry
       log({
         tags: ["info", "reconcile"],
         message: `Agent did not complete merge on attempt ${attempt}, retrying`,
@@ -245,7 +251,7 @@ export const reconcileMerge = async (
 
     // Spawn agent to resolve conflicts
     await spawnAgent({
-      agent,
+      ladder,
       prompt: buildReconcilePrompt({ worktree, conflictedFiles }),
       signal: AbortSignal.any([
         signal,
@@ -254,7 +260,7 @@ export const reconcileMerge = async (
       log,
     });
 
-    // Agent resolved everything — done
+    // Agent resolved everything -- done
     if (!(await hasUnresolvedConflicts(run))) {
       return void log({
         tags: ["info", "reconcile"],
@@ -263,7 +269,7 @@ export const reconcileMerge = async (
       });
     }
 
-    // Still conflicted — abort this merge and retry
+    // Still conflicted -- abort this merge and retry
     log({
       tags: ["info", "reconcile"],
       message:

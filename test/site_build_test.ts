@@ -252,7 +252,7 @@ Deno.test("reference.html contains plugin hooks table", async () => {
     assertStringIncludes(html, "onConfigResolved");
     assertStringIncludes(html, "onModelSelected");
     assertStringIncludes(html, "onPromptBuilt");
-    assertStringIncludes(html, "onCommandBuilt");
+    assertStringIncludes(html, "onSessionConfigBuilt");
     assertStringIncludes(html, "onIterationEnd");
     assertStringIncludes(html, "onValidationComplete");
     assertStringIncludes(html, "onLoopEnd");
@@ -330,7 +330,7 @@ Deno.test("architecture.html contains worker pipeline with state annotations", a
     assertStringIncludes(html, "resolving_model");
     assertStringIncludes(html, "model_resolved");
     assertStringIncludes(html, "prompt_built");
-    assertStringIncludes(html, "command_built");
+    assertStringIncludes(html, "config_built");
     assertStringIncludes(html, "running_agent");
   } finally {
     await cleanup();
@@ -346,7 +346,7 @@ Deno.test("architecture.html contains plugin lifecycle annotations", async () =>
     assertStringIncludes(html, "onConfigResolved");
     assertStringIncludes(html, "onModelSelected");
     assertStringIncludes(html, "onPromptBuilt");
-    assertStringIncludes(html, "onCommandBuilt");
+    assertStringIncludes(html, "onSessionConfigBuilt");
     assertStringIncludes(html, "onIterationEnd");
     assertStringIncludes(html, "onValidationComplete");
     assertStringIncludes(html, "onLoopEnd");

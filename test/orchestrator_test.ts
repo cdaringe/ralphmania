@@ -6,6 +6,7 @@ import {
 import { runParallelLoop } from "../src/orchestrator/mod.ts";
 import { noopLog, stubDeps, stubWorktree } from "./fixtures.ts";
 import { err, ok, type Result } from "../src/types.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 
 /** Unwrap a Result, throwing on error. */
 const unwrap = <T>(r: Result<T, string>): T => {
@@ -168,7 +169,7 @@ Deno.test("runParallelLoop exits immediately when all scenarios verified", async
   const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 5,
     parallelism: 2,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -188,7 +189,7 @@ Deno.test("runParallelLoop dispatches parallelism workers", async () => {
   const workersCreated: number[] = [];
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 2,
     expectedScenarioIds: ["1.1", "1.2", "1.3"],
@@ -213,7 +214,7 @@ Deno.test("runParallelLoop stops after max iterations", async () => {
   const content = "| 1.1 |          |      |";
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -233,7 +234,7 @@ Deno.test("runParallelLoop stops early when verified after round", async () => {
   let readCount = 0;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 10,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -262,7 +263,7 @@ Deno.test("runParallelLoop merges worktrees with new commits", async () => {
   let merged = false;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -288,7 +289,7 @@ Deno.test("runParallelLoop skips merge when no new commits", async () => {
   let merged = false;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -314,7 +315,7 @@ Deno.test("runParallelLoop returns 130 on aborted signal", async () => {
   controller.abort();
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 5,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -334,7 +335,7 @@ Deno.test("runParallelLoop runs validation after each round", async () => {
   let orchestratorValidationCount = 0;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -361,7 +362,7 @@ Deno.test("runParallelLoop cleans up worktrees on worker failure", async () => {
   let cleanedUp = false;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -387,7 +388,7 @@ Deno.test("runParallelLoop passes validation failure path to next round workers"
   const failurePaths: (string | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -424,7 +425,7 @@ Deno.test("runParallelLoop clears validation failure path after passing", async 
   let orchestratorRound = 0;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -465,7 +466,7 @@ Deno.test("runParallelLoop worker validation failure triggers fix-up iteration",
   const iterationCalls: { validationFailurePath: string | undefined }[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -506,7 +507,7 @@ Deno.test("runParallelLoop writes checkpoint after each round", async () => {
   const checkpoints: { iterationsUsed: number; step: string }[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -534,7 +535,7 @@ Deno.test("runParallelLoop clears checkpoint on clean exit", async () => {
   let cleared = false;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -559,7 +560,7 @@ Deno.test("runParallelLoop resumes iterationsUsed from checkpoint", async () => 
   let rounds = 0;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 5,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -591,7 +592,7 @@ Deno.test("runParallelLoop restores validationFailurePath from checkpoint", asyn
   const failurePaths: (string | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 4,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -625,7 +626,7 @@ Deno.test("runParallelLoop writes checkpoint with validationFailurePath", async 
   }[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -659,7 +660,7 @@ Deno.test("runParallelLoop resumes at validate step — skips agent work", async
   let agentRuns = 0;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 4,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -692,7 +693,7 @@ Deno.test("runParallelLoop always prescribes targetScenarioOverride to workers",
   let override: string | undefined = undefined;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -718,7 +719,7 @@ Deno.test("runParallelLoop logs error for invalid progress statuses", async () =
   const errors: string[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -748,7 +749,7 @@ Deno.test("runParallelLoop prescribes distinct scenarios to parallel workers", a
   const overrides: string[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 3,
     expectedScenarioIds: ["1.1", "1.2", "1.3"],
@@ -778,7 +779,7 @@ Deno.test("runParallelLoop skips round when all worktree creations fail", async 
   let iterationRan = false;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -805,7 +806,7 @@ Deno.test("runParallelLoop triggers reconcileMerge on conflict", async () => {
   let reconciled = false;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -836,7 +837,7 @@ Deno.test("runParallelLoop deduplicates scenarios so no two workers get the same
   const overrides: string[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 2,
     expectedScenarioIds: ["18.1"],
@@ -871,7 +872,7 @@ Deno.test("runParallelLoop deduplicates across rework and actionable lists", asy
   const overrides: string[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 3,
     expectedScenarioIds: ["5.1", "5.2"],
@@ -901,7 +902,7 @@ Deno.test("runParallelLoop logs resolved/still-actionable after merge", async ()
   const messages: string[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -943,7 +944,7 @@ Deno.test("runParallelLoop does not assign workers to VERIFIED scenarios with im
   const overrides: string[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 2,
     expectedScenarioIds: ["1.1", "1.2", "18.1"],
