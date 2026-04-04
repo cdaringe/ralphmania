@@ -11,7 +11,7 @@ function makeLogger(): {
   const bus = createEventBus();
   const events: GuiEvent[] = [];
   bus.subscribe((ev) => events.push(ev));
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   return { events, logger };
 }
 

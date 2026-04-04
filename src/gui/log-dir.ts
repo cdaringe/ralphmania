@@ -13,6 +13,10 @@ const LOG_DIR = ".ralph/worker-logs";
 const ORCHESTRATOR_LOG = `${LOG_DIR}/orchestrator.log`;
 const POLL_INTERVAL_MS = 200;
 
+/** Well-known log IDs for merge and validation phase streams. */
+export const MERGE_LOG_ID = "__merge__";
+export const VALIDATE_LOG_ID = "__validate__";
+
 /** Path to a worker's log file. */
 const workerLogPath = (workerId: string): string =>
   `${LOG_DIR}/worker-${workerId}.log`;
@@ -145,6 +149,8 @@ const tailSingleFile = async (
   const readNewLines = async (): Promise<void> => {
     try {
       const content = await Deno.readTextFile(filePath);
+      // Detect file truncation (e.g. resetWorkerLog between iterations).
+      if (content.length < pos) pos = 0;
       if (content.length <= pos) return;
       const newContent = content.slice(pos);
       pos = content.length;
@@ -289,7 +295,9 @@ export const tailLogDir = async (
     const canonical = canonicalPath(path);
     try {
       const content = await Deno.readTextFile(path);
-      const pos = positions.get(canonical) ?? 0;
+      let pos = positions.get(canonical) ?? 0;
+      // Detect file truncation (e.g. resetWorkerLog between iterations).
+      if (content.length < pos) pos = 0;
       if (content.length <= pos) return;
       const newContent = content.slice(pos);
       positions.set(canonical, content.length);

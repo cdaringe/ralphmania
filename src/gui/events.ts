@@ -50,13 +50,28 @@ export type GuiMergeDoneEvent = {
   readonly ts: number;
 };
 
+export type GuiValidateStartEvent = {
+  readonly type: "validate_start";
+  readonly iterationNum: number;
+  readonly ts: number;
+};
+
+export type GuiValidateDoneEvent = {
+  readonly type: "validate_done";
+  readonly iterationNum: number;
+  readonly outcome: "passed" | "failed";
+  readonly ts: number;
+};
+
 export type GuiEvent =
   | GuiLogEvent
   | GuiStateEvent
   | GuiWorkerActiveEvent
   | GuiWorkerDoneEvent
   | GuiMergeStartEvent
-  | GuiMergeDoneEvent;
+  | GuiMergeDoneEvent
+  | GuiValidateStartEvent
+  | GuiValidateDoneEvent;
 
 /** Unsubscribe function returned by {@link GuiEventBus.subscribe}. */
 export type Unsubscribe = () => void;

@@ -39,6 +39,8 @@ export type StatusDiff = {
 export type SelectedWorker = {
   readonly workerIndex: number;
   readonly scenario: string;
+  /** When set, this selection points to a phase stream (merge/validate) rather than a worker. */
+  readonly phase?: "merge" | "validate";
 } | null;
 
 // deno-lint-ignore no-explicit-any
@@ -70,6 +72,10 @@ const activeWorkers = new Map<number, WorkerInfo>();
 let selectedWorker: SelectedWorker = null;
 /** Scenarios whose workers have finished (worker_done received). */
 const finishedWorkers = new Set<string>();
+/** Whether the merge phase is currently active. */
+let mergeActive = false;
+/** Whether the validation phase is currently active. */
+let validateActive = false;
 const subscribers = new Map<Subscriber, ReadonlySet<StoreTopic> | null>();
 let logVersion = 0;
 let workerLogVersion = 0;
@@ -135,6 +141,8 @@ export const getWorkerLogBuffer = (
   workerId: string,
 ): readonly LogEvent[] => workerLogBuffers.get(workerId) ?? [];
 export const getWorkerLogVersion = (): number => workerLogVersion;
+export const isMergeActive = (): boolean => mergeActive;
+export const isValidateActive = (): boolean => validateActive;
 
 // --- Public write API ---
 export const subscribe = (
@@ -188,6 +196,8 @@ export const resetStore = (): void => {
   activeWorkers.clear();
   selectedWorker = null;
   finishedWorkers.clear();
+  mergeActive = false;
+  validateActive = false;
   notify(
     "connection",
     "graph",
@@ -254,6 +264,7 @@ export const dispatch = (ev: GuiEvent): void => {
     notify("graph", "worker_logs");
     return;
   } else if (ev.type === "merge_start") {
+    mergeActive = true;
     const existing = activeWorkers.get(ev.workerIndex as number);
     if (existing) {
       activeWorkers.set(ev.workerIndex as number, {
@@ -271,6 +282,19 @@ export const dispatch = (ev: GuiEvent): void => {
         status: "merged",
       });
     }
+    // Check if all workers are merged — if so, merge phase is done
+    const allMerged = [...activeWorkers.values()].every(
+      (w) => w.status === "merged",
+    );
+    if (allMerged) mergeActive = false;
+    notify("graph");
+    return;
+  } else if (ev.type === "validate_start") {
+    validateActive = true;
+    notify("graph");
+    return;
+  } else if (ev.type === "validate_done") {
+    validateActive = false;
     notify("graph");
     return;
   }

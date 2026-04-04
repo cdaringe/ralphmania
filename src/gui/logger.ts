@@ -6,6 +6,8 @@
  */
 import type { Logger } from "../types.ts";
 import type { GuiEventBus } from "./events.ts";
+import { writeWorkerLine } from "./log-dir.ts";
+import { MERGE_LOG_ID, VALIDATE_LOG_ID } from "./log-dir.ts";
 
 /** Pattern matching the orchestrator's state-transition log message: "from → to". */
 const TRANSITION_RE = /^(\w+) \u2192 (\w+)$/;
@@ -30,6 +32,26 @@ const MERGE_START_RE = /^Merging worker (\d+) \((.+)\)$/;
 /** Matches "Worker N merge: merged|conflict|no-changes" */
 const MERGE_DONE_RE = /^Worker (\d+) merge: (merged|conflict|no-changes)$/;
 
+/** Matches "Running validation on merged result..." */
+const VALIDATE_START_RE = /^Running validation on merged result/;
+
+/** Matches "Validation passed (iteration N)" or "Validation failed (iteration N)" */
+const VALIDATE_DONE_RE = /^Validation (passed|failed) \(iteration (\d+)\)/;
+
+/** Matches "Validation TIMEOUT (iteration N)" or "Validation crashed (iteration N)" */
+const VALIDATE_ERROR_RE = /^Validation (?:TIMEOUT|crashed) \(iteration (\d+)\)/;
+
+/** Tags that indicate merge-phase log output. */
+const MERGE_TAGS = new Set(["worktree", "reconcile"]);
+
+/** Tags that indicate validation-phase log output. */
+const VALIDATE_TAGS = new Set(["validate"]);
+
+export type GuiLoggerOptions = {
+  /** When true (default), mirror merge/validation log messages to dedicated log files. */
+  readonly writePhaseLog?: boolean;
+};
+
 /**
  * Returns a Logger that calls `base` for normal output and additionally:
  * - emits a `log` GuiEvent for every message
@@ -39,7 +61,9 @@ const MERGE_DONE_RE = /^Worker (\d+) merge: (merged|conflict|no-changes)$/;
  * - emits `worker_done` GuiEvents when workers complete
  */
 export const createGuiLogger =
-  (base: Logger, bus: GuiEventBus): Logger => (opts): void => {
+  (base: Logger, bus: GuiEventBus, options?: GuiLoggerOptions): Logger =>
+  (opts): void => {
+    const doWritePhaseLog = options?.writePhaseLog ?? true;
     base(opts);
     const ts = Date.now();
     bus.emit({
@@ -100,5 +124,58 @@ export const createGuiLogger =
         outcome: mergeDoneM[2] as "merged" | "conflict" | "no-changes",
         ts,
       });
+    }
+    // Emit validate_start when validation begins.
+    if (VALIDATE_START_RE.test(opts.message)) {
+      bus.emit({ type: "validate_start", iterationNum: -1, ts });
+    }
+    // Emit validate_done when validation completes.
+    const valDoneM = opts.message.match(VALIDATE_DONE_RE);
+    if (valDoneM) {
+      bus.emit({
+        type: "validate_done",
+        iterationNum: parseInt(valDoneM[2], 10),
+        outcome: valDoneM[1] as "passed" | "failed",
+        ts,
+      });
+    }
+    const valErrM = opts.message.match(VALIDATE_ERROR_RE);
+    if (valErrM) {
+      bus.emit({
+        type: "validate_done",
+        iterationNum: parseInt(valErrM[1], 10),
+        outcome: "failed",
+        ts,
+      });
+    }
+    if (doWritePhaseLog) {
+      // Mirror merge-phase log lines to the dedicated merge log stream.
+      const isMergeMessage = mergeStartM || mergeDoneM ||
+        (opts.tags as string[]).some((t) => MERGE_TAGS.has(t)) ||
+        /reconciliation|entering agent/.test(opts.message);
+      if (isMergeMessage) {
+        writeWorkerLine(MERGE_LOG_ID, {
+          type: "log",
+          level: opts.tags[0],
+          tags: opts.tags,
+          message: opts.message,
+          ts,
+          workerId: MERGE_LOG_ID,
+        });
+      }
+      // Mirror validation-phase log lines to the dedicated validate log stream.
+      if (
+        (opts.tags as string[]).some((t) => VALIDATE_TAGS.has(t)) ||
+        VALIDATE_START_RE.test(opts.message) || valDoneM || valErrM
+      ) {
+        writeWorkerLine(VALIDATE_LOG_ID, {
+          type: "log",
+          level: opts.tags[0],
+          tags: opts.tags,
+          message: opts.message,
+          ts,
+          workerId: VALIDATE_LOG_ID,
+        });
+      }
     }
   };

@@ -26,6 +26,12 @@ export default function WorkerPageApp(): preact.JSX.Element {
   const workerIndex = parseInt(parts[parts.length - 1], 10);
   const params = new URLSearchParams(globalThis.location?.search ?? "");
   const workerId = params.get("scenario") ?? "\u2014";
+  const phase = params.get("phase") as "merge" | "validate" | null;
+  const phaseLabel = phase === "merge"
+    ? "Merge"
+    : phase === "validate"
+    ? "Validation"
+    : undefined;
 
   const [events, setEvents] = useState<LogEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -38,7 +44,9 @@ export default function WorkerPageApp(): preact.JSX.Element {
 
   useEffect(() => {
     // deno-lint-ignore no-undef
-    document.title = `ralphmania \u00b7 W${workerIndex} \u00b7 ${workerId}`;
+    document.title = phaseLabel
+      ? `ralphmania \u00b7 ${phaseLabel}`
+      : `ralphmania \u00b7 W${workerIndex} \u00b7 ${workerId}`;
     let es: EventSource;
     let timer: number | undefined;
 
@@ -133,7 +141,7 @@ export default function WorkerPageApp(): preact.JSX.Element {
         <h1>ralphmania</h1>
         <a class="back" href="/">← overview</a>
         <span style="font-size:13px;color:var(--muted)">
-          W{workerIndex} · {workerId}
+          {phaseLabel ?? `W${workerIndex} · ${workerId}`}
         </span>
         <span
           class={`info-val state-${workerState}`}
@@ -171,28 +179,30 @@ export default function WorkerPageApp(): preact.JSX.Element {
           <div id="log" ref={logRef}>
             {visible.map((ev) => <LogEntry key={ev.seq} ev={ev} />)}
           </div>
-          <div id="input-bar">
-            <textarea
-              ref={inputRef}
-              placeholder="Send input to agent (Enter to send, Shift+Enter for newline)"
-              disabled={!isRunning}
-              onKeyDown={(e): void => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendInput();
-                }
-              }}
-            />
-            <button
-              type="button"
-              id="send-btn"
-              disabled={!isRunning}
-              onClick={sendInput}
-            >
-              Send
-            </button>
-            <span id="send-status">{sendStatus}</span>
-          </div>
+          {!phase && (
+            <div id="input-bar">
+              <textarea
+                ref={inputRef}
+                placeholder="Send input to agent (Enter to send, Shift+Enter for newline)"
+                disabled={!isRunning}
+                onKeyDown={(e): void => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendInput();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                id="send-btn"
+                disabled={!isRunning}
+                onClick={sendInput}
+              >
+                Send
+              </button>
+              <span id="send-status">{sendStatus}</span>
+            </div>
+          )}
         </section>
       </main>
     </>

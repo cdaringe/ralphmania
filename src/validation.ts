@@ -11,6 +11,11 @@ import {
   VALIDATE_TEMPLATE,
   VALIDATION_TIMEOUT_MS,
 } from "./constants.ts";
+import {
+  resetWorkerLog,
+  VALIDATE_LOG_ID,
+  writeWorkerLine,
+} from "./gui/log-dir.ts";
 
 export const ensureValidationHook = async (
   log: Logger,
@@ -48,17 +53,42 @@ export const runValidation = async ({ iterationNum, log, cwd }: {
     truncate: true,
   });
 
+  // Reset the GUI validation log stream for this run.
+  await resetWorkerLog(VALIDATE_LOG_ID).catch(() => {});
+
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const stripAnsi = (text: string): string =>
     // deno-lint-ignore no-control-regex
     text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
 
+  let lineBuffer = "";
+  const flushLines = (text: string): void => {
+    lineBuffer += text;
+    const lines = lineBuffer.split("\n");
+    lineBuffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trimEnd();
+      if (trimmed.length > 0) {
+        writeWorkerLine(VALIDATE_LOG_ID, {
+          type: "log",
+          level: "info",
+          tags: ["info", "validate", "script-output"],
+          message: stripAnsi(trimmed),
+          ts: Date.now(),
+          workerId: VALIDATE_LOG_ID,
+        });
+      }
+    }
+  };
+
   const tee = (dest: typeof Deno.stdout) =>
     new WritableStream<Uint8Array>({
       write(chunk: Uint8Array): void {
         dest.writeSync(chunk);
-        file.writeSync(encoder.encode(stripAnsi(decoder.decode(chunk))));
+        const text = decoder.decode(chunk, { stream: true });
+        file.writeSync(encoder.encode(stripAnsi(text)));
+        flushLines(text);
       },
     });
 

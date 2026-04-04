@@ -159,8 +159,12 @@ const buildGraph = (
     {
       id: "validating",
       position: { x: 250, y: 540 },
-      data: { label: "validating" },
-      style: { ...baseNodeStyle, ...stateNodeStyle("validating", as) },
+      data: { label: "validating", phase: "validate" },
+      style: {
+        ...baseNodeStyle,
+        cursor: "pointer",
+        ...stateNodeStyle("validating", as),
+      },
       sourcePosition: P.Bottom,
       targetPosition: P.Top,
     },
@@ -345,11 +349,12 @@ const buildGraph = (
     nodes.push({
       id: "merge",
       position: { x: 250, y: 460 },
-      data: { label: "merge" },
+      data: { label: "merge", phase: "merge" },
       style: {
         ...baseNodeStyle,
         borderRadius: 20,
         minWidth: 80,
+        cursor: "pointer",
         ...(mergeActive
           ? {
             background: "#fefce8",
@@ -445,6 +450,18 @@ export default function WorkflowGraph(): preact.JSX.Element {
             setSelectedWorker({
               workerIndex: node.data.workerIndex,
               scenario: node.data.scenario,
+            });
+          } else if (node.data?.phase === "merge") {
+            setSelectedWorker({
+              workerIndex: -1,
+              scenario: "__merge__",
+              phase: "merge",
+            });
+          } else if (node.data?.phase === "validate") {
+            setSelectedWorker({
+              workerIndex: -2,
+              scenario: "__validate__",
+              phase: "validate",
             });
           }
         };

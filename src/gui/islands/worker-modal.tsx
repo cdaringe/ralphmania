@@ -139,6 +139,13 @@ export default function WorkerModal(): preact.JSX.Element | null {
 
   if (!selected) return null;
 
+  const isPhase = selected.phase !== undefined;
+  const phaseLabel = selected.phase === "merge"
+    ? "Merge"
+    : selected.phase === "validate"
+    ? "Validation"
+    : undefined;
+
   const close = (): void => setSelectedWorker(null);
 
   const sendInput = (): void => {
@@ -186,13 +193,17 @@ export default function WorkerModal(): preact.JSX.Element | null {
         />
         <div class="modal-header">
           <h2>
-            W{selected.workerIndex} → {escHtml(selected.scenario)}
+            {phaseLabel
+              ? phaseLabel
+              : <>W{selected.workerIndex} → {escHtml(selected.scenario)}</>}
           </h2>
-          {finished && <span class="worker-status-badge">inactive</span>}
+          {finished && !isPhase && (
+            <span class="worker-status-badge">inactive</span>
+          )}
           <a
             href={`/worker/${selected.workerIndex}?scenario=${
               encodeURIComponent(selected.scenario)
-            }`}
+            }${selected.phase ? `&phase=${selected.phase}` : ""}`}
             target="_blank"
           >
             pop out
@@ -204,25 +215,27 @@ export default function WorkerModal(): preact.JSX.Element | null {
         <div class="modal-log" ref={logRef}>
           {events.map((ev) => <LogEntry key={ev.seq} ev={ev} />)}
         </div>
-        <div class="modal-input">
-          <textarea
-            ref={inputRef}
-            placeholder={finished
-              ? "Worker has finished"
-              : "Send input to agent (Enter to send)"}
-            disabled={finished}
-            onKeyDown={(e): void => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendInput();
-              }
-            }}
-          />
-          <button type="button" onClick={sendInput} disabled={finished}>
-            Send
-          </button>
-          <span class="send-status">{sendStatus}</span>
-        </div>
+        {!isPhase && (
+          <div class="modal-input">
+            <textarea
+              ref={inputRef}
+              placeholder={finished
+                ? "Worker has finished"
+                : "Send input to agent (Enter to send)"}
+              disabled={finished}
+              onKeyDown={(e): void => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendInput();
+                }
+              }}
+            />
+            <button type="button" onClick={sendInput} disabled={finished}>
+              Send
+            </button>
+            <span class="send-status">{sendStatus}</span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { nonInteractiveEnv, RECONCILE_TIMEOUT_MS } from "../constants.ts";
 import { getModel } from "../model.ts";
 import { buildCommandSpec } from "../command.ts";
 import { ndjsonResultTransform, pipeStream } from "../runner.ts";
+import { MERGE_LOG_ID, writeWorkerLine } from "../gui/log-dir.ts";
 
 /** Extract file paths from `git status --porcelain` with unmerged markers. */
 export const parseConflictedFiles = (porcelain: string): string[] =>
@@ -122,10 +123,29 @@ const defaultSpawnAgent: ReconcileDeps["spawnAgent"] = async (
     ? child.stdout.pipeThrough(ndjsonResultTransform())
     : child.stdout;
 
+  const mergeOnLine = (line: string): void => {
+    writeWorkerLine(MERGE_LOG_ID, {
+      type: "log",
+      level: "info",
+      tags: ["info", "reconcile", "agent-stream"],
+      message: line,
+      ts: Date.now(),
+      workerId: MERGE_LOG_ID,
+    });
+  };
+
   const [status] = await Promise.all([
     child.status,
-    pipeStream({ stream: stdoutStream, output: Deno.stdout }),
-    pipeStream({ stream: child.stderr, output: Deno.stderr }),
+    pipeStream({
+      stream: stdoutStream,
+      output: Deno.stdout,
+      onLine: mergeOnLine,
+    }),
+    pipeStream({
+      stream: child.stderr,
+      output: Deno.stderr,
+      onLine: mergeOnLine,
+    }),
   ]);
 
   return { code: status.code };

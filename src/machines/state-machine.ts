@@ -31,6 +31,7 @@ import { parseScenarioIds } from "../progress.ts";
 import { dim, green, yellow } from "../colors.ts";
 import { difference, xor } from "../set-fns.ts";
 import { formatDuration, Status } from "../constants.ts";
+import { MERGE_LOG_ID, resetWorkerLog } from "../gui/log-dir.ts";
 
 // ---------------------------------------------------------------------------
 // Deep completion verification — re-reads spec + progress from disk
@@ -570,6 +571,9 @@ export const transitionRunningWorkers = async (
   } finally {
     // Discard uncommitted changes before merging
     await ctx.deps.resetWorkingTree({ log: ctx.log });
+
+    // Reset merge log so each round gets a fresh stream.
+    await resetWorkerLog(MERGE_LOG_ID).catch(() => {});
 
     // Sequential merge — retry with -X theirs, then reconcile via agent
     for (const wr of results) {

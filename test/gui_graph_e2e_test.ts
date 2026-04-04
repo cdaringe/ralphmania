@@ -93,7 +93,7 @@ Deno.test("createGuiLogger emits merge_start on merge log message", () => {
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Merging worker 0 (GUI.a)",
@@ -113,7 +113,7 @@ Deno.test("createGuiLogger emits merge_done with merged outcome", () => {
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Worker 1 merge: merged",
@@ -132,7 +132,7 @@ Deno.test("createGuiLogger emits merge_done with conflict outcome", () => {
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Worker 0 merge: conflict",
@@ -150,7 +150,7 @@ Deno.test("createGuiLogger emits merge_done with no-changes outcome", () => {
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Worker 2 merge: no-changes",
@@ -169,7 +169,7 @@ Deno.test("createGuiLogger does not emit merge events for unrelated messages", (
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Something about merging but not a match",

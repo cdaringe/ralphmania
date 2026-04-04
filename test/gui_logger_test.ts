@@ -15,7 +15,7 @@ Deno.test("createGuiLogger calls base logger", () => {
   const calls: { tags: readonly string[]; message: string }[] = [];
   const base: Logger = (opts) => calls.push(opts);
 
-  const logger = createGuiLogger(base, bus);
+  const logger = createGuiLogger(base, bus, { writePhaseLog: false });
   logger({ tags: ["info"], message: "test message" });
 
   assertEquals(calls.length, 1);
@@ -28,7 +28,7 @@ Deno.test("createGuiLogger emits log event to bus", () => {
   bus.subscribe((e) => events.push(e));
 
   const base: Logger = () => {};
-  const logger = createGuiLogger(base, bus);
+  const logger = createGuiLogger(base, bus, { writePhaseLog: false });
 
   logger({ tags: ["info", "orchestrator"], message: "round started" });
 
@@ -49,7 +49,7 @@ Deno.test("createGuiLogger calls base before emitting to bus", () => {
   bus.subscribe(() => order.push("bus"));
 
   const base: Logger = () => order.push("base");
-  const logger = createGuiLogger(base, bus);
+  const logger = createGuiLogger(base, bus, { writePhaseLog: false });
 
   logger({ tags: ["info"], message: "test" });
 
@@ -62,7 +62,7 @@ Deno.test("createGuiLogger propagates error level tag", () => {
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({ tags: ["error"], message: "something failed" });
 
   const logEv = events.find((e) => e.type === "log") as GuiLogEvent;
@@ -75,7 +75,7 @@ Deno.test("createGuiLogger emits state event for transition log messages", () =>
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["debug", "orchestrator", "transition"],
     message: "reading_progress \u2192 finding_actionable",
@@ -93,7 +93,7 @@ Deno.test("createGuiLogger does not emit state event for non-transition logs", (
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({ tags: ["info", "orchestrator"], message: "some info message" });
 
   const stateEvents = events.filter((e) => e.type === "state");
@@ -105,7 +105,7 @@ Deno.test("createGuiLogger emits both log and state events for transitions", () 
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["debug", "orchestrator", "transition"],
     message: "init \u2192 reading_progress",
@@ -122,7 +122,7 @@ Deno.test("createGuiLogger emits worker_active events on launch message", () => 
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Round 1: launching 2 worker(s) for scenarios [GUI.c, GUI.d]",
@@ -144,7 +144,7 @@ Deno.test("createGuiLogger emits worker_done on resolved message", () => {
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Scenario GUI.c: resolved by worker 0",
@@ -162,7 +162,7 @@ Deno.test("createGuiLogger emits worker_done on still actionable message", () =>
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Scenario 5: still actionable after worker 2",
@@ -180,7 +180,7 @@ Deno.test("createGuiLogger emits worker_active for single worker launch", () => 
   const events: GuiEvent[] = [];
   bus.subscribe((e) => events.push(e));
 
-  const logger = createGuiLogger(() => {}, bus);
+  const logger = createGuiLogger(() => {}, bus, { writePhaseLog: false });
   logger({
     tags: ["info", "orchestrator"],
     message: "Round 3: launching 1 worker(s) for scenarios [29]",
