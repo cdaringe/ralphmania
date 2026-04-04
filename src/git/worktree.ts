@@ -46,8 +46,7 @@ export const createWorktree = async (
 ): Promise<Result<WorktreeInfo, string>> => {
   const timestamp = Date.now();
   const workerLaunchId = createWorkerLaunchId(workerIndex);
-  const branch =
-    `ralph/${workerLaunchId}-scenario-${scenario}-${timestamp}`;
+  const branch = `ralph/${workerLaunchId}-scenario-${scenario}-${timestamp}`;
   const path = `${WORKTREE_BASE_DIR}/${workerLaunchId}`;
 
   // Remove stale worktree path if it exists
