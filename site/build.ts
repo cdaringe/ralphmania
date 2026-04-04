@@ -52,6 +52,22 @@ export async function buildSite(opts: BuildOpts): Promise<void> {
   const cssSource = path.join(srcDir, "styles.css");
   const cssDest = path.join(outDir, "styles.css");
   await Deno.copyFile(cssSource, cssDest);
+
+  const assetsSource = path.join(srcDir, "assets");
+  const assetsDest = path.join(outDir, "assets");
+  try {
+    await Deno.mkdir(assetsDest, { recursive: true });
+    for await (const entry of Deno.readDir(assetsSource)) {
+      if (entry.isFile) {
+        await Deno.copyFile(
+          path.join(assetsSource, entry.name),
+          path.join(assetsDest, entry.name),
+        );
+      }
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
 }
 
 if (import.meta.main) {

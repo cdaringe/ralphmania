@@ -8,6 +8,7 @@ verified."
 deno run -A jsr:@cdaringe/ralphmania -i 10
 deno run -A jsr:@cdaringe/ralphmania -i 10 [-a claude|codex]
 deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
+deno run -A jsr:@cdaringe/ralphmania -i 10 --gui
 deno run -A jsr:@cdaringe/ralphmania serve receipts [--open] [--port 8421]
 ```
 
@@ -36,6 +37,19 @@ designed for iterative development. Specifically, it has strong support for:
    default behaviors!
 
 </details>
+
+## Live GUI
+
+Pass `--gui` to launch a real-time web dashboard alongside the orchestrator:
+
+```bash
+deno run -A jsr:@cdaringe/ralphmania -i 10 --gui
+```
+
+![ralphmania GUI](site/src/assets/gui-screenshot.png)
+
+The GUI shows an interactive workflow graph, per-worker log streaming, scenario
+status editing, and agent input — all updated in real-time via SSE.
 
 ## How it works
 
