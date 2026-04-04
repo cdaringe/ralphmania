@@ -1,6 +1,6 @@
 {
   "name": "@cdaringe/ralphmania",
-  "version": "0.61.0",
+  "version": "0.62.0",
   "license": "MIT",
   "exports": "./mod.ts",
   "compilerOptions": {
@@ -57,8 +57,8 @@
     "yeet": "deno task yeet:bump && deno task gen-gui-manifest && deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
   },
   "imports": {
-    "@mariozechner/pi-coding-agent": "npm:@mariozechner/pi-coding-agent@*",
-    "@mariozechner/pi-ai": "npm:@mariozechner/pi-ai@*",
+    "@mariozechner/pi-coding-agent": "npm:@mariozechner/pi-coding-agent@0.65.0",
+    "@mariozechner/pi-ai": "npm:@mariozechner/pi-ai@0.65.0",
     "@cliffy/ansi": "jsr:@cliffy/ansi@^1.0.0",
     "@cliffy/command": "jsr:@cliffy/command@^1.0.0",
     "@fresh/core": "jsr:@fresh/core@^2",
