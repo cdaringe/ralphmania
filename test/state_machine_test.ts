@@ -525,7 +525,7 @@ Deno.test("transitionCheckingDoneness all verified → done", async () => {
   }
 });
 
-Deno.test("transitionCheckingDoneness not all verified → reading_progress", async () => {
+Deno.test("transitionCheckingDoneness not all verified with failure → rectifying (budget remaining)", async () => {
   const content = "| 1.1 | VERIFIED | done |\n| 1.2 |          |      |";
   const ctx = makeCtx({
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
@@ -536,8 +536,8 @@ Deno.test("transitionCheckingDoneness not all verified → reading_progress", as
     validationFailurePath: "/tmp/old.log",
   };
   const next = await transitionCheckingDoneness(state, ctx);
-  assertEquals(next.tag, "reading_progress");
-  if (next.tag === "reading_progress") {
+  assertEquals(next.tag, "rectifying");
+  if (next.tag === "rectifying") {
     assertEquals(next.iterationsUsed, 1);
     assertEquals(next.validationFailurePath, "/tmp/old.log");
   }
@@ -658,7 +658,7 @@ Deno.test("transitionReadingProgress all verified but validation failure → fin
   assertEquals(next.tag, "finding_actionable");
 });
 
-Deno.test("transitionCheckingDoneness all verified but validation failure → reading_progress", async () => {
+Deno.test("transitionCheckingDoneness all verified but validation failure → rectifying (budget remaining)", async () => {
   const content = "| 1.1 | VERIFIED | done |\n| 1.2 | VERIFIED | done |";
   const ctx = makeCtx({
     deps: stubDeps({ readProgress: () => Promise.resolve(content) }),
@@ -669,8 +669,8 @@ Deno.test("transitionCheckingDoneness all verified but validation failure → re
     validationFailurePath: "/tmp/fail.log",
   };
   const next = await transitionCheckingDoneness(state, ctx);
-  assertEquals(next.tag, "reading_progress");
-  if (next.tag === "reading_progress") {
+  assertEquals(next.tag, "rectifying");
+  if (next.tag === "rectifying") {
     assertEquals(next.validationFailurePath, "/tmp/fail.log");
   }
 });

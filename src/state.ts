@@ -4,7 +4,7 @@ import { LOOP_STATE_FILE } from "./constants.ts";
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
 
-const VALID_STEPS = new Set<string>(["agent", "validate", "done"]);
+const VALID_STEPS = new Set<string>(["agent", "validate", "rectify", "done"]);
 
 const parseCheckpoint = (raw: string): LoopCheckpoint | undefined => {
   const parsed: unknown = JSON.parse(raw);

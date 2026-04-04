@@ -29,6 +29,7 @@ export type {
   LoopCheckpoint,
   LoopState,
   ModelSelection,
+  RectifyAction,
   Result,
   ToolMode,
   ValidationResult,
@@ -156,13 +157,23 @@ const main = async (): Promise<number> => {
     ? await plugin.onConfigResolved({
       agent: parsed.value.agent,
       iterations: parsed.value.iterations,
+      level: parsed.value.level,
+      parallel: parsed.value.parallel,
+      gui: parsed.value.gui,
+      guiPort: parsed.value.guiPort,
+      resetWorktrees: parsed.value.resetWorktrees,
       log,
     })
     : undefined;
 
   const agent = configHookResult?.agent ?? parsed.value.agent;
   const iterations = configHookResult?.iterations ?? parsed.value.iterations;
-  const { level, parallel, gui, guiPort, resetWorktrees } = parsed.value;
+  const level = configHookResult?.level ?? parsed.value.level;
+  const parallel = configHookResult?.parallel ?? parsed.value.parallel;
+  const gui = configHookResult?.gui ?? parsed.value.gui;
+  const guiPort = configHookResult?.guiPort ?? parsed.value.guiPort;
+  const resetWorktrees = configHookResult?.resetWorktrees ??
+    parsed.value.resetWorktrees;
 
   if (resetWorktrees) {
     const resetResult = await resetAllWorktrees({ log });
@@ -348,7 +359,7 @@ const main = async (): Promise<number> => {
     receiptsResult && receiptsResult.isErr() &&
       log({ tags: ["error"], message: receiptsResult.error });
 
-    if (allDone) {
+    if (allDone && import.meta.url.startsWith("file:")) {
       const guiOutDir = path.join(RALPH_RECEIPTS_DIRNAME, "gui");
       const guiResult = await publishContainedGui({ outDir: guiOutDir, log });
       if (guiResult.isErr()) {

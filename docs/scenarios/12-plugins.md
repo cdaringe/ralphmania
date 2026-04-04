@@ -14,15 +14,15 @@ The system SHALL support user-provided plugins (via `--plugin`) with hooks:
 
 `src/plugin.ts` – `Plugin` type defines all seven optional hooks:
 
-| Hook                   | Fires                                     | Can Modify            |
-| ---------------------- | ----------------------------------------- | --------------------- |
-| `onConfigResolved`     | Before loop starts                        | `agent`, `iterations` |
-| `onModelSelected`      | Each iteration, after model resolution    | `ModelSelection`      |
-| `onPromptBuilt`        | Each iteration, after prompt construction | prompt string         |
-| `onCommandBuilt`       | Each iteration, after command spec built  | `CommandSpec`         |
-| `onIterationEnd`       | After agent subprocess exits              | observation only      |
-| `onValidationComplete` | After validation script runs              | `ValidationResult`    |
-| `onLoopEnd`            | After loop exits (any reason)             | observation only      |
+| Hook                   | Fires                                     | Can Modify                                                                                                 |
+| ---------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `onConfigResolved`     | Before loop starts                        | `agent`, `iterations`, `level`, `parallel`, `gui`, `guiPort`, `resetWorktrees`, `specFile`, `progressFile` |
+| `onModelSelected`      | Each iteration, after model resolution    | `ModelSelection`                                                                                           |
+| `onPromptBuilt`        | Each iteration, after prompt construction | prompt string                                                                                              |
+| `onCommandBuilt`       | Each iteration, after command spec built  | `CommandSpec`                                                                                              |
+| `onIterationEnd`       | After agent subprocess exits              | observation only                                                                                           |
+| `onValidationComplete` | After validation script runs              | `ValidationResult`                                                                                         |
+| `onLoopEnd`            | After loop exits (any reason)             | observation only                                                                                           |
 
 Each hook receives a `HookContext` (`{ agent, log, iterationNum }`) plus
 hook-specific data.
@@ -44,7 +44,10 @@ hook-specific data.
 
 - `--plugin`/`-p` flag parsed by `parseCliArgsInteractive`.
 - `loadPlugin` called before the loop; failure exits with code 1.
-- `plugin.onConfigResolved` called to allow overriding `agent`/`iterations`.
+- `plugin.onConfigResolved` called to allow overriding any CLI config field
+  (`agent`, `iterations`, `level`, `parallel`, `gui`, `guiPort`,
+  `resetWorktrees`, `specFile`, `progressFile`). All return fields are optional;
+  omitted fields keep the CLI-resolved value.
 - `printBanner` and loop run with the (possibly overridden) config.
 
 `src/runner.ts` – `runIteration` / `runLoopIteration`:

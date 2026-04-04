@@ -69,7 +69,16 @@ export type LoopState = {
 };
 
 /** The step within an iteration that was last checkpointed. */
-export type LoopStep = "agent" | "validate" | "done";
+export type LoopStep = "agent" | "validate" | "rectify" | "done";
+
+/**
+ * Action returned by the {@link import("./plugin.ts").Plugin.onRectify} hook
+ * to control how rectification proceeds after a validation failure.
+ */
+export type RectifyAction =
+  | { action: "agent"; promptOverride?: string }
+  | { action: "skip" }
+  | { action: "abort"; reason: string };
 
 /**
  * Persisted loop checkpoint written at each major step so the workstream can

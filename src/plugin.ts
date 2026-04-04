@@ -1,10 +1,12 @@
 import type {
   Agent,
   CommandSpec,
+  EscalationLevel,
   IterationResult,
   Logger,
   LoopState,
   ModelSelection,
+  RectifyAction,
   Result,
   ValidationResult,
 } from "./types.ts";
@@ -35,24 +37,39 @@ export type HookContext = {
  */
 export type Plugin = {
   /**
-   * Override the resolved agent, iteration count, and file paths before the
-   * loop starts. Return `specFile` and/or `progressFile` to redirect
-   * ralphmania to read `specification.md` / `progress.md` from custom paths.
+   * Override the resolved CLI configuration before the loop starts.
+   * Every field in the return type is optional — omitted fields keep
+   * the CLI-resolved value.
    */
   onConfigResolved?: (opts: {
     agent: Agent;
     iterations: number;
+    level: EscalationLevel | undefined;
+    parallel: number;
+    gui: boolean;
+    guiPort: number;
+    resetWorktrees: boolean;
     log: Logger;
   }) =>
     | {
-      agent: Agent;
-      iterations: number;
+      agent?: Agent;
+      iterations?: number;
+      level?: EscalationLevel;
+      parallel?: number;
+      gui?: boolean;
+      guiPort?: number;
+      resetWorktrees?: boolean;
       specFile?: string;
       progressFile?: string;
     }
     | Promise<{
-      agent: Agent;
-      iterations: number;
+      agent?: Agent;
+      iterations?: number;
+      level?: EscalationLevel;
+      parallel?: number;
+      gui?: boolean;
+      guiPort?: number;
+      resetWorktrees?: boolean;
       specFile?: string;
       progressFile?: string;
     }>;
@@ -88,6 +105,18 @@ export type Plugin = {
     result: ValidationResult;
     ctx: HookContext;
   }) => ValidationResult | Promise<ValidationResult>;
+
+  /**
+   * Called when validation fails post-merge, before spawning a rectification
+   * agent on the merged main. Return `{ action: "agent" }` (default) to
+   * proceed, `{ action: "skip" }` to fall back to the normal restart, or
+   * `{ action: "abort", reason }` to stop the loop.
+   */
+  onRectify?: (opts: {
+    validationFailurePath: string;
+    iterationsUsed: number;
+    ctx: HookContext;
+  }) => RectifyAction | Promise<RectifyAction>;
 
   /** Called once after the loop exits, regardless of outcome. */
   onLoopEnd?: (opts: {

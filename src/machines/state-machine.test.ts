@@ -9,6 +9,8 @@ import {
   transitionFindingActionable,
   transitionInit,
   transitionReadingProgress,
+  transitionRectifying,
+  transitionReValidating,
   transitionRunningWorkers,
   transitionValidating,
 } from "./state-machine.ts";
@@ -516,7 +518,7 @@ Deno.test("transitionCheckingDoneness: not all verified → reading_progress", a
   assertEquals(next.tag, "reading_progress");
 });
 
-Deno.test("transitionCheckingDoneness: all verified but failure path present → reading_progress", async () => {
+Deno.test("transitionCheckingDoneness: all verified but failure path present → rectifying (budget remaining)", async () => {
   const ctx = makeCtx({
     deps: makeDeps({
       readProgress: () => Promise.resolve(allVerifiedProgress),
@@ -531,7 +533,7 @@ Deno.test("transitionCheckingDoneness: all verified but failure path present →
     },
     ctx,
   );
-  assertEquals(next.tag, "reading_progress");
+  assertEquals(next.tag, "rectifying");
 });
 
 // ---------------------------------------------------------------------------
@@ -794,4 +796,346 @@ Deno.test("transitionFindingActionable: clustering reduces parallel batch to one
   if (next.tag === "running_workers") {
     assertEquals(next.uniqueActionable.length, 1);
   }
+});
+
+// ---------------------------------------------------------------------------
+// transitionCheckingDoneness → rectifying
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionCheckingDoneness: validation failure with budget → rectifying", async () => {
+  const ctx = makeCtx({
+    iterations: 5,
+    deps: makeDeps({ readProgress: () => Promise.resolve(wipProgress) }),
+    expectedScenarioIds: ["ARCH.1", "ARCH.2"],
+  });
+  const next = await transitionCheckingDoneness(
+    {
+      tag: "checking_doneness",
+      iterationsUsed: 2,
+      validationFailurePath: ".ralph/validation/iteration-1.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "rectifying");
+  if (next.tag === "rectifying") {
+    assertEquals(next.iterationsUsed, 2);
+    assertEquals(
+      next.validationFailurePath,
+      ".ralph/validation/iteration-1.log",
+    );
+  }
+});
+
+Deno.test("transitionCheckingDoneness: validation failure with exhausted budget → reading_progress", async () => {
+  const ctx = makeCtx({
+    iterations: 2,
+    deps: makeDeps({ readProgress: () => Promise.resolve(wipProgress) }),
+    expectedScenarioIds: ["ARCH.1", "ARCH.2"],
+  });
+  const next = await transitionCheckingDoneness(
+    {
+      tag: "checking_doneness",
+      iterationsUsed: 2,
+      validationFailurePath: ".ralph/validation/iteration-1.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "reading_progress");
+});
+
+// ---------------------------------------------------------------------------
+// transitionInit with rectify checkpoint
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionInit: checkpoint at rectify step → rectifying", async () => {
+  const ctx = makeCtx({
+    deps: makeDeps({
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 3,
+          step: "rectify" as const,
+          validationFailurePath: ".ralph/validation/iteration-2.log",
+        }),
+    }),
+  });
+  const next = await transitionInit(ctx);
+  assertEquals(next.tag, "rectifying");
+  if (next.tag === "rectifying") {
+    assertEquals(next.iterationsUsed, 3);
+    assertEquals(
+      next.validationFailurePath,
+      ".ralph/validation/iteration-2.log",
+    );
+  }
+});
+
+Deno.test("transitionInit: checkpoint at rectify without failure path → reading_progress", async () => {
+  const ctx = makeCtx({
+    deps: makeDeps({
+      readCheckpoint: () =>
+        Promise.resolve({
+          iterationsUsed: 3,
+          step: "rectify" as const,
+          validationFailurePath: undefined,
+        }),
+    }),
+  });
+  const next = await transitionInit(ctx);
+  assertEquals(next.tag, "reading_progress");
+});
+
+// ---------------------------------------------------------------------------
+// transitionRectifying
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goes to re_validating", async () => {
+  let iterationRan = false;
+  const ctx = makeCtx({
+    deps: makeDeps({
+      runIteration: () => {
+        iterationRan = true;
+        return Promise.resolve({ status: "continue" as const });
+      },
+    }),
+  });
+  const next = await transitionRectifying(
+    {
+      tag: "rectifying",
+      iterationsUsed: 1,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "re_validating");
+  assertEquals(iterationRan, true);
+  if (next.tag === "re_validating") {
+    assertEquals(next.iterationsUsed, 1);
+  }
+});
+
+Deno.test("transitionRectifying: plugin returns skip → reading_progress", async () => {
+  const ctx = makeCtx({
+    plugin: {
+      onRectify: () => ({ action: "skip" as const }),
+    },
+  });
+  const next = await transitionRectifying(
+    {
+      tag: "rectifying",
+      iterationsUsed: 1,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "reading_progress");
+});
+
+Deno.test("transitionRectifying: plugin returns abort → done", async () => {
+  const ctx = makeCtx({
+    plugin: {
+      onRectify: () => ({ action: "abort" as const, reason: "unrecoverable" }),
+    },
+  });
+  const next = await transitionRectifying(
+    {
+      tag: "rectifying",
+      iterationsUsed: 1,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "done");
+  if (next.tag === "done") {
+    assertEquals(next.iterationsUsed, 1);
+  }
+});
+
+Deno.test("transitionRectifying: writes checkpoint at rectify step", async () => {
+  const checkpoints: { step: string }[] = [];
+  const ctx = makeCtx({
+    deps: makeDeps({
+      writeCheckpoint: (cp) => {
+        checkpoints.push(cp);
+        return Promise.resolve();
+      },
+    }),
+  });
+  await transitionRectifying(
+    {
+      tag: "rectifying",
+      iterationsUsed: 2,
+      validationFailurePath: ".ralph/validation/iteration-1.log",
+    },
+    ctx,
+  );
+  assertEquals(checkpoints.some((cp) => cp.step === "rectify"), true);
+});
+
+// ---------------------------------------------------------------------------
+// transitionReValidating
+// ---------------------------------------------------------------------------
+
+Deno.test("transitionReValidating: validation passes → checking_doneness without failure", async () => {
+  const ctx = makeCtx({
+    deps: makeDeps({
+      runValidation: () => Promise.resolve({ status: "passed" as const }),
+    }),
+  });
+  const next = await transitionReValidating(
+    {
+      tag: "re_validating",
+      iterationsUsed: 1,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "checking_doneness");
+  if (next.tag === "checking_doneness") {
+    assertEquals(next.validationFailurePath, undefined);
+    assertEquals(next.iterationsUsed, 2);
+  }
+});
+
+Deno.test("transitionReValidating: validation fails → checking_doneness with failure", async () => {
+  const ctx = makeCtx({
+    deps: makeDeps({
+      runValidation: () =>
+        Promise.resolve({
+          status: "failed" as const,
+          outputPath: ".ralph/validation/iteration-1.log",
+        }),
+    }),
+  });
+  const next = await transitionReValidating(
+    {
+      tag: "re_validating",
+      iterationsUsed: 1,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  assertEquals(next.tag, "checking_doneness");
+  if (next.tag === "checking_doneness") {
+    assertEquals(
+      next.validationFailurePath,
+      ".ralph/validation/iteration-1.log",
+    );
+    assertEquals(next.iterationsUsed, 2);
+  }
+});
+
+Deno.test("transitionReValidating: writes checkpoint before and after validation", async () => {
+  const checkpoints: { step: string; iterationsUsed: number }[] = [];
+  const ctx = makeCtx({
+    deps: makeDeps({
+      writeCheckpoint: (cp) => {
+        checkpoints.push(cp);
+        return Promise.resolve();
+      },
+      runValidation: () => Promise.resolve({ status: "passed" as const }),
+    }),
+  });
+  await transitionReValidating(
+    {
+      tag: "re_validating",
+      iterationsUsed: 2,
+      validationFailurePath: ".ralph/validation/iteration-1.log",
+    },
+    ctx,
+  );
+  assertEquals(checkpoints.length, 2);
+  assertEquals(checkpoints[0]?.step, "validate");
+  assertEquals(checkpoints[0]?.iterationsUsed, 2);
+  assertEquals(checkpoints[1]?.step, "done");
+  assertEquals(checkpoints[1]?.iterationsUsed, 3);
+});
+
+Deno.test("transitionReValidating: plugin.onValidationComplete can override result", async () => {
+  const ctx = makeCtx({
+    deps: makeDeps({
+      runValidation: () =>
+        Promise.resolve({ status: "failed" as const, outputPath: "x.log" }),
+    }),
+    plugin: {
+      onValidationComplete: () => ({ status: "passed" as const }),
+    },
+  });
+  const next = await transitionReValidating(
+    {
+      tag: "re_validating",
+      iterationsUsed: 0,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  if (next.tag === "checking_doneness") {
+    assertEquals(next.validationFailurePath, undefined);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// isTerminal: new states are not terminal
+// ---------------------------------------------------------------------------
+
+Deno.test("isTerminal: rectifying is not terminal", () => {
+  assertEquals(
+    isTerminal({
+      tag: "rectifying",
+      iterationsUsed: 0,
+      validationFailurePath: "x.log",
+    }),
+    false,
+  );
+});
+
+Deno.test("isTerminal: re_validating is not terminal", () => {
+  assertEquals(
+    isTerminal({
+      tag: "re_validating",
+      iterationsUsed: 0,
+      validationFailurePath: "x.log",
+    }),
+    false,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Full rectification loop: validate fails → rectify → re-validate → done
+// ---------------------------------------------------------------------------
+
+Deno.test("full loop: validation failure triggers rectification cycle", async () => {
+  let validationCallCount = 0;
+  const ctx = makeCtx({
+    iterations: 5,
+    deps: makeDeps({
+      readProgress: () => Promise.resolve(allVerifiedProgress),
+      runValidation: () => {
+        validationCallCount++;
+        // First validation (post-merge) fails; second (post-rectify) passes.
+        return validationCallCount <= 1
+          ? Promise.resolve({
+            status: "failed" as const,
+            outputPath: ".ralph/validation/iteration-0.log",
+          })
+          : Promise.resolve({ status: "passed" as const });
+      },
+    }),
+    expectedScenarioIds: ["ARCH.1", "ARCH.2"],
+  });
+
+  let state: import("./state-machine.ts").OrchestratorState = {
+    tag: "validating",
+    iterationsUsed: 0,
+    validationFailurePath: undefined,
+  };
+  const visited: string[] = [];
+  let steps = 0;
+  while (!isTerminal(state) && steps < 20) {
+    state = await transition(state, ctx);
+    visited.push(state.tag);
+    steps++;
+  }
+  assertEquals(state.tag, "done");
+  assertEquals(visited.includes("rectifying"), true);
+  assertEquals(visited.includes("re_validating"), true);
 });

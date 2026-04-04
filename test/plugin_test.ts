@@ -100,6 +100,17 @@ export const plugin = {
   }
 });
 
+const defaultConfigOpts = {
+  agent: "claude" as const,
+  iterations: 5,
+  level: undefined,
+  parallel: 2,
+  gui: false,
+  guiPort: 8420,
+  resetWorktrees: false,
+  log: testLog,
+};
+
 Deno.test("onConfigResolved can return custom specFile and progressFile", async () => {
   const path = await writeTempPlugin(`
 export const plugin = {
@@ -111,14 +122,29 @@ export const plugin = {
   const result = await loadPlugin({ pluginPath: path, log: testLog });
   assertEquals(result.isOk(), true);
   if (result.isOk()) {
-    const resolved = await result.value.onConfigResolved?.({
-      agent: "claude",
-      iterations: 5,
-      log: testLog,
-    });
+    const resolved = await result.value.onConfigResolved?.(defaultConfigOpts);
     assertEquals(resolved?.specFile, "custom/spec.md");
     assertEquals(resolved?.progressFile, "custom/progress.md");
     assertEquals(resolved?.agent, "claude");
     assertEquals(resolved?.iterations, 5);
+  }
+});
+
+Deno.test("onConfigResolved can override gui, parallel, and level", async () => {
+  const path = await writeTempPlugin(`
+export const plugin = {
+  onConfigResolved() {
+    return { gui: true, guiPort: 9999, parallel: 4, level: 1 };
+  },
+};
+`);
+  const result = await loadPlugin({ pluginPath: path, log: testLog });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    const resolved = await result.value.onConfigResolved?.(defaultConfigOpts);
+    assertEquals(resolved?.gui, true);
+    assertEquals(resolved?.guiPort, 9999);
+    assertEquals(resolved?.parallel, 4);
+    assertEquals(resolved?.level, 1);
   }
 });

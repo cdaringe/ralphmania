@@ -12,6 +12,7 @@ import type {
   EscalationState,
   IterationResult,
   Logger,
+  RectifyAction,
 } from "../types.ts";
 import type { WorktreeInfo } from "../git/worktree.ts";
 import type { Plugin } from "../plugin.ts";
@@ -196,6 +197,19 @@ export type CheckingDonenessState = Readonly<{
   validationFailurePath: string | undefined;
 }>;
 
+export type RectifyingState = Readonly<{
+  tag: "rectifying";
+  iterationsUsed: number;
+  /** Always present — this state is only entered on validation failure. */
+  validationFailurePath: string;
+}>;
+
+export type ReValidatingState = Readonly<{
+  tag: "re_validating";
+  iterationsUsed: number;
+  validationFailurePath: string;
+}>;
+
 export type DoneState = Readonly<{ tag: "done"; iterationsUsed: number }>;
 
 export type AbortedState = Readonly<{ tag: "aborted" }>;
@@ -207,6 +221,8 @@ export type OrchestratorState =
   | RunningWorkersState
   | ValidatingState
   | CheckingDonenessState
+  | RectifyingState
+  | ReValidatingState
   | DoneState
   | AbortedState;
 
@@ -224,7 +240,7 @@ const prefixLog = (log: Logger, workerIndex: number): Logger => (opts) =>
 
 export const transitionInit = async (
   ctx: MachineContext,
-): Promise<ReadingProgressState | ValidatingState> => {
+): Promise<ReadingProgressState | ValidatingState | RectifyingState> => {
   const checkpoint = await ctx.deps.readCheckpoint();
   const iterationsUsed = checkpoint?.iterationsUsed ?? 0;
   const validationFailurePath = checkpoint?.validationFailurePath;
@@ -241,6 +257,9 @@ export const transitionInit = async (
 
   if (checkpoint?.step === "validate") {
     return { tag: "validating", iterationsUsed, validationFailurePath };
+  }
+  if (checkpoint?.step === "rectify" && validationFailurePath) {
+    return { tag: "rectifying", iterationsUsed, validationFailurePath };
   }
   return { tag: "reading_progress", iterationsUsed, validationFailurePath };
 };
@@ -713,7 +732,7 @@ export const transitionValidating = async (
 export const transitionCheckingDoneness = async (
   state: CheckingDonenessState,
   ctx: MachineContext,
-): Promise<ReadingProgressState | DoneState> => {
+): Promise<ReadingProgressState | RectifyingState | DoneState> => {
   if (!state.validationFailurePath) {
     const { done } = await verifyCompletion(ctx);
     if (done) {
@@ -724,11 +743,144 @@ export const transitionCheckingDoneness = async (
       return { tag: "done", iterationsUsed: state.iterationsUsed };
     }
   }
+
+  // Route to rectification when validation failed and iteration budget remains.
+  if (
+    state.validationFailurePath &&
+    state.iterationsUsed < ctx.iterations
+  ) {
+    return {
+      tag: "rectifying",
+      iterationsUsed: state.iterationsUsed,
+      validationFailurePath: state.validationFailurePath,
+    };
+  }
+
   return {
     tag: "reading_progress",
     iterationsUsed: state.iterationsUsed,
     validationFailurePath: state.validationFailurePath,
   };
+};
+
+// ---------------------------------------------------------------------------
+// Rectification — targeted fix cycle on merged main after validation failure
+// ---------------------------------------------------------------------------
+
+export const transitionRectifying = async (
+  state: RectifyingState,
+  ctx: MachineContext,
+): Promise<ReValidatingState | ReadingProgressState | DoneState> => {
+  await ctx.deps.writeCheckpoint({
+    iterationsUsed: state.iterationsUsed,
+    step: "rectify",
+    validationFailurePath: state.validationFailurePath,
+  });
+
+  ctx.log({
+    tags: ["info", "orchestrator"],
+    message: yellow(
+      `Rectifying validation failures (iteration ${state.iterationsUsed})...`,
+    ),
+  });
+
+  const hookCtx = {
+    agent: ctx.agent,
+    log: ctx.log,
+    iterationNum: state.iterationsUsed,
+  };
+
+  const action: RectifyAction = ctx.plugin.onRectify
+    ? await ctx.plugin.onRectify({
+      validationFailurePath: state.validationFailurePath,
+      iterationsUsed: state.iterationsUsed,
+      ctx: hookCtx,
+    })
+    : { action: "agent" };
+
+  if (action.action === "skip") {
+    ctx.log({
+      tags: ["info", "orchestrator"],
+      message: "Plugin skipped rectification — falling back to normal flow",
+    });
+    return {
+      tag: "reading_progress",
+      iterationsUsed: state.iterationsUsed,
+      validationFailurePath: state.validationFailurePath,
+    };
+  }
+
+  if (action.action === "abort") {
+    ctx.log({
+      tags: ["info", "orchestrator"],
+      message: `Plugin aborted rectification: ${action.reason}`,
+    });
+    return { tag: "done", iterationsUsed: state.iterationsUsed };
+  }
+
+  // Run the rectification agent on main (no worktree isolation).
+  await ctx.deps.runIteration({
+    iterationNum: state.iterationsUsed,
+    agent: ctx.agent,
+    signal: ctx.signal,
+    log: ctx.log,
+    validationFailurePath: state.validationFailurePath,
+    plugin: ctx.plugin,
+    level: 1,
+    specFile: ctx.specFile,
+    progressFile: ctx.progressFile,
+  });
+
+  return {
+    tag: "re_validating",
+    iterationsUsed: state.iterationsUsed,
+    validationFailurePath: state.validationFailurePath,
+  };
+};
+
+export const transitionReValidating = async (
+  state: ReValidatingState,
+  ctx: MachineContext,
+): Promise<CheckingDonenessState> => {
+  await ctx.deps.writeCheckpoint({
+    iterationsUsed: state.iterationsUsed,
+    step: "validate",
+    validationFailurePath: state.validationFailurePath,
+  });
+
+  ctx.log({
+    tags: ["info", "orchestrator"],
+    message: dim("Re-validating after rectification..."),
+  });
+
+  const rawValidation = await ctx.deps.runValidation({
+    iterationNum: state.iterationsUsed,
+    log: ctx.log,
+  });
+  const validation = ctx.plugin.onValidationComplete
+    ? await ctx.plugin.onValidationComplete({
+      result: rawValidation,
+      ctx: {
+        agent: ctx.agent,
+        log: ctx.log,
+        iterationNum: state.iterationsUsed,
+      },
+    })
+    : rawValidation;
+
+  const validationFailurePath = validation.status === "failed"
+    ? validation.outputPath
+    : undefined;
+
+  const iterationsUsed = state.iterationsUsed + 1;
+
+  await ctx.deps.writeCheckpoint({
+    iterationsUsed,
+    step: "done",
+    validationFailurePath,
+  });
+
+  return { tag: "checking_doneness", iterationsUsed, validationFailurePath };
 };
 
 // ---------------------------------------------------------------------------
@@ -760,6 +912,12 @@ export const transition = async (
       break;
     case "checking_doneness":
       next = await transitionCheckingDoneness(state, ctx);
+      break;
+    case "rectifying":
+      next = await transitionRectifying(state, ctx);
+      break;
+    case "re_validating":
+      next = await transitionReValidating(state, ctx);
       break;
     case "done":
     case "aborted":
