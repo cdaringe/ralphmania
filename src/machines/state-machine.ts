@@ -34,6 +34,22 @@ import { difference, xor } from "../set-fns.ts";
 import { formatDuration, Status } from "../constants.ts";
 import { MERGE_LOG_ID, resetWorkerLog } from "../gui/log-dir.ts";
 
+const buildRectifyPrompt = (validationFailurePath: string): string =>
+  `You are the escalated rectification agent operating on the merged main branch.
+
+Your only goal in this pass is to get validation back on track.
+
+Required steps:
+1. Read the validation failure output at ${validationFailurePath}.
+2. Investigate the current merged code and identify the concrete cause.
+3. Make the smallest effective code, test, or configuration changes needed to fix the validation failure.
+4. Refrain from unrelated feature work or broad scenario implementation unless it is directly required to restore validation.
+5. Keep progress tracking coherent if your fix changes scenario state.
+
+Focus on producing a merged state that will pass the next validation run.
+
+When validation passes, COMMIT.`;
+
 // ---------------------------------------------------------------------------
 // Deep completion verification — re-reads spec + progress from disk
 // ---------------------------------------------------------------------------
@@ -827,6 +843,8 @@ export const transitionRectifying = async (
     validationFailurePath: state.validationFailurePath,
     plugin: ctx.plugin,
     level: 1,
+    promptOverride: action.promptOverride ??
+      buildRectifyPrompt(state.validationFailurePath),
     specFile: ctx.specFile,
     progressFile: ctx.progressFile,
   });
@@ -841,7 +859,7 @@ export const transitionRectifying = async (
 export const transitionReValidating = async (
   state: ReValidatingState,
   ctx: MachineContext,
-): Promise<CheckingDonenessState> => {
+): Promise<CheckingDonenessState | ReadingProgressState> => {
   await ctx.deps.writeCheckpoint({
     iterationsUsed: state.iterationsUsed,
     step: "validate",
@@ -879,6 +897,19 @@ export const transitionReValidating = async (
     step: "done",
     validationFailurePath,
   });
+
+  if (validationFailurePath) {
+    ctx.log({
+      tags: ["info", "orchestrator"],
+      message:
+        "Rectification validation still failing; resuming normal iteration flow",
+    });
+    return {
+      tag: "reading_progress",
+      iterationsUsed,
+      validationFailurePath,
+    };
+  }
 
   return { tag: "checking_doneness", iterationsUsed, validationFailurePath };
 };

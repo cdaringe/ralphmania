@@ -68,6 +68,7 @@ Deno.test("initialWorkerState: creates resolving_model state", () => {
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "ARCH.3",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -97,6 +98,7 @@ Deno.test("isWorkerTerminal: resolving_model is not terminal", () => {
         ladder: DEFAULT_MODEL_LADDER,
         level: undefined,
         targetScenarioOverride: undefined,
+        promptOverride: undefined,
         validationFailurePath: undefined,
         specFile: undefined,
         progressFile: undefined,
@@ -116,6 +118,7 @@ Deno.test("transitionResolvingModel: advances to model_resolved with targetScena
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "ARCH.3",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -132,6 +135,7 @@ Deno.test("transitionResolvingModel: plugin.onModelSelected can override selecti
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "ARCH.3",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -163,6 +167,7 @@ Deno.test("transitionModelResolved: advances to prompt_built", async () => {
       thinkingLevel: "high" as const,
       actionableScenarios: ["ARCH.3"],
     },
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -187,6 +192,7 @@ Deno.test("transitionModelResolved: plugin.onPromptBuilt can override prompt", a
       thinkingLevel: "high" as const,
       actionableScenarios: ["ARCH.3"],
     },
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -211,6 +217,7 @@ Deno.test("transitionModelResolved: includes validation failure path in prompt",
       thinkingLevel: "high" as const,
       actionableScenarios: ["1"],
     },
+    promptOverride: undefined,
     validationFailurePath: ".ralph/validation/iteration-1.log",
     specFile: undefined,
     progressFile: undefined,
@@ -220,6 +227,28 @@ Deno.test("transitionModelResolved: includes validation failure path in prompt",
     next.prompt.includes(".ralph/validation/iteration-1.log"),
     true,
   );
+});
+
+Deno.test("transitionModelResolved: uses promptOverride when provided", async () => {
+  const state = {
+    tag: "model_resolved" as const,
+    iterationNum: 2,
+    ladder: DEFAULT_MODEL_LADDER,
+    selection: {
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.escalated.model,
+      mode: "escalated" as const,
+      targetScenario: undefined,
+      thinkingLevel: "high" as const,
+      actionableScenarios: [],
+    },
+    promptOverride: "READ VALIDATION OUTPUT AND FIX THE FAILURE",
+    validationFailurePath: ".ralph/validation/iteration-1.log",
+    specFile: undefined,
+    progressFile: undefined,
+  };
+  const next = await transitionModelResolved(state, noop, log);
+  assertEquals(next.prompt, "READ VALIDATION OUTPUT AND FIX THE FAILURE");
 });
 
 // ---------------------------------------------------------------------------
@@ -436,6 +465,7 @@ Deno.test("workerTransition: resolving_model -> model_resolved", async () => {
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "1",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -491,6 +521,7 @@ Deno.test("workerTransition: full pipeline reaches done", async () => {
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "ARCH.3",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,

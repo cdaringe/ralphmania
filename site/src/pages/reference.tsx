@@ -131,7 +131,10 @@ export const ReferencePage = (): preact.VNode => (
                   <code>onConfigResolved</code>
                 </td>
                 <td>Once, before the loop starts</td>
-                <td>agent, iterations, specFile, progressFile</td>
+                <td>
+                  coder, verifier, escalated, iterations, level, parallel, gui,
+                  guiPort, resetWorktrees, specFile, progressFile
+                </td>
               </tr>
               <tr>
                 <td>
@@ -170,6 +173,13 @@ export const ReferencePage = (): preact.VNode => (
               </tr>
               <tr>
                 <td>
+                  <code>onRectify</code>
+                </td>
+                <td>After validation fails post-merge</td>
+                <td>RectifyAction (agent, skip, abort)</td>
+              </tr>
+              <tr>
+                <td>
                   <code>onLoopEnd</code>
                 </td>
                 <td>Once after the loop exits, regardless of outcome</td>
@@ -187,8 +197,8 @@ export const plugin: Plugin = {
     // Append extra instructions to every agent prompt
     return prompt + "\\nAlways use TypeScript strict mode.";
   },
-  onLoopEnd({ finalState, log }) {
-    log({ tags: ["info"], message: \`Loop ended after \${finalState.iteration} iterations\` });
+  onLoopEnd({ iterationNum, log }) {
+    log({ tags: ["info"], message: \`Loop ended after \${iterationNum} iterations\` });
   },
 };`}</code></pre>
 

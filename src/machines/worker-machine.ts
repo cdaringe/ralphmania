@@ -67,6 +67,7 @@ export type ResolvingModelState = Readonly<{
   ladder: ModelLadder;
   level: EscalationLevel | undefined;
   targetScenarioOverride: string | undefined;
+  promptOverride: string | undefined;
   validationFailurePath: string | undefined;
   specFile: string | undefined;
   progressFile: string | undefined;
@@ -77,6 +78,7 @@ export type ModelResolvedState = Readonly<{
   iterationNum: number;
   ladder: ModelLadder;
   selection: ModelSelection;
+  promptOverride: string | undefined;
   validationFailurePath: string | undefined;
   specFile: string | undefined;
   progressFile: string | undefined;
@@ -162,6 +164,7 @@ export const transitionResolvingModel = async (
     iterationNum: state.iterationNum,
     ladder: state.ladder,
     selection,
+    promptOverride: state.promptOverride,
     validationFailurePath: state.validationFailurePath,
     specFile: state.specFile,
     progressFile: state.progressFile,
@@ -179,13 +182,14 @@ export const transitionModelResolved = async (
     iterationNum: state.iterationNum,
   };
 
-  const rawPrompt = buildPrompt({
-    targetScenario: state.selection.targetScenario,
-    validationFailurePath: state.validationFailurePath,
-    actionableScenarios: state.selection.actionableScenarios,
-    specFile: state.specFile,
-    progressFile: state.progressFile,
-  });
+  const rawPrompt = state.promptOverride ??
+    buildPrompt({
+      targetScenario: state.selection.targetScenario,
+      validationFailurePath: state.validationFailurePath,
+      actionableScenarios: state.selection.actionableScenarios,
+      specFile: state.specFile,
+      progressFile: state.progressFile,
+    });
 
   const prompt = plugin.onPromptBuilt
     ? await plugin.onPromptBuilt({
@@ -361,6 +365,7 @@ export const initialWorkerState = (
     ladder: ModelLadder;
     level: EscalationLevel | undefined;
     targetScenarioOverride: string | undefined;
+    promptOverride: string | undefined;
     validationFailurePath: string | undefined;
     specFile: string | undefined;
     progressFile: string | undefined;

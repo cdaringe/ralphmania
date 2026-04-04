@@ -110,14 +110,15 @@ export const plugin: Plugin = {
 ```
 
 Load via `--plugin ./my-plugin.ts`. All hooks receive a `HookContext`
-(`{ agent, log, iterationNum }`) plus hook-specific data.
+(`{ ladder, log, iterationNum }`) plus hook-specific data.
 
-| Hook                   | When it fires                                    | What you can do                                                                                                                     |
-| ---------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `onConfigResolved`     | Before the loop starts                           | Override any CLI config: `agent`, `iterations`, `level`, `parallel`, `gui`, `guiPort`, `resetWorktrees`, `specFile`, `progressFile` |
-| `onModelSelected`      | Each iteration, after model resolution           | Override the `ModelSelection` (model, provider)                                                                                     |
-| `onPromptBuilt`        | Each iteration, after prompt construction        | Modify the prompt string sent to the agent                                                                                          |
-| `onCommandBuilt`       | Each iteration, after CLI command is assembled   | Modify the `CommandSpec` (command, args, env)                                                                                       |
-| `onIterationEnd`       | After the agent subprocess exits                 | Observe the `IterationResult` (read-only)                                                                                           |
-| `onValidationComplete` | After the validation script runs                 | Override the `ValidationResult` (pass/fail/messages)                                                                                |
-| `onLoopEnd`            | Once after the loop exits, regardless of outcome | Observe the final `LoopState` (read-only)                                                                                           |
+| Hook                   | When it fires                                     | What you can do                                                                                                                                              |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `onConfigResolved`     | Before the loop starts                            | Override any CLI config: `coder`, `verifier`, `escalated`, `iterations`, `level`, `parallel`, `gui`, `guiPort`, `resetWorktrees`, `specFile`, `progressFile` |
+| `onModelSelected`      | Each iteration, after model resolution            | Override the `ModelSelection` (model, provider)                                                                                                              |
+| `onPromptBuilt`        | Each iteration, after prompt construction         | Modify the prompt string sent to the agent                                                                                                                   |
+| `onSessionConfigBuilt` | Each iteration, after session config is assembled | Modify the `AgentSessionConfig` (provider, model, workingDir)                                                                                                |
+| `onIterationEnd`       | After the agent subprocess exits                  | Observe the `IterationResult` (read-only)                                                                                                                    |
+| `onValidationComplete` | After the validation script runs                  | Override the `ValidationResult` (pass/fail/messages)                                                                                                         |
+| `onRectify`            | After validation fails post-merge                 | Override rectification behavior (`agent`, `skip`, `abort`)                                                                                                   |
+| `onLoopEnd`            | Once after the loop exits, regardless of outcome  | Observe the final `LoopState` (read-only)                                                                                                                    |

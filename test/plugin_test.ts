@@ -167,3 +167,21 @@ export const plugin = {
     assertEquals(resolved?.escalated, "openai/o1");
   }
 });
+
+Deno.test("onConfigResolved supports colon-form model overrides", async () => {
+  const path = await writeTempPlugin(`
+export const plugin = {
+  onConfigResolved() {
+    return { coder: "ollama:gemma:4eb", gui: true, iterations: 50 };
+  },
+};
+`);
+  const result = await loadPlugin({ pluginPath: path, log: testLog });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    const resolved = await result.value.onConfigResolved?.(defaultConfigOpts);
+    assertEquals(resolved?.coder, "ollama:gemma:4eb");
+    assertEquals(resolved?.gui, true);
+    assertEquals(resolved?.iterations, 50);
+  }
+});

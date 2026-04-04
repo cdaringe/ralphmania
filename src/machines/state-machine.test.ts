@@ -890,11 +890,16 @@ Deno.test("transitionInit: checkpoint at rectify without failure path → readin
 // ---------------------------------------------------------------------------
 
 Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goes to re_validating", async () => {
-  let iterationRan = false;
+  let iterationOpts:
+    | { level: number | undefined; promptOverride: string | undefined }
+    | undefined;
   const ctx = makeCtx({
     deps: makeDeps({
-      runIteration: () => {
-        iterationRan = true;
+      runIteration: (opts) => {
+        iterationOpts = {
+          level: opts.level,
+          promptOverride: opts.promptOverride,
+        };
         return Promise.resolve({ status: "continue" as const });
       },
     }),
@@ -908,10 +913,43 @@ Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goe
     ctx,
   );
   assertEquals(next.tag, "re_validating");
-  assertEquals(iterationRan, true);
+  assertEquals(iterationOpts?.level, 1);
+  assertEquals(
+    iterationOpts?.promptOverride?.includes(
+      "Your only goal in this pass is to get validation back on track.",
+    ),
+    true,
+  );
   if (next.tag === "re_validating") {
     assertEquals(next.iterationsUsed, 1);
   }
+});
+
+Deno.test("transitionRectifying: plugin promptOverride is passed to agent run", async () => {
+  let promptOverride: string | undefined;
+  const ctx = makeCtx({
+    plugin: {
+      onRectify: () => ({
+        action: "agent" as const,
+        promptOverride: "READ THE VALIDATION FAILURE AND FIX IT",
+      }),
+    },
+    deps: makeDeps({
+      runIteration: (opts) => {
+        promptOverride = opts.promptOverride;
+        return Promise.resolve({ status: "continue" as const });
+      },
+    }),
+  });
+  await transitionRectifying(
+    {
+      tag: "rectifying",
+      iterationsUsed: 1,
+      validationFailurePath: ".ralph/validation/iteration-0.log",
+    },
+    ctx,
+  );
+  assertEquals(promptOverride, "READ THE VALIDATION FAILURE AND FIX IT");
 });
 
 Deno.test("transitionRectifying: plugin returns skip → reading_progress", async () => {
@@ -997,7 +1035,7 @@ Deno.test("transitionReValidating: validation passes → checking_doneness witho
   }
 });
 
-Deno.test("transitionReValidating: validation fails → checking_doneness with failure", async () => {
+Deno.test("transitionReValidating: validation fails → reading_progress with failure", async () => {
   const ctx = makeCtx({
     deps: makeDeps({
       runValidation: () =>
@@ -1015,8 +1053,8 @@ Deno.test("transitionReValidating: validation fails → checking_doneness with f
     },
     ctx,
   );
-  assertEquals(next.tag, "checking_doneness");
-  if (next.tag === "checking_doneness") {
+  assertEquals(next.tag, "reading_progress");
+  if (next.tag === "reading_progress") {
     assertEquals(
       next.validationFailurePath,
       ".ralph/validation/iteration-1.log",

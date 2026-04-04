@@ -36,15 +36,15 @@ const withRunOptions = <T extends Command<any>>(cmd: T): T =>
     )
     .option(
       "--coder <spec:string>",
-      "Coder model as provider/model (default: anthropic/claude-sonnet-4-5-20250514).",
+      "Coder model as provider/model or provider:model (default: anthropic/claude-sonnet-4-5-20250514).",
     )
     .option(
       "--verifier <spec:string>",
-      "Verifier model as provider/model (default: anthropic/claude-opus-4-5-20250514).",
+      "Verifier model as provider/model or provider:model (default: anthropic/claude-opus-4-5-20250514).",
     )
     .option(
       "--escalated <spec:string>",
-      "Escalated model as provider/model (default: anthropic/claude-opus-4-5-20250514).",
+      "Escalated model as provider/model or provider:model (default: anthropic/claude-opus-4-5-20250514).",
     )
     .option("-p, --plugin <path:string>", "Path to a plugin module.")
     .option(
