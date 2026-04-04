@@ -46,7 +46,7 @@ Pass `--gui` to launch a real-time web dashboard alongside the orchestrator:
 deno run -A jsr:@cdaringe/ralphmania -i 10 --gui
 ```
 
-![ralphmania GUI](site/src/assets/gui-screenshot.png)
+![ralphmania GUI](./site/src/assets/gui-screenshot.png)
 
 The GUI shows an interactive workflow graph, per-worker log streaming, scenario
 status editing, and agent input — all updated in real-time via SSE.
