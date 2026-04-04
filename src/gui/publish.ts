@@ -13,8 +13,11 @@ import { createLogger } from "../logger.ts";
 import { err, ok } from "../types.ts";
 import { loadCssFiles } from "./css.ts";
 
-const GUI_DIR = path.dirname(path.fromFileUrl(import.meta.url));
-const ISLANDS_DIR = path.join(GUI_DIR, "islands");
+const IS_REMOTE = !import.meta.url.startsWith("file:");
+const GUI_DIR = IS_REMOTE
+  ? undefined
+  : path.dirname(path.fromFileUrl(import.meta.url));
+const ISLANDS_DIR = GUI_DIR ? path.join(GUI_DIR, "islands") : undefined;
 
 const PAGE_CONFIG = [
   {
@@ -72,6 +75,11 @@ const denoNpmBundlePlugin: Plugin = {
 const compileEntries = async (
   entries: readonly string[],
 ): Promise<Result<ReadonlyMap<string, string>, string>> => {
+  if (!ISLANDS_DIR) {
+    return err(
+      "publishContainedGui requires a local checkout — cannot compile islands from a remote URL",
+    );
+  }
   const entryPoints = entries.map((e) => path.join(ISLANDS_DIR, e));
   try {
     const result = await esbuild.build({
