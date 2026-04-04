@@ -1,6 +1,6 @@
 {
   "name": "@cdaringe/ralphmania",
-  "version": "0.60.0",
+  "version": "0.61.0",
   "license": "MIT",
   "exports": "./mod.ts",
   "compilerOptions": {
