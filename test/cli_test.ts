@@ -1,30 +1,79 @@
 import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { parseCliArgs } from "../src/cli.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 
 Deno.test("parseCliArgs with valid args", async () => {
-  const result = await parseCliArgs(["--iterations", "5", "--agent", "claude"]);
+  const result = await parseCliArgs(["--iterations", "5"]);
   assertEquals(result.isOk(), true);
   if (result.isOk()) {
-    assertEquals(result.value.agent, "claude");
+    assertEquals(result.value.ladder, DEFAULT_MODEL_LADDER);
     assertEquals(result.value.iterations, 5);
     assertEquals(result.value.pluginPath, undefined);
   }
 });
 
 Deno.test("parseCliArgs with short flags", async () => {
-  const result = await parseCliArgs(["-i", "3", "-a", "codex"]);
+  const result = await parseCliArgs(["-i", "3"]);
   assertEquals(result.isOk(), true);
   if (result.isOk()) {
-    assertEquals(result.value.agent, "codex");
     assertEquals(result.value.iterations, 3);
+    assertEquals(result.value.ladder, DEFAULT_MODEL_LADDER);
   }
 });
 
-Deno.test("parseCliArgs with default agent", async () => {
+Deno.test("parseCliArgs with default ladder", async () => {
   const result = await parseCliArgs(["--iterations", "1"]);
   assertEquals(result.isOk(), true);
   if (result.isOk()) {
-    assertEquals(result.value.agent, "claude");
+    assertEquals(result.value.ladder.coder.provider, "anthropic");
+    assertEquals(
+      result.value.ladder.coder.model,
+      DEFAULT_MODEL_LADDER.coder.model,
+    );
+    assertEquals(
+      result.value.ladder.verifier.model,
+      DEFAULT_MODEL_LADDER.verifier.model,
+    );
+    assertEquals(
+      result.value.ladder.escalated.model,
+      DEFAULT_MODEL_LADDER.escalated.model,
+    );
+  }
+});
+
+Deno.test("parseCliArgs with --coder override", async () => {
+  const result = await parseCliArgs(["-i", "1", "--coder", "openai/gpt-4o"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.ladder.coder.provider, "openai");
+    assertEquals(result.value.ladder.coder.model, "gpt-4o");
+    // Other roles stay at defaults
+    assertEquals(
+      result.value.ladder.verifier.model,
+      DEFAULT_MODEL_LADDER.verifier.model,
+    );
+    assertEquals(
+      result.value.ladder.escalated.model,
+      DEFAULT_MODEL_LADDER.escalated.model,
+    );
+  }
+});
+
+Deno.test("parseCliArgs with --verifier override", async () => {
+  const result = await parseCliArgs(["-i", "1", "--verifier", "openai/gpt-4o"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.ladder.verifier.provider, "openai");
+    assertEquals(result.value.ladder.verifier.model, "gpt-4o");
+  }
+});
+
+Deno.test("parseCliArgs with --escalated override", async () => {
+  const result = await parseCliArgs(["-i", "1", "--escalated", "openai/o1"]);
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    assertEquals(result.value.ladder.escalated.provider, "openai");
+    assertEquals(result.value.ladder.escalated.model, "o1");
   }
 });
 
@@ -45,12 +94,7 @@ Deno.test("parseCliArgs with long plugin flag", async () => {
 });
 
 Deno.test("parseCliArgs missing iterations", async () => {
-  const result = await parseCliArgs(["--agent", "claude"]);
-  assertEquals(result.isErr(), true);
-});
-
-Deno.test("parseCliArgs invalid agent", async () => {
-  const result = await parseCliArgs(["-i", "5", "-a", "gpt"]);
+  const result = await parseCliArgs([]);
   assertEquals(result.isErr(), true);
 });
 
@@ -170,4 +214,9 @@ Deno.test("parseCliArgs --reset-worktrees sets resetWorktrees to true", async ()
   if (result.isOk()) {
     assertEquals(result.value.resetWorktrees, true);
   }
+});
+
+Deno.test("parseCliArgs invalid coder spec returns error", async () => {
+  const result = await parseCliArgs(["-i", "5", "--coder", "no-slash"]);
+  assertEquals(result.isErr(), true);
 });

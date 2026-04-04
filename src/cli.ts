@@ -1,17 +1,17 @@
 // coverage:ignore — CLI entry point with process-level orchestration and interactive prompts
-import { Command, EnumType, ValidationError } from "@cliffy/command";
+import { Command, ValidationError } from "@cliffy/command";
 import {
-  type Agent,
   err,
   type EscalationLevel,
+  type ModelLadder,
   ok,
   type Result,
-  VALID_AGENTS,
 } from "./types.ts";
-import { bold, cyan, dim, green, yellow } from "./colors.ts";
+import { DEFAULT_MODEL_LADDER, parseModelSpec } from "./constants.ts";
+import { bold, cyan, dim } from "./colors.ts";
 
 export type CliConfig = {
-  agent: Agent;
+  ladder: ModelLadder;
   iterations: number;
   pluginPath: string | undefined;
   level: EscalationLevel | undefined;
@@ -21,26 +21,31 @@ export type CliConfig = {
   resetWorktrees: boolean;
 };
 
-const agentType = new EnumType(VALID_AGENTS);
-
-const isAgent = (s: string): s is Agent => VALID_AGENTS.some((a) => a === s);
-
 const validateLevel = (v: number): number => {
   if (v < 0 || v > 1) throw new ValidationError("level must be 0 or 1");
   return v;
 };
 
 /** Apply the shared run-command options to a Command. */
-const withRunOptions = <T extends Command>(cmd: T) =>
+// deno-lint-ignore no-explicit-any
+const withRunOptions = <T extends Command<any>>(cmd: T): T =>
   cmd
-    .type("agent", agentType)
     .option(
       "-i, --iterations <count:integer>",
       "Number of agentic loop iterations.",
     )
-    .option("-a, --agent <name:agent>", "Agent backend.", {
-      default: "claude" as const,
-    })
+    .option(
+      "--coder <spec:string>",
+      "Coder model as provider/model (default: anthropic/claude-sonnet-4-5-20250514).",
+    )
+    .option(
+      "--verifier <spec:string>",
+      "Verifier model as provider/model (default: anthropic/claude-opus-4-5-20250514).",
+    )
+    .option(
+      "--escalated <spec:string>",
+      "Escalated model as provider/model (default: anthropic/claude-opus-4-5-20250514).",
+    )
     .option("-p, --plugin <path:string>", "Path to a plugin module.")
     .option(
       "-l, --level <level:integer>",
@@ -60,7 +65,7 @@ const withRunOptions = <T extends Command>(cmd: T) =>
       "--reset-worktrees",
       "Clear all existing ralph worker worktrees and state on boot.",
       { default: false },
-    );
+    ) as T;
 
 export type CliActions = {
   // deno-lint-ignore no-explicit-any
@@ -113,15 +118,52 @@ export const createCli = (version: string, actions: CliActions = {}) => {
 // deno-lint-ignore no-explicit-any
 type ParsedOptions = Record<string, any>;
 
-const toCliConfig = (options: ParsedOptions): Result<CliConfig, string> => {
-  const agent = String(options.agent ?? "claude").toLowerCase();
-  if (!isAgent(agent)) return err("invalid agent");
+/** Resolve a model ladder from CLI options, using defaults for unspecified roles. */
+const resolveLadder = (options: ParsedOptions): Result<ModelLadder, string> => {
+  const coderSpec = options.coder as string | undefined;
+  const verifierSpec = options.verifier as string | undefined;
+  const escalatedSpec = options.escalated as string | undefined;
 
+  const coder = coderSpec
+    ? parseModelSpec(coderSpec)
+    : ok({ ...DEFAULT_MODEL_LADDER.coder });
+  if (coder.isErr()) return err(`--coder: ${coder.error}`);
+
+  const verifier = verifierSpec
+    ? parseModelSpec(verifierSpec)
+    : ok({ ...DEFAULT_MODEL_LADDER.verifier });
+  if (verifier.isErr()) return err(`--verifier: ${verifier.error}`);
+
+  const escalated = escalatedSpec
+    ? parseModelSpec(escalatedSpec)
+    : ok({ ...DEFAULT_MODEL_LADDER.escalated });
+  if (escalated.isErr()) return err(`--escalated: ${escalated.error}`);
+
+  return ok({
+    coder: {
+      ...DEFAULT_MODEL_LADDER.coder,
+      ...coder.value,
+    },
+    verifier: {
+      ...DEFAULT_MODEL_LADDER.verifier,
+      ...verifier.value,
+    },
+    escalated: {
+      ...DEFAULT_MODEL_LADDER.escalated,
+      ...escalated.value,
+    },
+  });
+};
+
+const toCliConfig = (options: ParsedOptions): Result<CliConfig, string> => {
   const iterations = options.iterations as number | undefined;
   if (!iterations || iterations < 1) return err("iterations required");
 
+  const ladderResult = resolveLadder(options);
+  if (ladderResult.isErr()) return err(ladderResult.error);
+
   return ok({
-    agent,
+    ladder: ladderResult.value,
     iterations,
     pluginPath: options.plugin as string | undefined,
     level: options.level as EscalationLevel | undefined,
@@ -176,17 +218,10 @@ export const parseCliArgsInteractive = async (
     const level = options.level as EscalationLevel | undefined;
     const parallel = (options.parallel as number | undefined) ?? 2;
 
-    // Resolve agent
-    let agent: string = String(options.agent ?? "").toLowerCase();
-    if (!isAgent(agent)) {
-      if (!isTTY) return err("agent required");
-      agent = await promptSelect({
-        message: "Select agent backend",
-        options: [...VALID_AGENTS],
-        defaultValue: "claude",
-      });
-    }
-    if (!isAgent(agent)) return err("invalid agent");
+    // Resolve model ladder
+    const ladderResult = resolveLadder(options);
+    if (ladderResult.isErr()) return err(ladderResult.error);
+    const ladder = ladderResult.value;
 
     // Resolve iterations
     let iterations = options.iterations as number | undefined;
@@ -204,7 +239,7 @@ export const parseCliArgsInteractive = async (
     const resetWorktrees = (options.resetWorktrees as boolean | undefined) ??
       false;
     return ok({
-      agent,
+      ladder,
       iterations,
       pluginPath,
       level,
@@ -228,34 +263,6 @@ const readLine = async (): Promise<string> => {
   const buf = new Uint8Array(1024);
   const n = await Deno.stdin.read(buf);
   return n ? new TextDecoder().decode(buf.subarray(0, n)).trim() : "";
-};
-
-const promptSelect = async (
-  { message, options, defaultValue }: {
-    message: string;
-    options: string[];
-    defaultValue: string;
-  },
-): Promise<string> => {
-  write(`\n${bold(cyan("?"))} ${bold(message)}\n`);
-  options.forEach((opt, i) => {
-    const isDefault = opt === defaultValue;
-    const prefix = isDefault ? green("  > ") : "    ";
-    const label = isDefault ? green(bold(opt)) : dim(opt);
-    const tag = isDefault ? dim(" (default)") : "";
-    write(`${prefix}${yellow(`${i + 1})`)} ${label}${tag}\n`);
-  });
-  write(
-    `\n${dim("Enter choice [1-" + options.length + "]")} ${
-      dim("(" + defaultValue + ")")
-    }: `,
-  );
-  const input = await readLine();
-  if (!input) return defaultValue;
-  const idx = parseInt(input, 10);
-  if (idx >= 1 && idx <= options.length) return options[idx - 1];
-  const match = options.find((o) => o.toLowerCase() === input.toLowerCase());
-  return match ?? defaultValue;
 };
 
 const promptNumber = async (

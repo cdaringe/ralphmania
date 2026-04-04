@@ -2,6 +2,7 @@ import { assertEquals } from "jsr:@std/assert@^1.0.11";
 import { loadPlugin, noopPlugin, resolvePlugin } from "../src/plugin.ts";
 import type { Plugin } from "../src/plugin.ts";
 import type { Logger } from "../src/types.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 
 const testLog: Logger = () => {};
 
@@ -63,13 +64,14 @@ export const plugin = {
     const modified = result.value.onPromptBuilt?.({
       prompt: "hello",
       selection: {
-        model: "x",
-        mode: "general",
+        provider: "anthropic",
+        model: "test-model",
+        mode: "coder",
         targetScenario: undefined,
-        effort: undefined,
+        thinkingLevel: undefined,
         actionableScenarios: [],
       },
-      ctx: { agent: "claude", log: testLog, iterationNum: 1 },
+      ctx: { ladder: DEFAULT_MODEL_LADDER, log: testLog, iterationNum: 1 },
     });
     assertEquals(modified, "hello [named]");
   }
@@ -101,7 +103,7 @@ export const plugin = {
 });
 
 const defaultConfigOpts = {
-  agent: "claude" as const,
+  ladder: DEFAULT_MODEL_LADDER,
   iterations: 5,
   level: undefined,
   parallel: 2,
@@ -114,8 +116,8 @@ const defaultConfigOpts = {
 Deno.test("onConfigResolved can return custom specFile and progressFile", async () => {
   const path = await writeTempPlugin(`
 export const plugin = {
-  onConfigResolved({ agent, iterations }) {
-    return { agent, iterations, specFile: "custom/spec.md", progressFile: "custom/progress.md" };
+  onConfigResolved({ ladder, iterations }) {
+    return { iterations, specFile: "custom/spec.md", progressFile: "custom/progress.md" };
   },
 };
 `);
@@ -125,7 +127,6 @@ export const plugin = {
     const resolved = await result.value.onConfigResolved?.(defaultConfigOpts);
     assertEquals(resolved?.specFile, "custom/spec.md");
     assertEquals(resolved?.progressFile, "custom/progress.md");
-    assertEquals(resolved?.agent, "claude");
     assertEquals(resolved?.iterations, 5);
   }
 });
@@ -146,5 +147,23 @@ export const plugin = {
     assertEquals(resolved?.guiPort, 9999);
     assertEquals(resolved?.parallel, 4);
     assertEquals(resolved?.level, 1);
+  }
+});
+
+Deno.test("onConfigResolved can return coder/verifier/escalated model overrides", async () => {
+  const path = await writeTempPlugin(`
+export const plugin = {
+  onConfigResolved() {
+    return { coder: "openai/gpt-4o", verifier: "openai/gpt-4o", escalated: "openai/o1" };
+  },
+};
+`);
+  const result = await loadPlugin({ pluginPath: path, log: testLog });
+  assertEquals(result.isOk(), true);
+  if (result.isOk()) {
+    const resolved = await result.value.onConfigResolved?.(defaultConfigOpts);
+    assertEquals(resolved?.coder, "openai/gpt-4o");
+    assertEquals(resolved?.verifier, "openai/gpt-4o");
+    assertEquals(resolved?.escalated, "openai/o1");
   }
 });

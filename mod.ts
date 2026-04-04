@@ -4,8 +4,8 @@
  * `specification.md` is fully implemented and validated.
  *
  * ```sh
- * deno run -A mod.ts --iterations 10 --agent claude
- * deno run -A mod.ts --iterations 10 --agent codex
+ * deno run -A mod.ts --iterations 10
+ * deno run -A mod.ts --iterations 10 --coder ollama/gemma4:e2b
  * deno run -A mod.ts --iterations 10 --plugin ./my-plugin.ts
  * deno run -A mod.ts serve receipts --open
  * ```
@@ -19,24 +19,26 @@ import denoConfig from "./deno.json" with { type: "json" };
 const { version } = denoConfig;
 export { loadPlugin, noopPlugin } from "./src/plugin.ts";
 export type {
-  Agent,
-  CommandSpec,
-  EffortLevel,
+  AgentSessionConfig,
   EscalationLevel,
   EscalationState,
+  InputMode,
   IterationResult,
   Logger,
   LoopCheckpoint,
   LoopState,
+  ModelLadder,
+  ModelRoleConfig,
   ModelSelection,
   RectifyAction,
   Result,
+  ThinkingLevel,
   ToolMode,
   ValidationResult,
 } from "./src/types.ts";
-export { err, ok, VALID_AGENTS } from "./src/types.ts";
+export { err, ok } from "./src/types.ts";
 
-import type { Agent, EscalationLevel } from "./src/types.ts";
+import type { EscalationLevel, ModelLadder } from "./src/types.ts";
 import { createLogger } from "./src/logger.ts";
 import { createCli, parseCliArgsInteractive } from "./src/cli.ts";
 import { serveReceipts } from "./src/serve.ts";
@@ -44,7 +46,12 @@ import { ensureValidationHook } from "./src/validation.ts";
 import { updateReceipts } from "./src/runner.ts";
 import { publishContainedGui } from "./src/gui/publish.ts";
 import { loadPlugin } from "./src/plugin.ts";
-import { getModel } from "./src/model.ts";
+import {
+  formatDuration,
+  formatModelSpec,
+  parseModelSpec,
+  RALPH_RECEIPTS_DIRNAME,
+} from "./src/constants.ts";
 import { isAllVerified } from "./src/orchestrator/progress-queries.ts";
 import { DEFAULT_FILE_PATHS, parseScenarioIds } from "./src/progress.ts";
 import type { FilePaths } from "./src/progress.ts";
@@ -52,16 +59,9 @@ export type { FilePaths } from "./src/progress.ts";
 import { parseProgressRows } from "./src/parsers/progress-rows.ts";
 import { computeStatusDiff, lookupScenarioDetail } from "./src/status-diff.ts";
 import { updateProgressRow } from "./src/parsers/progress-update.ts";
-import {
-  CLAUDE_CODER,
-  CLAUDE_ESCALATED,
-  CLAUDE_VERIFIER,
-  formatDuration,
-  RALPH_RECEIPTS_DIRNAME,
-} from "./src/constants.ts";
 import * as path from "jsr:@std/path@^1";
 import { ensureProgressFile } from "./src/progress.ts";
-import { bold, cyan, dim, green, magenta, yellow } from "./src/colors.ts";
+import { bold, dim, green, magenta, yellow } from "./src/colors.ts";
 import { runParallelLoop } from "./src/orchestrator/mod.ts";
 import {
   pruneOrphanedBranches,
@@ -78,8 +78,8 @@ import type { TuiController } from "./src/tui/mod.ts";
 import { defaultLoggerOutput } from "./src/ports/impl.ts";
 
 const printBanner = (
-  { agent, iterations, level, parallel }: {
-    agent: Agent;
+  { ladder, iterations, level, parallel }: {
+    ladder: ModelLadder;
     iterations: number;
     level: EscalationLevel | undefined;
     parallel: number;
@@ -94,35 +94,24 @@ const printBanner = (
   w(`\n${line}\n`);
   w(`  ${bold(magenta("ralphmania"))} ${dim(`v${version}`)}\n`);
   w(`${line}\n`);
-  w(`  ${dim("agent")}        ${bold(cyan(agent))}\n`);
   w(`  ${dim("iterations")}   ${bold(yellow(String(iterations)))}\n`);
   w(`  ${dim("level")}        ${bold(yellow(String(level ?? "auto")))}\n`);
   w(`  ${dim("parallel")}     ${bold(yellow(String(parallel)))}\n`);
   w(`\n`);
   w(`  ${bold("Model Ladder")}\n`);
 
-  const roles = agent === "claude"
-    ? [
-      { label: "coder", ...CLAUDE_CODER },
-      { label: "verifier", ...CLAUDE_VERIFIER },
-      { label: "escalated", ...CLAUDE_ESCALATED },
-    ].map(({ label, model, mode, effort }) => ({
-      label,
-      model,
-      desc: `(${mode}, effort: ${effort})`,
-    }))
-    : ([
-      { label: "fast", desc: "(default build)" },
-      { label: "general", desc: "(rework escalation)" },
-      { label: "strong", desc: "(heavy rework)" },
-    ] as const).map(({ label, desc }) => ({
-      label,
-      model: getModel({ agent, mode: label }),
-      desc,
-    }));
+  const roles = [
+    { label: "coder", config: ladder.coder, desc: "(building features)" },
+    { label: "verifier", config: ladder.verifier, desc: "(verification)" },
+    { label: "escalated", config: ladder.escalated, desc: "(rework)" },
+  ];
 
-  roles.forEach(({ label, model, desc }) => {
-    w(`  ${dim(label)} ${green("→")} ${model} ${dim(desc)}\n`);
+  roles.forEach(({ label, config, desc }) => {
+    const spec = formatModelSpec(config);
+    const thinking = config.thinkingLevel
+      ? `, thinking: ${config.thinkingLevel}`
+      : "";
+    w(`  ${dim(label)} ${green("→")} ${spec} ${dim(`${desc}${thinking}`)}\n`);
   });
 
   w(`${line}\n\n`);
@@ -155,7 +144,7 @@ const main = async (): Promise<number> => {
 
   const configHookResult = plugin.onConfigResolved
     ? await plugin.onConfigResolved({
-      agent: parsed.value.agent,
+      ladder: parsed.value.ladder,
       iterations: parsed.value.iterations,
       level: parsed.value.level,
       parallel: parsed.value.parallel,
@@ -166,7 +155,38 @@ const main = async (): Promise<number> => {
     })
     : undefined;
 
-  const agent = configHookResult?.agent ?? parsed.value.agent;
+  // Apply plugin overrides to ladder if provided.
+  const applyLadderOverride = (
+    base: ModelLadder,
+    overrides: typeof configHookResult,
+  ): ModelLadder => {
+    if (!overrides) return base;
+    const coderOverride = overrides.coder
+      ? parseModelSpec(overrides.coder)
+      : undefined;
+    const verifierOverride = overrides.verifier
+      ? parseModelSpec(overrides.verifier)
+      : undefined;
+    const escalatedOverride = overrides.escalated
+      ? parseModelSpec(overrides.escalated)
+      : undefined;
+    return {
+      coder: coderOverride?.isOk()
+        ? { ...base.coder, ...coderOverride.value }
+        : base.coder,
+      verifier: verifierOverride?.isOk()
+        ? { ...base.verifier, ...verifierOverride.value }
+        : base.verifier,
+      escalated: escalatedOverride?.isOk()
+        ? { ...base.escalated, ...escalatedOverride.value }
+        : base.escalated,
+    };
+  };
+
+  const ladder = applyLadderOverride(
+    parsed.value.ladder,
+    configHookResult,
+  );
   const iterations = configHookResult?.iterations ?? parsed.value.iterations;
   const level = configHookResult?.level ?? parsed.value.level;
   const parallel = configHookResult?.parallel ?? parsed.value.parallel;
@@ -192,7 +212,7 @@ const main = async (): Promise<number> => {
       DEFAULT_FILE_PATHS.progressFile,
   };
 
-  printBanner({ agent, iterations, level, parallel });
+  printBanner({ ladder, iterations, level, parallel });
 
   const guiController = new AbortController();
   let guiFinished: Promise<void> | undefined;
@@ -276,8 +296,6 @@ const main = async (): Promise<number> => {
 
     // ── TUI setup ──────────────────────────────────────────────────────────
     // Activate the terminal UI when stdout is a TTY and the web GUI is off.
-    // The TUI subscribes to `bus` (already wired above) and renders a live
-    // status bar at the bottom of the terminal with worker-stream filtering.
     if (Deno.stdout.isTerminal() && !gui) {
       tui = createTui({
         bus,
@@ -301,12 +319,11 @@ const main = async (): Promise<number> => {
         }
       }, 4_000);
       // Start keyboard handler (raw stdin for 0-9 worker filter keys).
-      // Runs in the background; resolves when the abort signal fires.
       tui.startKeyboardHandler().catch(() => {});
     }
 
     const iterationsUsed = await runParallelLoop({
-      agent,
+      ladder,
       iterations,
       parallelism: parallel,
       expectedScenarioIds,
@@ -353,7 +370,7 @@ const main = async (): Promise<number> => {
 
     const receiptsResult = allDone
       ? (log({ tags: ["info"], message: "Generating evidence receipts..." }),
-        await updateReceipts({ agent, plugin, log }))
+        await updateReceipts({ ladder, plugin, log }))
       : undefined;
 
     receiptsResult && receiptsResult.isErr() &&

@@ -149,10 +149,10 @@ export const ReferencePage = (): preact.VNode => (
               </tr>
               <tr>
                 <td>
-                  <code>onCommandBuilt</code>
+                  <code>onSessionConfigBuilt</code>
                 </td>
-                <td>Each iteration, after CLI command assembly</td>
-                <td>CommandSpec (command, args, env)</td>
+                <td>Each iteration, after session config assembly</td>
+                <td>AgentSessionConfig (provider, model, workingDir)</td>
               </tr>
               <tr>
                 <td>

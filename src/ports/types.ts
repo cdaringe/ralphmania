@@ -1,11 +1,11 @@
 import type {
-  Agent,
-  CommandSpec,
+  AgentSessionConfig,
   EscalationLevel,
   EscalationState,
   IterationResult,
   Logger,
   LoopCheckpoint,
+  ModelLadder,
   ModelSelection,
   Result,
   ValidationResult,
@@ -42,20 +42,19 @@ export type ModelIODeps = {
   mkdir: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
 };
 
-/** Dependencies for the agent execution step — worker I/O boundary. */
+/** Dependencies for the agent execution step -- worker I/O boundary. */
 export type AgentRunDeps = {
-  /** Spawn the agent, stream output, return the iteration result. */
+  /** Spawn a pi-mono agent session, stream output, return the iteration result. */
   readonly execute: (opts: {
-    spec: CommandSpec;
-    agent: Agent;
+    config: AgentSessionConfig;
+    prompt: string;
     selection: ModelSelection;
     iterationNum: number;
     signal: AbortSignal;
     log: Logger;
-    cwd: string | undefined;
     /** Worker index used to build a colored per-line stdio prefix. */
     workerIndex?: number;
-    /** When provided, the agent subprocess stdin is piped and registered here. */
+    /** When provided, routes GUI text input to the agent session. */
     agentInputBus?: AgentInputBus;
   }) => Promise<IterationResult>;
 };
@@ -70,7 +69,7 @@ export type MachineDeps = {
   readonly runIteration: (
     opts: {
       iterationNum: number;
-      agent: Agent;
+      ladder: ModelLadder;
       signal: AbortSignal;
       log: Logger;
       validationFailurePath: string | undefined;
@@ -102,7 +101,7 @@ export type MachineDeps = {
   readonly reconcileMerge: (
     opts: {
       worktree: WorktreeInfo;
-      agent: Agent;
+      ladder: ModelLadder;
       signal: AbortSignal;
       log: Logger;
     },

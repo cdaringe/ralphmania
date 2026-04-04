@@ -7,6 +7,7 @@ import {
 } from "../src/git/reconcile.ts";
 import type { ReconcileDeps } from "../src/git/reconcile.ts";
 import type { WorktreeInfo } from "../src/git/worktree.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 import { noopLog } from "./fixtures.ts";
 
 const stubWorktree: WorktreeInfo = {
@@ -102,7 +103,7 @@ Deno.test("reconcileMerge returns immediately when merge succeeds", async () => 
 
   await reconcileMerge({
     worktree: stubWorktree,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     signal: AbortSignal.timeout(5_000),
     log: noopLog,
     deps: {
@@ -122,10 +123,10 @@ Deno.test("reconcileMerge resolves conflicts on first agent attempt", async () =
   let agentCallCount = 0;
 
   // Call sequence:
-  // 1. git merge → fails (code 1)
-  // 2. git status --porcelain → shows conflict
+  // 1. git merge -> fails (code 1)
+  // 2. git status --porcelain -> shows conflict
   // 3. (agent spawns)
-  // 4. git status --porcelain → clean (no conflicts)
+  // 4. git status --porcelain -> clean (no conflicts)
   const responses = [
     { code: 1, stdout: "", stderr: "merge conflict" }, // merge fails
     { code: 0, stdout: "UU src/foo.ts", stderr: "" }, // status shows conflict
@@ -134,7 +135,7 @@ Deno.test("reconcileMerge resolves conflicts on first agent attempt", async () =
 
   await reconcileMerge({
     worktree: stubWorktree,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     signal: AbortSignal.timeout(5_000),
     log: noopLog,
     deps: {
@@ -154,16 +155,16 @@ Deno.test("reconcileMerge retries when first agent attempt fails to resolve", as
 
   // Call sequence:
   // Attempt 1:
-  //   1. git merge → fails
-  //   2. git status → conflict
-  //   3. (agent spawns — fails to resolve)
-  //   4. git status → still conflict
+  //   1. git merge -> fails
+  //   2. git status -> conflict
+  //   3. (agent spawns -- fails to resolve)
+  //   4. git status -> still conflict
   //   5. git merge --abort
   // Attempt 2:
-  //   6. git merge → fails
-  //   7. git status → conflict
-  //   8. (agent spawns — resolves)
-  //   9. git status → clean
+  //   6. git merge -> fails
+  //   7. git status -> conflict
+  //   8. (agent spawns -- resolves)
+  //   9. git status -> clean
   const responses = [
     // Attempt 1
     { code: 1, stdout: "", stderr: "conflict" }, // merge
@@ -180,7 +181,7 @@ Deno.test("reconcileMerge retries when first agent attempt fails to resolve", as
 
   await reconcileMerge({
     worktree: stubWorktree,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     signal: AbortSignal.timeout(5_000),
     log: noopLog,
     deps: {
@@ -201,11 +202,11 @@ Deno.test("reconcileMerge spawns agent when merge fails without conflicts", asyn
 
   // Call sequence:
   // Attempt 1:
-  //   1. git merge → fails (code 1)
-  //   2. git status --porcelain → no conflict markers (empty/clean)
+  //   1. git merge -> fails (code 1)
+  //   2. git status --porcelain -> no conflict markers (empty/clean)
   //   3. git merge --abort
   //   4. (agent spawns with broad merge prompt)
-  //   5. git log -1 --pretty=%s → shows merge commit mentioning branch
+  //   5. git log -1 --pretty=%s -> shows merge commit mentioning branch
   const responses = [
     { code: 1, stdout: "", stderr: "merge failed" }, // merge fails
     { code: 0, stdout: "", stderr: "" }, // status: no conflicts
@@ -220,7 +221,7 @@ Deno.test("reconcileMerge spawns agent when merge fails without conflicts", asyn
 
   await reconcileMerge({
     worktree: stubWorktree,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     signal: AbortSignal.timeout(5_000),
     log: noopLog,
     deps: {
@@ -246,13 +247,13 @@ Deno.test("reconcileMerge retries when agent fails to land merge without conflic
 
   // Call sequence:
   // Attempt 1 (no conflicts path, agent fails to land merge):
-  //   1. git merge → fails
-  //   2. git status → no conflicts
+  //   1. git merge -> fails
+  //   2. git status -> no conflicts
   //   3. git merge --abort
-  //   4. (agent spawns — doesn't complete merge)
-  //   5. git log → no mention of branch
+  //   4. (agent spawns -- doesn't complete merge)
+  //   5. git log -> no mention of branch
   // Attempt 2 (merge succeeds directly):
-  //   6. git merge → succeeds
+  //   6. git merge -> succeeds
   const responses = [
     // Attempt 1
     { code: 1, stdout: "", stderr: "merge failed" }, // merge fails
@@ -266,7 +267,7 @@ Deno.test("reconcileMerge retries when agent fails to land merge without conflic
 
   await reconcileMerge({
     worktree: stubWorktree,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     signal: AbortSignal.timeout(5_000),
     log: noopLog,
     deps: {
@@ -289,7 +290,7 @@ Deno.test("reconcileMerge throws on aborted signal", async () => {
     () =>
       reconcileMerge({
         worktree: stubWorktree,
-        agent: "claude",
+        ladder: DEFAULT_MODEL_LADDER,
         signal: controller.signal,
         log: noopLog,
         deps: {

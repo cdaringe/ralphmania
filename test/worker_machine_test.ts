@@ -3,7 +3,7 @@ import {
   initialWorkerState,
   isWorkerTerminal,
   resolveWorkerModelSelection,
-  transitionCommandBuilt,
+  transitionConfigBuilt,
   transitionModelResolved,
   transitionPromptBuilt,
   transitionResolvingModel,
@@ -11,71 +11,51 @@ import {
   workerTransition,
 } from "../src/machines/worker-machine.ts";
 import type {
-  CommandBuiltState,
+  ConfigBuiltState,
   ModelResolvedState,
   PromptBuiltState,
   RunningAgentState,
   WorkerState,
 } from "../src/machines/worker-machine.ts";
 import type { Plugin } from "../src/plugin.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 import { noopLog } from "./fixtures.ts";
 
 // ---------------------------------------------------------------------------
 // resolveWorkerModelSelection
 // ---------------------------------------------------------------------------
 
-Deno.test("resolveWorkerModelSelection claude level 0 → CLAUDE_CODER", () => {
+Deno.test("resolveWorkerModelSelection level 0 -> coder", () => {
   const s = resolveWorkerModelSelection({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenario: "3",
   });
-  assertEquals(s.model, "sonnet");
-  assertEquals(s.mode, "general");
-  assertEquals(s.effort, "high");
+  assertEquals(s.model, DEFAULT_MODEL_LADDER.coder.model);
+  assertEquals(s.mode, "coder");
+  assertEquals(s.thinkingLevel, DEFAULT_MODEL_LADDER.coder.thinkingLevel);
   assertEquals(s.targetScenario, "3");
   assertEquals(s.actionableScenarios, ["3"]);
 });
 
-Deno.test("resolveWorkerModelSelection claude level 1 → CLAUDE_ESCALATED", () => {
+Deno.test("resolveWorkerModelSelection level 1 -> escalated", () => {
   const s = resolveWorkerModelSelection({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 1,
     targetScenario: "7",
   });
-  assertEquals(s.model, "opus");
-  assertEquals(s.mode, "strong");
-  assertEquals(s.effort, "high");
+  assertEquals(s.model, DEFAULT_MODEL_LADDER.escalated.model);
+  assertEquals(s.mode, "escalated");
+  assertEquals(s.thinkingLevel, DEFAULT_MODEL_LADDER.escalated.thinkingLevel);
 });
 
-Deno.test("resolveWorkerModelSelection claude undefined level → CLAUDE_CODER", () => {
+Deno.test("resolveWorkerModelSelection undefined level -> coder", () => {
   const s = resolveWorkerModelSelection({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: undefined,
     targetScenario: "1",
   });
-  assertEquals(s.model, "sonnet");
-});
-
-Deno.test("resolveWorkerModelSelection codex level 0 → general", () => {
-  const s = resolveWorkerModelSelection({
-    agent: "codex",
-    level: 0,
-    targetScenario: "1",
-  });
-  assertEquals(s.model, "gpt-5.1-codex-max");
-  assertEquals(s.mode, "general");
-  assertEquals(s.effort, undefined);
-});
-
-Deno.test("resolveWorkerModelSelection codex level 1 → strong", () => {
-  const s = resolveWorkerModelSelection({
-    agent: "codex",
-    level: 1,
-    targetScenario: "1",
-  });
-  assertEquals(s.model, "gpt-5.3-codex");
-  assertEquals(s.mode, "strong");
+  assertEquals(s.model, DEFAULT_MODEL_LADDER.coder.model);
 });
 
 // ---------------------------------------------------------------------------
@@ -94,7 +74,7 @@ Deno.test("isWorkerTerminal returns false for non-terminal", () => {
     isWorkerTerminal({
       tag: "resolving_model",
       iterationNum: 0,
-      agent: "claude",
+      ladder: DEFAULT_MODEL_LADDER,
       level: undefined,
       targetScenarioOverride: "1",
       validationFailurePath: undefined,
@@ -112,7 +92,7 @@ Deno.test("isWorkerTerminal returns false for non-terminal", () => {
 Deno.test("initialWorkerState creates resolving_model state", () => {
   const s = initialWorkerState({
     iterationNum: 5,
-    agent: "codex",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 1,
     targetScenarioOverride: "3",
     validationFailurePath: "/tmp/fail.log",
@@ -121,7 +101,7 @@ Deno.test("initialWorkerState creates resolving_model state", () => {
   });
   assertEquals(s.tag, "resolving_model");
   assertEquals(s.iterationNum, 5);
-  assertEquals(s.agent, "codex");
+  assertEquals(s.ladder, DEFAULT_MODEL_LADDER);
   assertEquals(s.level, 1);
   assertEquals(s.targetScenarioOverride, "3");
   assertEquals(s.validationFailurePath, "/tmp/fail.log");
@@ -134,7 +114,7 @@ Deno.test("initialWorkerState creates resolving_model state", () => {
 Deno.test("transitionResolvingModel with targetScenarioOverride uses resolveWorkerModelSelection", async () => {
   const state = initialWorkerState({
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 1,
     targetScenarioOverride: "5",
     validationFailurePath: undefined,
@@ -144,14 +124,14 @@ Deno.test("transitionResolvingModel with targetScenarioOverride uses resolveWork
 
   const next = await transitionResolvingModel(state, {}, noopLog);
   assertEquals(next.tag, "model_resolved");
-  assertEquals(next.selection.model, "opus"); // escalated
+  assertEquals(next.selection.model, DEFAULT_MODEL_LADDER.escalated.model); // escalated
   assertEquals(next.selection.targetScenario, "5");
 });
 
 Deno.test("transitionResolvingModel fires onModelSelected plugin hook", async () => {
   const state = initialWorkerState({
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "1",
     validationFailurePath: undefined,
@@ -178,12 +158,13 @@ Deno.test("transitionModelResolved builds prompt with target scenario", async ()
   const state: ModelResolvedState = {
     tag: "model_resolved",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "3",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["3"],
     },
     validationFailurePath: undefined,
@@ -200,12 +181,13 @@ Deno.test("transitionModelResolved includes validation failure in prompt", async
   const state: ModelResolvedState = {
     tag: "model_resolved",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
     validationFailurePath: "/tmp/fail.log",
@@ -222,12 +204,13 @@ Deno.test("transitionModelResolved fires onPromptBuilt plugin hook", async () =>
   const state: ModelResolvedState = {
     tag: "model_resolved",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
     validationFailurePath: undefined,
@@ -247,113 +230,111 @@ Deno.test("transitionModelResolved fires onPromptBuilt plugin hook", async () =>
 // transitionPromptBuilt
 // ---------------------------------------------------------------------------
 
-Deno.test("transitionPromptBuilt builds command spec for claude", async () => {
+Deno.test("transitionPromptBuilt builds session config", async () => {
   const state: PromptBuiltState = {
     tag: "prompt_built",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
     prompt: "test prompt",
   };
 
-  const next = await transitionPromptBuilt(state, {}, noopLog);
-  assertEquals(next.tag, "command_built");
-  assertEquals(next.spec.command, "claude");
-  assertEquals(next.spec.args.includes("sonnet"), true);
+  const next = await transitionPromptBuilt(state, {}, noopLog, "/tmp/work");
+  assertEquals(next.tag, "config_built");
+  assertEquals(next.config.provider, "anthropic");
+  assertEquals(next.config.model, DEFAULT_MODEL_LADDER.coder.model);
+  assertEquals(next.config.workingDir, "/tmp/work");
 });
 
-Deno.test("transitionPromptBuilt builds command spec for codex", async () => {
+Deno.test("transitionPromptBuilt fires onSessionConfigBuilt plugin hook", async () => {
   const state: PromptBuiltState = {
     tag: "prompt_built",
     iterationNum: 0,
-    agent: "codex",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "gpt-5.1-codex",
-      mode: "fast",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: undefined,
-      actionableScenarios: ["1"],
-    },
-    prompt: "test prompt",
-  };
-
-  const next = await transitionPromptBuilt(state, {}, noopLog);
-  assertEquals(next.spec.command, "codex");
-});
-
-Deno.test("transitionPromptBuilt fires onCommandBuilt plugin hook", async () => {
-  const state: PromptBuiltState = {
-    tag: "prompt_built",
-    iterationNum: 0,
-    agent: "claude",
-    selection: {
-      model: "sonnet",
-      mode: "general",
-      targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
     prompt: "test prompt",
   };
 
   const plugin: Plugin = {
-    onCommandBuilt: ({ spec }) => ({
-      ...spec,
-      command: "custom-agent",
+    onSessionConfigBuilt: ({ config }) => ({
+      ...config,
+      provider: "custom-provider",
     }),
   };
 
-  const next = await transitionPromptBuilt(state, plugin, noopLog);
-  assertEquals(next.spec.command, "custom-agent");
+  const next = await transitionPromptBuilt(state, plugin, noopLog, "/tmp");
+  assertEquals(next.config.provider, "custom-provider");
 });
 
 // ---------------------------------------------------------------------------
-// transitionCommandBuilt
+// transitionConfigBuilt
 // ---------------------------------------------------------------------------
 
-Deno.test("transitionCommandBuilt produces running_agent state", () => {
-  const state: CommandBuiltState = {
-    tag: "command_built",
+Deno.test("transitionConfigBuilt produces running_agent state", () => {
+  const state: ConfigBuiltState = {
+    tag: "config_built",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
-    spec: { command: "claude", args: ["--model", "sonnet", "prompt"] },
+    config: {
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      workingDir: "/tmp",
+      thinkingLevel: "high",
+    },
+    prompt: "test prompt",
   };
 
-  const next = transitionCommandBuilt(state);
+  const next = transitionConfigBuilt(state);
   assertEquals(next.tag, "running_agent");
-  assertEquals(next.spec, state.spec);
+  assertEquals(next.config, state.config);
 });
 
 // ---------------------------------------------------------------------------
 // transitionRunningAgent
 // ---------------------------------------------------------------------------
 
-Deno.test("transitionRunningAgent with successful agent → done/continue", async () => {
+Deno.test("transitionRunningAgent with successful agent -> done/continue", async () => {
   const state: RunningAgentState = {
     tag: "running_agent",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
-    spec: { command: "echo", args: ["hello"] },
+    config: {
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      workingDir: "/tmp",
+      thinkingLevel: "high",
+    },
+    prompt: "test prompt",
   };
 
   const deps = {
@@ -366,7 +347,6 @@ Deno.test("transitionRunningAgent with successful agent → done/continue", asyn
     {},
     noopLog,
     AbortSignal.timeout(10_000),
-    undefined,
   );
   assertEquals(next.tag, "done");
   assertEquals(next.result.status, "continue");
@@ -376,15 +356,22 @@ Deno.test("transitionRunningAgent forwards workerIndex to execute for stdio pref
   const state: RunningAgentState = {
     tag: "running_agent",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "33",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["33"],
     },
-    spec: { command: "echo", args: ["hello"] },
+    config: {
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      workingDir: "/tmp",
+      thinkingLevel: "high",
+    },
+    prompt: "test prompt",
   };
 
   let capturedWorkerIndex: number | undefined = -1;
@@ -401,7 +388,6 @@ Deno.test("transitionRunningAgent forwards workerIndex to execute for stdio pref
     {},
     noopLog,
     AbortSignal.timeout(10_000),
-    undefined,
     2,
   );
   assertEquals(capturedWorkerIndex, 2);
@@ -411,15 +397,22 @@ Deno.test("transitionRunningAgent fires onIterationEnd plugin hook", async () =>
   const state: RunningAgentState = {
     tag: "running_agent",
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     selection: {
-      model: "sonnet",
-      mode: "general",
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      mode: "coder",
       targetScenario: "1",
-      effort: "high",
+      thinkingLevel: "high",
       actionableScenarios: ["1"],
     },
-    spec: { command: "echo", args: ["hello"] },
+    config: {
+      provider: "anthropic",
+      model: DEFAULT_MODEL_LADDER.coder.model,
+      workingDir: "/tmp",
+      thinkingLevel: "high",
+    },
+    prompt: "test prompt",
   };
 
   let hookFired = false;
@@ -435,7 +428,6 @@ Deno.test("transitionRunningAgent fires onIterationEnd plugin hook", async () =>
     plugin,
     noopLog,
     AbortSignal.timeout(10_000),
-    undefined,
   );
   assertEquals(hookFired, true);
 });
@@ -462,10 +454,10 @@ Deno.test("workerTransition returns done state unchanged", async () => {
 // Full pipeline test
 // ---------------------------------------------------------------------------
 
-Deno.test("worker pipeline: resolving_model → ... → done", async () => {
+Deno.test("worker pipeline: resolving_model -> ... -> done", async () => {
   let current: WorkerState = initialWorkerState({
     iterationNum: 0,
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "1",
     validationFailurePath: undefined,
@@ -492,7 +484,7 @@ Deno.test("worker pipeline: resolving_model → ... → done", async () => {
   assertEquals(tags, [
     "model_resolved",
     "prompt_built",
-    "command_built",
+    "config_built",
     "running_agent",
     "done",
   ]);

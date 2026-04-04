@@ -1,10 +1,9 @@
 import type {
-  Agent,
-  CommandSpec,
+  AgentSessionConfig,
   EscalationLevel,
   IterationResult,
   Logger,
-  LoopState,
+  ModelLadder,
   ModelSelection,
   RectifyAction,
   Result,
@@ -12,9 +11,11 @@ import type {
 } from "./types.ts";
 import { err, ok } from "./types.ts";
 
-/** Context passed to every {@link Plugin} hook during the loop. */
+import type { LoopState } from "./types.ts";
+
+/** Context passed to every Plugin hook during the loop. */
 export type HookContext = {
-  readonly agent: Agent;
+  readonly ladder: ModelLadder;
   readonly log: Logger;
   readonly iterationNum: number;
 };
@@ -38,11 +39,11 @@ export type HookContext = {
 export type Plugin = {
   /**
    * Override the resolved CLI configuration before the loop starts.
-   * Every field in the return type is optional — omitted fields keep
+   * Every field in the return type is optional -- omitted fields keep
    * the CLI-resolved value.
    */
   onConfigResolved?: (opts: {
-    agent: Agent;
+    ladder: ModelLadder;
     iterations: number;
     level: EscalationLevel | undefined;
     parallel: number;
@@ -52,7 +53,9 @@ export type Plugin = {
     log: Logger;
   }) =>
     | {
-      agent?: Agent;
+      coder?: string;
+      verifier?: string;
+      escalated?: string;
       iterations?: number;
       level?: EscalationLevel;
       parallel?: number;
@@ -63,7 +66,9 @@ export type Plugin = {
       progressFile?: string;
     }
     | Promise<{
-      agent?: Agent;
+      coder?: string;
+      verifier?: string;
+      escalated?: string;
       iterations?: number;
       level?: EscalationLevel;
       parallel?: number;
@@ -87,12 +92,12 @@ export type Plugin = {
     ctx: HookContext;
   }) => string | Promise<string>;
 
-  /** Modify the CLI command before it is spawned. */
-  onCommandBuilt?: (opts: {
-    spec: CommandSpec;
+  /** Modify the session config before the agent is spawned. */
+  onSessionConfigBuilt?: (opts: {
+    config: AgentSessionConfig;
     selection: ModelSelection;
     ctx: HookContext;
-  }) => CommandSpec | Promise<CommandSpec>;
+  }) => AgentSessionConfig | Promise<AgentSessionConfig>;
 
   /** Called after each agent iteration completes. */
   onIterationEnd?: (opts: {
@@ -130,7 +135,7 @@ export type Plugin = {
 export const noopPlugin: Plugin = {};
 
 /**
- * Resolve a {@link Plugin} from a dynamically imported module namespace.
+ * Resolve a Plugin from a dynamically imported module namespace.
  * Expects a named `plugin` export: `export const plugin: Plugin = { ... }`.
  */
 export const resolvePlugin = (mod: Record<string, unknown>): Plugin =>
@@ -139,8 +144,8 @@ export const resolvePlugin = (mod: Record<string, unknown>): Plugin =>
     : {};
 
 /**
- * Dynamically import a {@link Plugin} from a file path, URL, or package
- * specifier (`jsr:`, `npm:`). Returns {@link noopPlugin} if no path is given.
+ * Dynamically import a Plugin from a file path, URL, or package
+ * specifier (`jsr:`, `npm:`). Returns noopPlugin if no path is given.
  */
 export const loadPlugin = async (
   { pluginPath, log }: { pluginPath: string | undefined; log: Logger },

@@ -9,6 +9,7 @@ import type {
 } from "../src/types.ts";
 import { ok } from "../src/types.ts";
 import type { Plugin } from "../src/plugin.ts";
+import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 import {
   createEscalationStore,
   createProgressStore,
@@ -28,7 +29,7 @@ Deno.test("integration: worker transitions progress from WIP to WORK_COMPLETE to
   let round = 0;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 5,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -69,7 +70,7 @@ Deno.test("integration: rework scenarios get escalated level from orchestrator",
   const levels: (EscalationLevel | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -104,7 +105,7 @@ Deno.test("integration: non-rework scenarios get base level 0", async () => {
   const levels: (EscalationLevel | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -131,7 +132,7 @@ Deno.test("integration: CLI --level overrides base level for non-rework", async 
   const levels: (EscalationLevel | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -166,7 +167,7 @@ Deno.test("integration: onValidationComplete plugin hook fires in parallel loop"
   };
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -203,7 +204,7 @@ Deno.test("integration: onValidationComplete override prevents failure propagati
   };
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -234,7 +235,7 @@ Deno.test("integration: validation failure feeds back to next round", async () =
   const failurePaths: (string | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -287,7 +288,7 @@ Deno.test("integration: parallel workers get distinct scenarios with correct esc
   }[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 2,
     expectedScenarioIds: ["1.1", "1.2", "1.3"],
@@ -334,7 +335,7 @@ Deno.test("integration: escalation persists across rounds for repeated rework", 
   const levelsPerRound: (EscalationLevel | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -371,7 +372,7 @@ Deno.test("integration: progress changes between rounds affect scenario selectio
   const scenariosPerRound: (string | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -420,7 +421,7 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
   let mergeCall = 0;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 2,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -442,7 +443,7 @@ Deno.test("integration: conflict triggers reconciliation then continues", async 
   // but we can test with overrides)
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 2,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -499,7 +500,7 @@ Deno.test("integration: OBSOLETE scenarios are skipped, not assigned to workers"
   const scenarios: (string | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 3,
     expectedScenarioIds: ["1.1", "1.2", "1.3"],
@@ -518,53 +519,35 @@ Deno.test("integration: OBSOLETE scenarios are skipped, not assigned to workers"
   assertEquals(scenarios, ["1.2"], "only scenario 1.2 should be actionable");
 });
 
-Deno.test("integration: resolveWorkerModelSelection maps escalated level to CLAUDE_ESCALATED", () => {
+Deno.test("integration: resolveWorkerModelSelection maps escalated level to escalated role", () => {
   const selection = resolveWorkerModelSelection({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 1,
     targetScenario: "5.1",
   });
-  // CLAUDE_ESCALATED: opus/strong/high
-  assertEquals(selection.model, "opus");
-  assertEquals(selection.mode, "strong");
-  assertEquals(selection.effort, "high");
+  assertEquals(selection.model, DEFAULT_MODEL_LADDER.escalated.model);
+  assertEquals(selection.mode, "escalated");
+  assertEquals(
+    selection.thinkingLevel,
+    DEFAULT_MODEL_LADDER.escalated.thinkingLevel,
+  );
   assertEquals(selection.targetScenario, "5.1");
   assertEquals(selection.actionableScenarios, ["5.1"]);
 });
 
-Deno.test("integration: resolveWorkerModelSelection maps base level to CLAUDE_CODER", () => {
+Deno.test("integration: resolveWorkerModelSelection maps base level to coder role", () => {
   const selection = resolveWorkerModelSelection({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenario: "3.1",
   });
-  // CLAUDE_CODER: sonnet/general/high
-  assertEquals(selection.model, "sonnet");
-  assertEquals(selection.mode, "general");
-  assertEquals(selection.effort, "high");
+  assertEquals(selection.model, DEFAULT_MODEL_LADDER.coder.model);
+  assertEquals(selection.mode, "coder");
+  assertEquals(
+    selection.thinkingLevel,
+    DEFAULT_MODEL_LADDER.coder.thinkingLevel,
+  );
   assertEquals(selection.targetScenario, "3.1");
-});
-
-Deno.test("integration: resolveWorkerModelSelection codex level 0 uses general", () => {
-  const selection = resolveWorkerModelSelection({
-    agent: "codex",
-    level: 0,
-    targetScenario: "1.1",
-  });
-  assertEquals(selection.model, "gpt-5.1-codex-max");
-  assertEquals(selection.mode, "general");
-  assertEquals(selection.effort, undefined);
-});
-
-Deno.test("integration: resolveWorkerModelSelection codex level 1 uses strong", () => {
-  const selection = resolveWorkerModelSelection({
-    agent: "codex",
-    level: 1,
-    targetScenario: "1.1",
-  });
-  assertEquals(selection.model, "gpt-5.3-codex");
-  assertEquals(selection.mode, "strong");
-  assertEquals(selection.effort, undefined);
 });
 
 Deno.test("integration: full lifecycle — implement, rework, fix, verify", async () => {
@@ -581,7 +564,7 @@ Deno.test("integration: full lifecycle — implement, rework, fix, verify", asyn
   const validationPaths: (string | undefined)[] = [];
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 10,
     parallelism: 1,
     expectedScenarioIds: ["1.1", "1.2"],
@@ -650,7 +633,7 @@ Deno.test("integration(ARCH.4): crash recovery — resumes from persisted checkp
   let agentRuns = 0;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 4,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -693,7 +676,7 @@ Deno.test("integration(ARCH.4): crash at validate step — agent skipped, valida
   let agentRuns = 0;
 
   const iterationsUsed = await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 3,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -738,7 +721,7 @@ Deno.test("integration(ARCH.4): validationFailurePath restored from checkpoint a
   const receivedPaths: (string | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -775,7 +758,7 @@ Deno.test("integration(ARCH.4): escalation state survives simulated restart", as
   const levelsReceived: (EscalationLevel | undefined)[] = [];
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 1,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -809,7 +792,7 @@ Deno.test("integration(ARCH.4): worker validation failure persists escalation fo
   let iterationCall = 0;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],
@@ -863,7 +846,7 @@ Deno.test("integration(ARCH.4): escalation from worker validation failure carrie
   let iterationCall = 0;
 
   await runParallelLoop({
-    agent: "claude",
+    ladder: DEFAULT_MODEL_LADDER,
     iterations: 2,
     parallelism: 1,
     expectedScenarioIds: ["1.1"],

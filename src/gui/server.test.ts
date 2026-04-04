@@ -7,14 +7,12 @@ Deno.test(
   "POST /input/:workerId: sends text to registered worker, returns ok JSON",
   async () => {
     const inputBus = createAgentInputBus();
-    const collected: string[] = [];
+    const collected: { text: string; mode: string }[] = [];
 
-    const stream = new WritableStream<Uint8Array>({
-      write(chunk): void {
-        collected.push(new TextDecoder().decode(chunk));
-      },
+    // deno-lint-ignore require-await
+    inputBus.registerSession("GUI.0", async (text, mode) => {
+      collected.push({ text, mode });
     });
-    inputBus.register("GUI.0", stream);
 
     const ac = new AbortController();
     const handle = await startGuiServer({
@@ -26,14 +24,16 @@ Deno.test(
 
     const res = await fetch(`http://localhost:${handle.port}/input/GUI.0`, {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: "hello agent",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hello agent", mode: "steer" }),
     });
 
     assertEquals(res.status, 200);
     const json = await res.json();
     assertEquals(json.ok, true);
-    assertEquals(collected.join(""), "hello agent\n");
+    assertEquals(collected.length, 1);
+    assertEquals(collected[0].text, "hello agent");
+    assertEquals(collected[0].mode, "steer");
 
     ac.abort();
     await handle.finished;

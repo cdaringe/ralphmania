@@ -1,4 +1,4 @@
-import type { Agent, CommandSpec } from "./types.ts";
+import type { AgentSessionConfig, ModelSelection } from "./types.ts";
 import { AUTONOMOUS_PROMPT, buildTargetedPrompt } from "./constants.ts";
 
 export const buildPrompt = (
@@ -19,11 +19,9 @@ export const buildPrompt = (
   const raw = targetScenario === undefined
     ? AUTONOMOUS_PROMPT
     : buildTargetedPrompt(targetScenario);
-  const prompt = (specFile || progressFile)
-    ? raw
-      .replaceAll("@specification.md", `@${specFile ?? "specification.md"}`)
-      .replaceAll("@progress.md", `@${progressFile ?? "progress.md"}`)
-    : raw;
+  const prompt = raw
+    .replaceAll("{SPEC_FILE}", specFile ?? "specification.md")
+    .replaceAll("{PROGRESS_FILE}", progressFile ?? "progress.md");
 
   const actionableInfo = targetScenario === undefined &&
       actionableScenarios.length > 0
@@ -40,30 +38,15 @@ VALIDATION FAILED on previous iteration. Review the failure output at: ${validat
 Fix the issues identified in the validation output before proceeding with other work.`;
 };
 
-export const buildCommandSpec = ({ agent, model, prompt }: {
-  agent: Agent;
-  model: string;
-  prompt: string;
-}): CommandSpec =>
-  agent === "claude"
-    ? {
-      command: "claude",
-      args: [
-        "--dangerously-skip-permissions",
-        "--output-format=stream-json",
-        "--verbose",
-        "--model",
-        model,
-        prompt,
-      ],
-    }
-    : {
-      command: "codex",
-      args: [
-        "exec",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--model",
-        model,
-        prompt,
-      ],
-    };
+/** Build a pi-mono session config from a model selection and working directory. */
+export const buildSessionConfig = (
+  { selection, workingDir }: {
+    selection: ModelSelection;
+    workingDir: string;
+  },
+): AgentSessionConfig => ({
+  provider: selection.provider,
+  model: selection.model,
+  workingDir,
+  thinkingLevel: selection.thinkingLevel,
+});

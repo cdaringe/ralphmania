@@ -15,6 +15,7 @@ import {
   transitionValidating,
 } from "./state-machine.ts";
 import { noopPlugin } from "../plugin.ts";
+import { DEFAULT_MODEL_LADDER } from "../constants.ts";
 
 // ---------------------------------------------------------------------------
 // Progress content fixtures
@@ -87,7 +88,7 @@ const makeDeps = (overrides: Partial<MachineDeps> = {}): MachineDeps => ({
 });
 
 const makeCtx = (overrides: Partial<MachineContext> = {}): MachineContext => ({
-  agent: "claude",
+  ladder: DEFAULT_MODEL_LADDER,
   iterations: 5,
   parallelism: 1,
   expectedScenarioIds: ["ARCH.1", "ARCH.2"],

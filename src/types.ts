@@ -1,6 +1,3 @@
-/** Supported AI agent backends. Derived from {@link VALID_AGENTS}. */
-export type Agent = (typeof VALID_AGENTS)[number];
-
 /** Severity levels for log output. */
 export type LogLevel = "info" | "error" | "debug";
 
@@ -19,30 +16,48 @@ export type ValidationResult =
   | { status: "failed"; outputPath: string };
 
 /**
- * Model capability tier. `"fast"` uses the cheapest model, `"general"` is the
- * default, and `"strong"` escalates to the most capable model for rework.
+ * Model role within the escalation ladder. `"coder"` builds features,
+ * `"verifier"` confirms completion, and `"escalated"` handles rework.
  */
-export type ToolMode = "fast" | "general" | "strong";
+export type ToolMode = "coder" | "verifier" | "escalated";
 
-/** Claude Code effort level, passed via `CLAUDE_CODE_EFFORT_LEVEL` env var. */
-export type EffortLevel = "low" | "medium" | "high";
+/** Pi-mono thinking level, controlling model reasoning depth. */
+export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh";
 
-/** Per-scenario escalation level (0–1) in the Claude ladder. */
+/** Per-scenario escalation level (0-1) in the model ladder. */
 export type EscalationLevel = 0 | 1;
 
-/** Persistent escalation state: scenario number (as string) → level. */
+/** Persistent escalation state: scenario number (as string) -> level. */
 export type EscalationState = Record<string, EscalationLevel>;
 
+/** Provider + model pair identifying a specific LLM configuration. */
+export type ModelRoleConfig = {
+  readonly provider: string;
+  readonly model: string;
+  readonly thinkingLevel?: ThinkingLevel;
+};
+
 /**
- * The resolved model configuration for an iteration, including the concrete
- * model name, capability tier, an optional scenario to focus on, and an
- * optional effort level for Claude Code.
+ * Three-role model ladder. Each role maps to a provider/model/thinking
+ * combination. Configurable via CLI (`--coder`, `--verifier`, `--escalated`)
+ * or the plugin `onConfigResolved` hook.
+ */
+export type ModelLadder = {
+  readonly coder: ModelRoleConfig;
+  readonly verifier: ModelRoleConfig;
+  readonly escalated: ModelRoleConfig;
+};
+
+/**
+ * Resolved model configuration for an iteration, including the concrete
+ * provider, model name, role, optional scenario focus, and thinking level.
  */
 export type ModelSelection = {
+  readonly provider: string;
   readonly model: string;
   readonly mode: ToolMode;
   readonly targetScenario: string | undefined;
-  readonly effort: EffortLevel | undefined;
+  readonly thinkingLevel: ThinkingLevel | undefined;
   readonly actionableScenarios: readonly string[];
 };
 
@@ -53,10 +68,15 @@ export type IterationResult =
   | { status: "failed"; code: number }
   | { status: "timeout" };
 
-/** A shell command with its arguments, ready to be spawned. */
-export type CommandSpec = {
-  readonly command: string;
-  readonly args: string[];
+/**
+ * Configuration for a pi-mono agent session. Passed through the
+ * `onSessionConfigBuilt` plugin hook before execution.
+ */
+export type AgentSessionConfig = {
+  readonly provider: string;
+  readonly model: string;
+  readonly workingDir: string;
+  readonly thinkingLevel?: ThinkingLevel;
 };
 
 /**
@@ -72,8 +92,8 @@ export type LoopState = {
 export type LoopStep = "agent" | "validate" | "rectify" | "done";
 
 /**
- * Action returned by the {@link import("./plugin.ts").Plugin.onRectify} hook
- * to control how rectification proceeds after a validation failure.
+ * Action returned by the plugin onRectify hook to control how rectification
+ * proceeds after a validation failure.
  */
 export type RectifyAction =
   | { action: "agent"; promptOverride?: string }
@@ -95,81 +115,5 @@ export type LoopCheckpoint = {
   readonly validationFailurePath: string | undefined;
 };
 
-/** The set of supported agent backend identifiers. */
-export const VALID_AGENTS = ["claude", "codex"] as const;
-
-/**
- * Subset of the Claude Agent SDK NDJSON streaming message types relevant
- * to output extraction when using `--output-format=stream-json`.
- *
- * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
- */
-
-/** Final result message emitted when the agent completes or errors. */
-export type SDKResultMessage =
-  | {
-    type: "result";
-    subtype: "success";
-    result: string;
-    is_error: boolean;
-    duration_ms: number;
-    num_turns: number;
-    total_cost_usd: number;
-  }
-  | {
-    type: "result";
-    subtype:
-      | "error_max_turns"
-      | "error_during_execution"
-      | "error_max_budget_usd";
-    is_error: boolean;
-    errors: string[];
-  };
-
-/** System-level events (init, status, hooks, tasks, etc.). */
-export type SDKSystemMessage = {
-  type: "system";
-  subtype: string;
-  session_id: string;
-};
-
-/**
- * A content block inside an Anthropic API message.
- * @see {@link https://docs.anthropic.com/en/api/messages}
- */
-export type ContentBlock =
-  | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: unknown }
-  | { type: "thinking"; thinking: string };
-
-/** Assistant turn with a full Anthropic API message payload. */
-export type SDKAssistantMessage = {
-  type: "assistant";
-  session_id: string;
-  message: { content: ContentBlock[] };
-};
-
-/** Streaming partial events (only with --include-partial-messages). */
-export type SDKPartialAssistantMessage = {
-  type: "stream_event";
-  event: unknown;
-};
-
-/** Tool use summary (e.g. "Read 3 files, ran 2 commands"). */
-export type SDKToolUseSummaryMessage = {
-  type: "tool_use_summary";
-  summary: string;
-};
-
-/**
- * Discriminated union of NDJSON message types emitted by
- * `claude --output-format=stream-json`.
- *
- * @see {@link https://platform.claude.com/docs/en/agent-sdk/typescript#message-types}
- */
-export type SDKMessage =
-  | SDKResultMessage
-  | SDKSystemMessage
-  | SDKAssistantMessage
-  | SDKPartialAssistantMessage
-  | SDKToolUseSummaryMessage;
+/** Delivery mode for interactive input to a running agent session. */
+export type InputMode = "steer" | "followUp";

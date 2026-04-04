@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@^1.0.11";
-import { buildCommandSpec, buildPrompt } from "../src/command.ts";
+import { buildPrompt, buildSessionConfig } from "../src/command.ts";
 import { AUTONOMOUS_PROMPT, buildTargetedPrompt } from "../src/constants.ts";
 
 Deno.test("buildPrompt without scenario or actionable", () => {
@@ -8,7 +8,10 @@ Deno.test("buildPrompt without scenario or actionable", () => {
     validationFailurePath: undefined,
     actionableScenarios: [],
   });
-  assertEquals(prompt, AUTONOMOUS_PROMPT);
+  const expected = AUTONOMOUS_PROMPT
+    .replaceAll("{SPEC_FILE}", "specification.md")
+    .replaceAll("{PROGRESS_FILE}", "progress.md");
+  assertEquals(prompt, expected);
 });
 
 Deno.test("buildPrompt with target scenario is prescriptive", () => {
@@ -77,16 +80,15 @@ Deno.test("buildPrompt with scenario and validation failure", () => {
   assertStringIncludes(prompt, "/tmp/out.log");
 });
 
-Deno.test("buildCommandSpec claude", () => {
-  const spec = buildCommandSpec({
-    agent: "claude",
-    model: "sonnet",
-    prompt: "test prompt",
+Deno.test("buildPrompt uses {SPEC_FILE} and {PROGRESS_FILE} markers", () => {
+  const prompt = buildPrompt({
+    targetScenario: undefined,
+    validationFailurePath: undefined,
+    actionableScenarios: [],
   });
-  assertEquals(spec.command, "claude");
-  assertStringIncludes(spec.args.join(" "), "--model");
-  assertStringIncludes(spec.args.join(" "), "sonnet");
-  assertStringIncludes(spec.args.join(" "), "test prompt");
+  // Default substitution uses specification.md and progress.md
+  assertStringIncludes(prompt, "specification.md");
+  assertStringIncludes(prompt, "progress.md");
 });
 
 Deno.test("buildPrompt uses custom specFile in prompt references", () => {
@@ -96,8 +98,7 @@ Deno.test("buildPrompt uses custom specFile in prompt references", () => {
     actionableScenarios: [],
     specFile: "docs/my-spec.md",
   });
-  assertStringIncludes(prompt, "@docs/my-spec.md");
-  assertEquals(prompt.includes("@specification.md"), false);
+  assertStringIncludes(prompt, "docs/my-spec.md");
 });
 
 Deno.test("buildPrompt uses custom progressFile in prompt references", () => {
@@ -107,8 +108,7 @@ Deno.test("buildPrompt uses custom progressFile in prompt references", () => {
     actionableScenarios: [],
     progressFile: "docs/my-progress.md",
   });
-  assertStringIncludes(prompt, "@docs/my-progress.md");
-  assertEquals(prompt.includes("@progress.md"), false);
+  assertStringIncludes(prompt, "docs/my-progress.md");
 });
 
 Deno.test("buildPrompt uses both custom specFile and progressFile", () => {
@@ -119,10 +119,8 @@ Deno.test("buildPrompt uses both custom specFile and progressFile", () => {
     specFile: "custom/spec.md",
     progressFile: "custom/progress.md",
   });
-  assertStringIncludes(prompt, "@custom/spec.md");
-  assertStringIncludes(prompt, "@custom/progress.md");
-  assertEquals(prompt.includes("@specification.md"), false);
-  assertEquals(prompt.includes("@progress.md"), false);
+  assertStringIncludes(prompt, "custom/spec.md");
+  assertStringIncludes(prompt, "custom/progress.md");
 });
 
 Deno.test("buildPrompt keeps defaults when no custom paths given", () => {
@@ -131,20 +129,26 @@ Deno.test("buildPrompt keeps defaults when no custom paths given", () => {
     validationFailurePath: undefined,
     actionableScenarios: [],
   });
-  assertStringIncludes(prompt, "@specification.md");
-  assertStringIncludes(prompt, "@progress.md");
+  assertStringIncludes(prompt, "specification.md");
+  assertStringIncludes(prompt, "progress.md");
 });
 
-Deno.test("buildCommandSpec codex", () => {
-  const spec = buildCommandSpec({
-    agent: "codex",
-    model: "gpt-5.1-codex",
-    prompt: "test prompt",
+Deno.test("buildSessionConfig builds AgentSessionConfig from selection", () => {
+  const config = buildSessionConfig({
+    selection: {
+      provider: "anthropic",
+      model: "claude-sonnet-4-5-20250514",
+      mode: "coder",
+      targetScenario: "1",
+      thinkingLevel: "high",
+      actionableScenarios: ["1"],
+    },
+    workingDir: "/tmp/work",
   });
-  assertEquals(spec.command, "codex");
-  assertStringIncludes(spec.args.join(" "), "exec");
-  assertStringIncludes(spec.args.join(" "), "gpt-5.1-codex");
-  assertStringIncludes(spec.args.join(" "), "test prompt");
+  assertEquals(config.provider, "anthropic");
+  assertEquals(config.model, "claude-sonnet-4-5-20250514");
+  assertEquals(config.workingDir, "/tmp/work");
+  assertEquals(config.thinkingLevel, "high");
 });
 
 Deno.test("buildTargetedPrompt includes critique for same scenario", () => {

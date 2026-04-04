@@ -152,23 +152,33 @@ export const startGuiServer = async (
       : new Response("not found", { status: 404 });
   });
 
-  // POST /input/:workerId — send text to an active agent's stdin.
+  // POST /input/:workerId — send text to an active agent session.
+  // Body: { text, mode } where mode is "steer" or "followUp" (default: "followUp")
   // Returns JSON: { ok: true } or { ok: false, error: "..." }
   app.post("/input/:workerId", async (ctx) => {
     const workerId = decodeURIComponent(ctx.params.workerId);
-    const text = await ctx.req.text();
+    let text: string;
+    let mode: import("../types.ts").InputMode = "followUp";
+    const contentType = ctx.req.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await ctx.req.json();
+      text = typeof body.text === "string" ? body.text : "";
+      mode = body.mode === "steer" ? "steer" : "followUp";
+    } else {
+      text = await ctx.req.text();
+    }
     if (!agentInputBus) {
       return Response.json(
         { ok: false, error: "No input bus configured" },
         { status: 503 },
       );
     }
-    const result = await agentInputBus.send(workerId, text + "\n");
+    const result = await agentInputBus.send(workerId, text, mode);
     if (result.isOk()) {
       writeWorkerLine(workerId, {
         type: "log",
         level: "info",
-        tags: ["user", "input"],
+        tags: ["user", "input", mode],
         message: text,
         ts: Date.now(),
         workerId,

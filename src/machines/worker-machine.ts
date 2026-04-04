@@ -3,30 +3,30 @@
  *
  * Models one agent iteration as a linear pipeline with plugin hooks at
  * each boundary. Separates pure logic (model selection, prompt building,
- * command building) from subprocess I/O (agent execution), making the
- * pure parts testable without real agent binaries.
+ * session config) from I/O (agent execution), making the pure parts
+ * testable without real agent binaries.
  *
  * ```
- * resolving_model → model_resolved → prompt_built → command_built
- *     → running_agent → done
+ * resolving_model -> model_resolved -> prompt_built -> config_built
+ *     -> running_agent -> done
  * ```
  *
  * @module
  */
 
 import type {
-  Agent,
-  CommandSpec,
+  AgentSessionConfig,
   EscalationLevel,
   IterationResult,
   Logger,
+  ModelLadder,
   ModelSelection,
+  ToolMode,
 } from "../types.ts";
 import type { AgentRunDeps } from "../ports/types.ts";
 import type { HookContext, Plugin } from "../plugin.ts";
-import { getModel, resolveModelSelection } from "../model.ts";
-import { CLAUDE_CODER, CLAUDE_ESCALATED } from "../constants.ts";
-import { buildCommandSpec, buildPrompt } from "../command.ts";
+import { resolveModelSelection } from "../model.ts";
+import { buildPrompt, buildSessionConfig } from "../command.ts";
 import type { AgentInputBus } from "../gui/input-bus.ts";
 
 // ---------------------------------------------------------------------------
@@ -35,36 +35,24 @@ import type { AgentInputBus } from "../gui/input-bus.ts";
 
 /**
  * Compute a ModelSelection for a worker assigned to a specific scenario
- * by the orchestrator. Uses the escalation ladder constants rather than
- * hardcoding mode/effort, so rework scenarios correctly escalate to
- * stronger models.
- *
- * The orchestrator pre-computes the effective escalation `level` per
- * scenario (incorporating both CLI --level and per-scenario state from
- * .ralph/escalation.json), so this function just maps level → config.
+ * by the orchestrator. Uses the model ladder so rework scenarios correctly
+ * escalate to stronger models.
  */
 export const resolveWorkerModelSelection = (
-  { agent, level, targetScenario }: {
-    agent: Agent;
+  { ladder, level, targetScenario }: {
+    ladder: ModelLadder;
     level: EscalationLevel | undefined;
     targetScenario: string;
   },
 ): ModelSelection => {
-  if (agent === "claude") {
-    const config = (level ?? 0) >= 1 ? CLAUDE_ESCALATED : CLAUDE_CODER;
-    return {
-      ...config,
-      targetScenario,
-      actionableScenarios: [targetScenario],
-    };
-  }
-  // Codex: mode derived from escalation level
-  const mode = (level ?? 0) >= 1 ? "strong" as const : "general" as const;
+  const mode: ToolMode = (level ?? 0) >= 1 ? "escalated" : "coder";
+  const config = ladder[mode];
   return {
-    model: getModel({ agent, mode }),
+    provider: config.provider,
+    model: config.model,
     mode,
+    thinkingLevel: config.thinkingLevel,
     targetScenario,
-    effort: undefined,
     actionableScenarios: [targetScenario],
   };
 };
@@ -76,7 +64,7 @@ export const resolveWorkerModelSelection = (
 export type ResolvingModelState = Readonly<{
   tag: "resolving_model";
   iterationNum: number;
-  agent: Agent;
+  ladder: ModelLadder;
   level: EscalationLevel | undefined;
   targetScenarioOverride: string | undefined;
   validationFailurePath: string | undefined;
@@ -87,7 +75,7 @@ export type ResolvingModelState = Readonly<{
 export type ModelResolvedState = Readonly<{
   tag: "model_resolved";
   iterationNum: number;
-  agent: Agent;
+  ladder: ModelLadder;
   selection: ModelSelection;
   validationFailurePath: string | undefined;
   specFile: string | undefined;
@@ -97,25 +85,27 @@ export type ModelResolvedState = Readonly<{
 export type PromptBuiltState = Readonly<{
   tag: "prompt_built";
   iterationNum: number;
-  agent: Agent;
+  ladder: ModelLadder;
   selection: ModelSelection;
   prompt: string;
 }>;
 
-export type CommandBuiltState = Readonly<{
-  tag: "command_built";
+export type ConfigBuiltState = Readonly<{
+  tag: "config_built";
   iterationNum: number;
-  agent: Agent;
+  ladder: ModelLadder;
   selection: ModelSelection;
-  spec: CommandSpec;
+  config: AgentSessionConfig;
+  prompt: string;
 }>;
 
 export type RunningAgentState = Readonly<{
   tag: "running_agent";
   iterationNum: number;
-  agent: Agent;
+  ladder: ModelLadder;
   selection: ModelSelection;
-  spec: CommandSpec;
+  config: AgentSessionConfig;
+  prompt: string;
 }>;
 
 export type DoneState = Readonly<{
@@ -127,7 +117,7 @@ export type WorkerState =
   | ResolvingModelState
   | ModelResolvedState
   | PromptBuiltState
-  | CommandBuiltState
+  | ConfigBuiltState
   | RunningAgentState
   | DoneState;
 
@@ -135,7 +125,7 @@ export const isWorkerTerminal = (s: WorkerState): s is DoneState =>
   s.tag === "done";
 
 // ---------------------------------------------------------------------------
-// Transition functions — narrow return types enforce valid edges
+// Transition functions -- narrow return types enforce valid edges
 // ---------------------------------------------------------------------------
 
 export const transitionResolvingModel = async (
@@ -144,7 +134,7 @@ export const transitionResolvingModel = async (
   log: Logger,
 ): Promise<ModelResolvedState> => {
   const ctx: HookContext = {
-    agent: state.agent,
+    ladder: state.ladder,
     log,
     iterationNum: state.iterationNum,
   };
@@ -152,12 +142,12 @@ export const transitionResolvingModel = async (
   const rawSelection: ModelSelection =
     state.targetScenarioOverride !== undefined
       ? resolveWorkerModelSelection({
-        agent: state.agent,
+        ladder: state.ladder,
         level: state.level,
         targetScenario: state.targetScenarioOverride,
       })
       : await resolveModelSelection({
-        agent: state.agent,
+        ladder: state.ladder,
         log,
         minLevel: state.level,
         progressFile: state.progressFile,
@@ -170,7 +160,7 @@ export const transitionResolvingModel = async (
   return {
     tag: "model_resolved",
     iterationNum: state.iterationNum,
-    agent: state.agent,
+    ladder: state.ladder,
     selection,
     validationFailurePath: state.validationFailurePath,
     specFile: state.specFile,
@@ -184,7 +174,7 @@ export const transitionModelResolved = async (
   log: Logger,
 ): Promise<PromptBuiltState> => {
   const ctx: HookContext = {
-    agent: state.agent,
+    ladder: state.ladder,
     log,
     iterationNum: state.iterationNum,
   };
@@ -208,7 +198,7 @@ export const transitionModelResolved = async (
   return {
     tag: "prompt_built",
     iterationNum: state.iterationNum,
-    agent: state.agent,
+    ladder: state.ladder,
     selection: state.selection,
     prompt,
   };
@@ -218,44 +208,46 @@ export const transitionPromptBuilt = async (
   state: PromptBuiltState,
   plugin: Plugin,
   log: Logger,
-): Promise<CommandBuiltState> => {
+  cwd: string | undefined,
+): Promise<ConfigBuiltState> => {
   const ctx: HookContext = {
-    agent: state.agent,
+    ladder: state.ladder,
     log,
     iterationNum: state.iterationNum,
   };
 
-  const rawSpec = buildCommandSpec({
-    agent: state.agent,
-    model: state.selection.model,
-    prompt: state.prompt,
+  const rawConfig = buildSessionConfig({
+    selection: state.selection,
+    workingDir: cwd ?? ".",
   });
 
-  const spec = plugin.onCommandBuilt
-    ? await plugin.onCommandBuilt({
-      spec: rawSpec,
+  const config = plugin.onSessionConfigBuilt
+    ? await plugin.onSessionConfigBuilt({
+      config: rawConfig,
       selection: state.selection,
       ctx,
     })
-    : rawSpec;
+    : rawConfig;
 
   return {
-    tag: "command_built",
+    tag: "config_built",
     iterationNum: state.iterationNum,
-    agent: state.agent,
+    ladder: state.ladder,
     selection: state.selection,
-    spec,
+    config,
+    prompt: state.prompt,
   };
 };
 
-export const transitionCommandBuilt = (
-  state: CommandBuiltState,
+export const transitionConfigBuilt = (
+  state: ConfigBuiltState,
 ): RunningAgentState => ({
   tag: "running_agent",
   iterationNum: state.iterationNum,
-  agent: state.agent,
+  ladder: state.ladder,
   selection: state.selection,
-  spec: state.spec,
+  config: state.config,
+  prompt: state.prompt,
 });
 
 export const transitionRunningAgent = async (
@@ -264,31 +256,32 @@ export const transitionRunningAgent = async (
   plugin: Plugin,
   log: Logger,
   signal: AbortSignal,
-  cwd: string | undefined,
   workerIndex?: number,
   agentInputBus?: AgentInputBus,
 ): Promise<DoneState> => {
   const ctx: HookContext = {
-    agent: state.agent,
+    ladder: state.ladder,
     log,
     iterationNum: state.iterationNum,
   };
 
   log({
     tags: ["info", "iteration"],
-    message: `Starting ${state.iterationNum} (${state.selection.model}${
-      state.selection.effort ? `, effort: ${state.selection.effort}` : ""
-    })...`,
+    message:
+      `Starting ${state.iterationNum} (${state.selection.provider}/${state.selection.model}${
+        state.selection.thinkingLevel
+          ? `, thinking: ${state.selection.thinkingLevel}`
+          : ""
+      })...`,
   });
 
   const result = await deps.execute({
-    spec: state.spec,
-    agent: state.agent,
+    config: state.config,
+    prompt: state.prompt,
     selection: state.selection,
     iterationNum: state.iterationNum,
     signal,
     log,
-    cwd,
     workerIndex,
     agentInputBus,
   });
@@ -313,7 +306,7 @@ export const workerTransition = async (
     agentDeps: AgentRunDeps;
     /** Passed to execute so it can build a colored per-line stdio prefix. */
     workerIndex?: number;
-    /** When provided, routes GUI text input to the agent subprocess stdin. */
+    /** When provided, routes GUI text input to the agent session. */
     agentInputBus?: AgentInputBus;
   },
 ): Promise<WorkerState> => {
@@ -327,10 +320,15 @@ export const workerTransition = async (
       next = await transitionModelResolved(state, opts.plugin, opts.log);
       break;
     case "prompt_built":
-      next = await transitionPromptBuilt(state, opts.plugin, opts.log);
+      next = await transitionPromptBuilt(
+        state,
+        opts.plugin,
+        opts.log,
+        opts.cwd,
+      );
       break;
-    case "command_built":
-      next = transitionCommandBuilt(state);
+    case "config_built":
+      next = transitionConfigBuilt(state);
       break;
     case "running_agent":
       next = await transitionRunningAgent(
@@ -339,7 +337,6 @@ export const workerTransition = async (
         opts.plugin,
         opts.log,
         opts.signal,
-        opts.cwd,
         opts.workerIndex,
         opts.agentInputBus,
       );
@@ -361,7 +358,7 @@ export const workerTransition = async (
 export const initialWorkerState = (
   opts: {
     iterationNum: number;
-    agent: Agent;
+    ladder: ModelLadder;
     level: EscalationLevel | undefined;
     targetScenarioOverride: string | undefined;
     validationFailurePath: string | undefined;
