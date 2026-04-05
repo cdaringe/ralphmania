@@ -1,6 +1,10 @@
 import { assertEquals, assertExists } from "jsr:@std/assert@^1";
 import type { Plugin } from "../plugin.ts";
-import type { IterationResult } from "../types.ts";
+import type {
+  AgentSessionConfig,
+  IterationResult,
+  ModelSelection,
+} from "../types.ts";
 import type { AgentInputBus } from "../gui/input-bus.ts";
 import { createAgentInputBus } from "../gui/input-bus.ts";
 import { DEFAULT_MODEL_LADDER } from "../constants.ts";
@@ -22,6 +26,28 @@ import {
 
 const noop: Plugin = {};
 const log = (): void => {};
+
+const testSelection = (
+  overrides: Partial<ModelSelection> = {},
+): ModelSelection => ({
+  provider: "anthropic",
+  model: DEFAULT_MODEL_LADDER.coder.model,
+  mode: "coder",
+  targetScenario: "1",
+  thinkingLevel: "high",
+  actionableScenarios: ["1"],
+  ...overrides,
+});
+
+const testConfig = (
+  overrides: Partial<AgentSessionConfig> = {},
+): AgentSessionConfig => ({
+  provider: "anthropic",
+  model: DEFAULT_MODEL_LADDER.coder.model,
+  workingDir: "/tmp",
+  thinkingLevel: "high",
+  ...overrides,
+});
 
 // ---------------------------------------------------------------------------
 // resolveWorkerModelSelection
@@ -159,14 +185,10 @@ Deno.test("transitionModelResolved: advances to prompt_built", async () => {
     tag: "model_resolved" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
+    selection: testSelection({
       targetScenario: "ARCH.3",
-      thinkingLevel: "high" as const,
       actionableScenarios: ["ARCH.3"],
-    },
+    }),
     promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
@@ -184,14 +206,10 @@ Deno.test("transitionModelResolved: plugin.onPromptBuilt can override prompt", a
     tag: "model_resolved" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
+    selection: testSelection({
       targetScenario: "ARCH.3",
-      thinkingLevel: "high" as const,
       actionableScenarios: ["ARCH.3"],
-    },
+    }),
     promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
@@ -209,14 +227,7 @@ Deno.test("transitionModelResolved: includes validation failure path in prompt",
     tag: "model_resolved" as const,
     iterationNum: 2,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
-      targetScenario: "1",
-      thinkingLevel: "high" as const,
-      actionableScenarios: ["1"],
-    },
+    selection: testSelection(),
     promptOverride: undefined,
     validationFailurePath: ".ralph/validation/iteration-1.log",
     specFile: undefined,
@@ -234,14 +245,13 @@ Deno.test("transitionModelResolved: uses promptOverride when provided", async ()
     tag: "model_resolved" as const,
     iterationNum: 2,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
+    selection: testSelection({
       provider: "anthropic",
       model: DEFAULT_MODEL_LADDER.escalated.model,
-      mode: "escalated" as const,
+      mode: "escalated",
       targetScenario: undefined,
-      thinkingLevel: "high" as const,
       actionableScenarios: [],
-    },
+    }),
     promptOverride: "READ VALIDATION OUTPUT AND FIX THE FAILURE",
     validationFailurePath: ".ralph/validation/iteration-1.log",
     specFile: undefined,
@@ -260,14 +270,7 @@ Deno.test("transitionPromptBuilt: advances to config_built", async () => {
     tag: "prompt_built" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
-      targetScenario: "1",
-      thinkingLevel: "high" as const,
-      actionableScenarios: ["1"],
-    },
+    selection: testSelection(),
     prompt: "do the thing",
   };
   const next = await transitionPromptBuilt(state, noop, log, "/tmp/work");
@@ -282,24 +285,17 @@ Deno.test("transitionPromptBuilt: plugin.onSessionConfigBuilt can override confi
     tag: "prompt_built" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
-      targetScenario: "1",
-      thinkingLevel: "high" as const,
-      actionableScenarios: ["1"],
-    },
+    selection: testSelection(),
     prompt: "do the thing",
   };
   const plugin: Plugin = {
     onSessionConfigBuilt: ({ config }) => ({
       ...config,
-      provider: "custom-provider",
+      provider: "openrouter",
     }),
   };
   const next = await transitionPromptBuilt(state, plugin, log, "/tmp");
-  assertEquals(next.config.provider, "custom-provider");
+  assertEquals(next.config.provider, "openrouter");
 });
 
 // ---------------------------------------------------------------------------
@@ -311,20 +307,8 @@ Deno.test("transitionConfigBuilt: advances to running_agent", () => {
     tag: "config_built" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
-      targetScenario: "1",
-      thinkingLevel: "high" as const,
-      actionableScenarios: ["1"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high" as const,
-    },
+    selection: testSelection(),
+    config: testConfig(),
     prompt: "do the thing",
   };
   const next = transitionConfigBuilt(state);
@@ -341,20 +325,8 @@ Deno.test("transitionRunningAgent: returns done with result on success", async (
     tag: "running_agent" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
-      targetScenario: "1",
-      thinkingLevel: "high" as const,
-      actionableScenarios: ["1"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high" as const,
-    },
+    selection: testSelection(),
+    config: testConfig(),
     prompt: "test",
   };
   const result: IterationResult = { status: "complete" };
@@ -375,20 +347,8 @@ Deno.test("transitionRunningAgent: calls plugin.onIterationEnd", async () => {
     tag: "running_agent" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
-      targetScenario: "1",
-      thinkingLevel: "high" as const,
-      actionableScenarios: ["1"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high" as const,
-    },
+    selection: testSelection(),
+    config: testConfig(),
     prompt: "test",
   };
   let hookFired = false;
@@ -417,20 +377,11 @@ Deno.test("transitionRunningAgent: passes agentInputBus to deps.execute", async 
     tag: "running_agent" as const,
     iterationNum: 1,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder" as const,
+    selection: testSelection({
       targetScenario: "GUI.d",
-      thinkingLevel: "high" as const,
       actionableScenarios: ["GUI.d"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high" as const,
-    },
+    }),
+    config: testConfig(),
     prompt: "test",
   };
   const mockBus: AgentInputBus = createAgentInputBus();

@@ -366,6 +366,7 @@ Deno.test("transitionRunningWorkers worker validation failure persists escalatio
           status: "failed" as const,
           outputPath: "/tmp/wt-fail.log",
         }),
+      hasNewCommits: () => Promise.resolve(true),
       writeEscalationState: (s) => {
         writtenEscalation = s;
         return Promise.resolve();
@@ -401,6 +402,7 @@ Deno.test("transitionRunningWorkers worker validation failure re-run receives va
           status: "failed" as const,
           outputPath: "/tmp/wt-fail.log",
         }),
+      hasNewCommits: () => Promise.resolve(true),
     }),
   });
   const state: RunningWorkersState = {

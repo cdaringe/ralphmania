@@ -1,6 +1,45 @@
 import { tmpdir } from "node:os";
-import type { ModelLadder, ModelRoleConfig, Result } from "./types.ts";
+import type {
+  KnownProvider,
+  ModelLadder,
+  ModelRoleConfig,
+  Result,
+} from "./types.ts";
 import { err, ok } from "./types.ts";
+
+/**
+ * Set of provider names recognised by the pi-ai model registry.
+ * Used to validate user-supplied model specs at parse time.
+ *
+ * Typed as `ReadonlySet<KnownProvider>` so the compiler enforces that
+ * every entry is a member of pi-ai's provider union.
+ */
+const _KNOWN_PROVIDERS: readonly KnownProvider[] = [
+  "amazon-bedrock",
+  "anthropic",
+  "azure-openai-responses",
+  "cerebras",
+  "github-copilot",
+  "google",
+  "google-antigravity",
+  "google-gemini-cli",
+  "google-vertex",
+  "groq",
+  "huggingface",
+  "kimi-coding",
+  "minimax",
+  "minimax-cn",
+  "mistral",
+  "openai",
+  "openai-codex",
+  "opencode",
+  "opencode-go",
+  "openrouter",
+  "vercel-ai-gateway",
+  "xai",
+  "zai",
+] as const;
+export const KNOWN_PROVIDERS: ReadonlySet<string> = new Set(_KNOWN_PROVIDERS);
 
 export const TIMEOUT_MS = 60 * 60 * 1000;
 export const WORKER_IDLE_TIMEOUT_MS = 90 * 1000;
@@ -32,6 +71,7 @@ export const DEFAULT_MODEL_LADDER: ModelLadder = {
  * Parse a model spec string into a ModelRoleConfig.
  * Accepts either "provider/model" or "provider:model", with only the first
  * delimiter splitting provider from model so model names may contain ":".
+ * Validates the provider against the set of known providers.
  */
 export const parseModelSpec = (
   spec: string,
@@ -39,11 +79,20 @@ export const parseModelSpec = (
   const slashIdx = spec.indexOf("/");
   const colonIdx = spec.indexOf(":");
   const idx = slashIdx >= 1 ? slashIdx : colonIdx >= 1 ? colonIdx : -1;
-  return idx < 1
-    ? err(
-      `Invalid model spec "${spec}": expected "provider/model" or "provider:model" format (e.g., "anthropic/claude-sonnet-4-5-20250514" or "ollama:gemma:4eb")`,
-    )
-    : ok({ provider: spec.slice(0, idx), model: spec.slice(idx + 1) });
+  if (idx < 1) {
+    return err(
+      `Invalid model spec "${spec}": expected "provider/model" or "provider:model" format (e.g., "anthropic/claude-sonnet-4-5-20250514")`,
+    );
+  }
+  const provider = spec.slice(0, idx);
+  const model = spec.slice(idx + 1);
+  if (!KNOWN_PROVIDERS.has(provider)) {
+    return err(
+      `Unknown provider "${provider}" in model spec "${spec}". ` +
+        `Known providers: [${[...KNOWN_PROVIDERS].sort().join(", ")}].`,
+    );
+  }
+  return ok({ provider: provider as KnownProvider, model });
 };
 
 /** Format a ModelRoleConfig as "provider/model" for display. */

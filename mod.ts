@@ -159,7 +159,7 @@ const main = async (): Promise<number> => {
   const applyLadderOverride = (
     base: ModelLadder,
     overrides: typeof configHookResult,
-  ): ModelLadder => {
+  ): ModelLadder | Error => {
     if (!overrides) return base;
     const coderOverride = overrides.coder
       ? parseModelSpec(overrides.coder)
@@ -170,6 +170,19 @@ const main = async (): Promise<number> => {
     const escalatedOverride = overrides.escalated
       ? parseModelSpec(overrides.escalated)
       : undefined;
+    for (
+      const [role, result] of [
+        ["coder", coderOverride],
+        ["verifier", verifierOverride],
+        ["escalated", escalatedOverride],
+      ] as const
+    ) {
+      if (result && result.isErr()) {
+        return new Error(
+          `Plugin onConfigResolved returned invalid ${role}: ${result.error}`,
+        );
+      }
+    }
     return {
       coder: coderOverride?.isOk()
         ? { ...base.coder, ...coderOverride.value }
@@ -183,10 +196,15 @@ const main = async (): Promise<number> => {
     };
   };
 
-  const ladder = applyLadderOverride(
+  const ladderResult = applyLadderOverride(
     parsed.value.ladder,
     configHookResult,
   );
+  if (ladderResult instanceof Error) {
+    log({ tags: ["error"], message: ladderResult.message });
+    Deno.exit(1);
+  }
+  const ladder = ladderResult;
   const iterations = configHookResult?.iterations ?? parsed.value.iterations;
   const level = configHookResult?.level ?? parsed.value.level;
   const parallel = configHookResult?.parallel ?? parsed.value.parallel;

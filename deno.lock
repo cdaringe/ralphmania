@@ -62,7 +62,8 @@
     "npm:preact@^10.28.2": "10.29.0",
     "npm:preact@^10.28.3": "10.29.0",
     "npm:puppeteer-core@23": "23.11.1",
-    "npm:puppeteer@23": "23.11.1"
+    "npm:puppeteer@23": "23.11.1",
+    "npm:zod@4": "4.3.6"
   },
   "jsr": {
     "@cliffy/ansi@1.0.0": {
@@ -2795,7 +2796,8 @@
       "npm:@xyflow/react@12",
       "npm:neverthrow@^8.2.0",
       "npm:preact-render-to-string@6",
-      "npm:preact@10"
+      "npm:preact@10",
+      "npm:zod@4"
     ]
   }
 }

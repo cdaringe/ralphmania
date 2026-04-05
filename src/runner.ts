@@ -226,10 +226,14 @@ export const executeAgent: AgentRunDeps["execute"] = async (
     const { createAgentSession } = await import(
       "@mariozechner/pi-coding-agent"
     );
-    const { getModel } = await import("@mariozechner/pi-ai");
-
-    // deno-lint-ignore no-explicit-any
-    const model = getModel(config.provider as any, config.model as any);
+    const model = config.customModel
+      ? await (await import("./custom-model.ts")).resolveCustomModel(
+        config.customModel,
+      )
+      : await (await import("./resolve-model.ts")).resolveModel(
+        config.provider,
+        config.model,
+      );
 
     const { session } = await createAgentSession({
       model,
@@ -422,10 +426,8 @@ export const updateReceipts = async (
     const { createAgentSession } = await import(
       "@mariozechner/pi-coding-agent"
     );
-    const { getModel } = await import("@mariozechner/pi-ai");
-
-    // deno-lint-ignore no-explicit-any
-    const model = getModel(selection.provider as any, selection.model as any);
+    const { resolveModel } = await import("./resolve-model.ts");
+    const model = await resolveModel(selection.provider, selection.model);
     const { session } = await createAgentSession({
       model,
       cwd: Deno.cwd(),

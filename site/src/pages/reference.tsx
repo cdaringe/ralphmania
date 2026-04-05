@@ -202,6 +202,35 @@ export const plugin: Plugin = {
   },
 };`}</code></pre>
 
+        <h3>Local models</h3>
+        <p>
+          For <strong>ollama</strong>, set <code>customModel</code> via{" "}
+          <code>onSessionConfigBuilt</code>. Ralphmania queries{" "}
+          <code>/api/show</code> to discover context window and capabilities:
+        </p>
+        <pre><code>{`export const plugin: Plugin = {
+  onSessionConfigBuilt: ({ config }) => ({
+    ...config,
+    customModel: { kind: "ollama", model: "gemma4:e2b" },
+  }),
+};`}</code></pre>
+        <p>
+          For other <strong>OpenAI-compatible</strong>{" "}
+          servers (llama.cpp, vLLM, LM Studio), provide{" "}
+          <code>contextWindow</code> since there is no discovery API:
+        </p>
+        <pre><code>{`export const plugin: Plugin = {
+  onSessionConfigBuilt: ({ config }) => ({
+    ...config,
+    customModel: {
+      kind: "openai-compatible",
+      baseUrl: "http://localhost:8080/v1",
+      model: "my-model",
+      contextWindow: 8192,
+    },
+  }),
+};`}</code></pre>
+
         <h2 id="statuses">Progress Statuses</h2>
         <p>
           Each scenario in <code>progress.md</code>{" "}

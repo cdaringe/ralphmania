@@ -9,6 +9,9 @@ export type Logger = (
 export { err, ok } from "neverthrow";
 export type { Result } from "neverthrow";
 
+import type { KnownProvider as _KnownProvider } from "@mariozechner/pi-ai";
+export type KnownProvider = _KnownProvider;
+
 /** Outcome of running the validation script after an iteration. */
 export type ValidationResult =
   | { status: "passed" }
@@ -32,7 +35,7 @@ export type EscalationState = Record<string, EscalationLevel>;
 
 /** Provider + model pair identifying a specific LLM configuration. */
 export type ModelRoleConfig = {
-  readonly provider: string;
+  readonly provider: KnownProvider;
   readonly model: string;
   readonly thinkingLevel?: ThinkingLevel;
 };
@@ -53,7 +56,7 @@ export type ModelLadder = {
  * provider, model name, role, optional scenario focus, and thinking level.
  */
 export type ModelSelection = {
-  readonly provider: string;
+  readonly provider: KnownProvider;
   readonly model: string;
   readonly mode: ToolMode;
   readonly targetScenario: string | undefined;
@@ -69,14 +72,47 @@ export type IterationResult =
   | { status: "timeout" };
 
 /**
+ * Descriptor for a model hosted outside the pi-ai registry.
+ *
+ * - `"ollama"`: queries the ollama `/api/show` endpoint to discover
+ *   context window, input modalities, etc. Talks to ollama's
+ *   OpenAI-compatible `/v1` endpoint for inference.
+ * - `"openai-compatible"`: generic OpenAI-completions endpoint (e.g.
+ *   llama.cpp, vLLM, LM Studio). You must provide `contextWindow`.
+ */
+export type CustomModelConfig =
+  | {
+    readonly kind: "ollama";
+    /** Ollama base URL (default `http://localhost:11434`). */
+    readonly baseUrl?: string;
+    /** Model name as known to ollama, e.g. `"gemma4:e2b"`. */
+    readonly model: string;
+  }
+  | {
+    readonly kind: "openai-compatible";
+    /** Base URL for the OpenAI-compatible `/v1` endpoint. */
+    readonly baseUrl: string;
+    /** Model identifier passed in API requests. */
+    readonly model: string;
+    /** Context window size in tokens (required — no discovery API). */
+    readonly contextWindow: number;
+  };
+
+/**
  * Configuration for a pi-mono agent session. Passed through the
  * `onSessionConfigBuilt` plugin hook before execution.
  */
 export type AgentSessionConfig = {
-  readonly provider: string;
+  readonly provider: KnownProvider;
   readonly model: string;
   readonly workingDir: string;
   readonly thinkingLevel?: ThinkingLevel;
+  /**
+   * When set, bypasses the pi-ai model registry and constructs the
+   * `Model` object from the provided config. Use this for local or
+   * self-hosted models not in the registry.
+   */
+  readonly customModel?: CustomModelConfig;
 };
 
 /**

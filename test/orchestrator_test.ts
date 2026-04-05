@@ -492,6 +492,7 @@ Deno.test("runParallelLoop worker validation failure triggers fix-up iteration",
             }
             : { status: "passed" as const },
         ),
+      hasNewCommits: () => Promise.resolve(true),
     }),
   });
 

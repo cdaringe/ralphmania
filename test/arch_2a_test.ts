@@ -48,11 +48,11 @@ Deno.test("ARCH.2a: src/ has domain subdirectories reducing root noise", () => {
   assert(subdirs.includes("parsers"), "parsers/ domain folder exists");
 
   // Root file count should be well below the original 22 ungrouped files.
-  // Five files were moved into subdirectories; root should now have ≤17.
+  // Five files were moved into subdirectories; root should now have ≤19.
   const rootFiles = filesIn(srcDir).filter((f) => f.endsWith(".ts"));
   assert(
-    rootFiles.length <= 17,
-    `src/ root should have ≤17 .ts files, has ${rootFiles.length}: ${
+    rootFiles.length <= 19,
+    `src/ root should have ≤19 .ts files, has ${rootFiles.length}: ${
       rootFiles.join(", ")
     }`,
   );

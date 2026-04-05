@@ -56,12 +56,9 @@ const makeRunFastCall = (
   ladder: ModelLadder,
 ): (prompt: string) => Promise<string> =>
 async (prompt: string): Promise<string> => {
-  const { complete, getModel } = await import("@mariozechner/pi-ai");
-  // deno-lint-ignore no-explicit-any
-  const provider: any = ladder.coder.provider;
-  // deno-lint-ignore no-explicit-any
-  const modelId: any = ladder.coder.model;
-  const model = getModel(provider, modelId);
+  const { complete } = await import("@mariozechner/pi-ai");
+  const { resolveModel } = await import("../resolve-model.ts");
+  const model = await resolveModel(ladder.coder.provider, ladder.coder.model);
   const result = await complete(model, {
     messages: [{
       role: "user",

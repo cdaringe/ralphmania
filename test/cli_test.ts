@@ -60,12 +60,22 @@ Deno.test("parseCliArgs with --coder override", async () => {
 });
 
 Deno.test("parseCliArgs with colon-form --coder override", async () => {
-  const result = await parseCliArgs(["-i", "1", "--coder", "ollama:gemma:4eb"]);
+  const result = await parseCliArgs([
+    "-i",
+    "1",
+    "--coder",
+    "groq:llama-3.3-70b-versatile",
+  ]);
   assertEquals(result.isOk(), true);
   if (result.isOk()) {
-    assertEquals(result.value.ladder.coder.provider, "ollama");
-    assertEquals(result.value.ladder.coder.model, "gemma:4eb");
+    assertEquals(result.value.ladder.coder.provider, "groq");
+    assertEquals(result.value.ladder.coder.model, "llama-3.3-70b-versatile");
   }
+});
+
+Deno.test("parseCliArgs with unknown provider returns error", async () => {
+  const result = await parseCliArgs(["-i", "1", "--coder", "ollama:gemma:4eb"]);
+  assertEquals(result.isErr(), true);
 });
 
 Deno.test("parseCliArgs with --verifier override", async () => {

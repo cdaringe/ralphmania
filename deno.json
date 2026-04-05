@@ -45,6 +45,8 @@
   "tasks": {
     "site:build": "deno run -A site/build.ts",
     "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net",
+    "test:unit": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --ignore=test/*_integration_test.ts src/ test/",
+    "test:integration": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net test/*_integration_test.ts",
     "test:coverage": "deno task test --clean --coverage=coverage/ && deno coverage coverage/",
     "test:coverage:html": "deno task test --clean --coverage=coverage/ && deno coverage --html coverage/",
     "test:coverage:enforce": "deno task test --clean --coverage=coverage/ && bash -c 'deno coverage coverage/ 2>&1 | deno run --allow-read scripts/check-coverage.ts'",
@@ -64,6 +66,7 @@
     "@fresh/core": "jsr:@fresh/core@^2",
     "@xyflow/react": "npm:@xyflow/react@^12",
     "neverthrow": "npm:neverthrow@^8.2.0",
+    "zod": "npm:zod@^4",
     "preact": "npm:preact@^10",
     "preact/hooks": "npm:preact@^10/hooks",
     "preact/jsx-runtime": "npm:preact@^10/jsx-runtime",

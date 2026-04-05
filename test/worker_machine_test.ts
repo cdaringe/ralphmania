@@ -18,8 +18,29 @@ import type {
   WorkerState,
 } from "../src/machines/worker-machine.ts";
 import type { Plugin } from "../src/plugin.ts";
+import type { AgentSessionConfig, ModelSelection } from "../src/types.ts";
 import { DEFAULT_MODEL_LADDER } from "../src/constants.ts";
 import { noopLog } from "./fixtures.ts";
+
+const sel = (overrides: Partial<ModelSelection> = {}): ModelSelection => ({
+  provider: "anthropic",
+  model: DEFAULT_MODEL_LADDER.coder.model,
+  mode: "coder",
+  targetScenario: "1",
+  thinkingLevel: "high",
+  actionableScenarios: ["1"],
+  ...overrides,
+});
+
+const cfg = (
+  overrides: Partial<AgentSessionConfig> = {},
+): AgentSessionConfig => ({
+  provider: "anthropic",
+  model: DEFAULT_MODEL_LADDER.coder.model,
+  workingDir: "/tmp",
+  thinkingLevel: "high",
+  ...overrides,
+});
 
 // ---------------------------------------------------------------------------
 // resolveWorkerModelSelection
@@ -77,6 +98,7 @@ Deno.test("isWorkerTerminal returns false for non-terminal", () => {
       ladder: DEFAULT_MODEL_LADDER,
       level: undefined,
       targetScenarioOverride: "1",
+      promptOverride: undefined,
       validationFailurePath: undefined,
       specFile: undefined,
       progressFile: undefined,
@@ -95,6 +117,7 @@ Deno.test("initialWorkerState creates resolving_model state", () => {
     ladder: DEFAULT_MODEL_LADDER,
     level: 1,
     targetScenarioOverride: "3",
+    promptOverride: undefined,
     validationFailurePath: "/tmp/fail.log",
     specFile: "spec.md",
     progressFile: "progress.md",
@@ -117,6 +140,7 @@ Deno.test("transitionResolvingModel with targetScenarioOverride uses resolveWork
     ladder: DEFAULT_MODEL_LADDER,
     level: 1,
     targetScenarioOverride: "5",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -134,6 +158,7 @@ Deno.test("transitionResolvingModel fires onModelSelected plugin hook", async ()
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "1",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -159,14 +184,8 @@ Deno.test("transitionModelResolved builds prompt with target scenario", async ()
     tag: "model_resolved",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "3",
-      thinkingLevel: "high",
-      actionableScenarios: ["3"],
-    },
+    selection: sel({ targetScenario: "3", actionableScenarios: ["3"] }),
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -182,14 +201,8 @@ Deno.test("transitionModelResolved includes validation failure in prompt", async
     tag: "model_resolved",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
+    selection: sel(),
+    promptOverride: undefined,
     validationFailurePath: "/tmp/fail.log",
     specFile: undefined,
     progressFile: undefined,
@@ -205,14 +218,8 @@ Deno.test("transitionModelResolved fires onPromptBuilt plugin hook", async () =>
     tag: "model_resolved",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
+    selection: sel(),
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,
@@ -235,14 +242,7 @@ Deno.test("transitionPromptBuilt builds session config", async () => {
     tag: "prompt_built",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
+    selection: sel(),
     prompt: "test prompt",
   };
 
@@ -258,26 +258,19 @@ Deno.test("transitionPromptBuilt fires onSessionConfigBuilt plugin hook", async 
     tag: "prompt_built",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
+    selection: sel(),
     prompt: "test prompt",
   };
 
   const plugin: Plugin = {
     onSessionConfigBuilt: ({ config }) => ({
       ...config,
-      provider: "custom-provider",
+      provider: "openrouter",
     }),
   };
 
   const next = await transitionPromptBuilt(state, plugin, noopLog, "/tmp");
-  assertEquals(next.config.provider, "custom-provider");
+  assertEquals(next.config.provider, "openrouter");
 });
 
 // ---------------------------------------------------------------------------
@@ -289,20 +282,8 @@ Deno.test("transitionConfigBuilt produces running_agent state", () => {
     tag: "config_built",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high",
-    },
+    selection: sel(),
+    config: cfg(),
     prompt: "test prompt",
   };
 
@@ -320,20 +301,8 @@ Deno.test("transitionRunningAgent with successful agent -> done/continue", async
     tag: "running_agent",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high",
-    },
+    selection: sel(),
+    config: cfg(),
     prompt: "test prompt",
   };
 
@@ -357,20 +326,8 @@ Deno.test("transitionRunningAgent forwards workerIndex to execute for stdio pref
     tag: "running_agent",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "33",
-      thinkingLevel: "high",
-      actionableScenarios: ["33"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high",
-    },
+    selection: sel({ targetScenario: "33", actionableScenarios: ["33"] }),
+    config: cfg(),
     prompt: "test prompt",
   };
 
@@ -398,20 +355,8 @@ Deno.test("transitionRunningAgent fires onIterationEnd plugin hook", async () =>
     tag: "running_agent",
     iterationNum: 0,
     ladder: DEFAULT_MODEL_LADDER,
-    selection: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      mode: "coder",
-      targetScenario: "1",
-      thinkingLevel: "high",
-      actionableScenarios: ["1"],
-    },
-    config: {
-      provider: "anthropic",
-      model: DEFAULT_MODEL_LADDER.coder.model,
-      workingDir: "/tmp",
-      thinkingLevel: "high",
-    },
+    selection: sel(),
+    config: cfg(),
     prompt: "test prompt",
   };
 
@@ -460,6 +405,7 @@ Deno.test("worker pipeline: resolving_model -> ... -> done", async () => {
     ladder: DEFAULT_MODEL_LADDER,
     level: 0,
     targetScenarioOverride: "1",
+    promptOverride: undefined,
     validationFailurePath: undefined,
     specFile: undefined,
     progressFile: undefined,

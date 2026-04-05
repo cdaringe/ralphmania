@@ -110,10 +110,8 @@ const defaultSpawnAgent: ReconcileDeps["spawnAgent"] = async (
     const { createAgentSession } = await import(
       "@mariozechner/pi-coding-agent"
     );
-    const { getModel } = await import("@mariozechner/pi-ai");
-
-    // deno-lint-ignore no-explicit-any
-    const model = getModel(config.provider as any, config.model as any);
+    const { resolveModel } = await import("../resolve-model.ts");
+    const model = await resolveModel(config.provider, config.model);
     const { session } = await createAgentSession({
       model,
       cwd: cwd ?? Deno.cwd(),

@@ -122,3 +122,50 @@ Load via `--plugin ./my-plugin.ts`. All hooks receive a `HookContext`
 | `onValidationComplete` | After the validation script runs                  | Override the `ValidationResult` (pass/fail/messages)                                                                                                         |
 | `onRectify`            | After validation fails post-merge                 | Override rectification behavior (`agent`, `skip`, `abort`)                                                                                                   |
 | `onLoopEnd`            | Once after the loop exits, regardless of outcome  | Observe the final `LoopState` (read-only)                                                                                                                    |
+
+### Model selection
+
+The `provider` field on `ModelRoleConfig`, `ModelSelection`, and
+`AgentSessionConfig` is typed as `KnownProvider` (re-exported from
+`@mariozechner/pi-ai`). Invalid providers are rejected at parse time.
+
+**Remote (built-in providers)** &mdash; use `onConfigResolved` or CLI flags:
+
+```typescript
+export const plugin: Plugin = {
+  onConfigResolved: () => ({ coder: "anthropic/claude-sonnet-4-5-20250514" }),
+};
+```
+
+**Local models (ollama)** &mdash; use `onSessionConfigBuilt` to set
+`customModel`. Ralphmania queries ollama's `/api/show` to discover context
+window, vision support, etc.:
+
+```typescript
+export const plugin: Plugin = {
+  onSessionConfigBuilt: ({ config }) => ({
+    ...config,
+    customModel: { kind: "ollama", model: "gemma4:e2b" },
+  }),
+};
+```
+
+`baseUrl` defaults to `http://localhost:11434`. Override it if ollama is
+elsewhere.
+
+**Other OpenAI-compatible servers** (llama.cpp, vLLM, LM Studio) &mdash; no
+discovery API, so you provide `contextWindow`:
+
+```typescript
+export const plugin: Plugin = {
+  onSessionConfigBuilt: ({ config }) => ({
+    ...config,
+    customModel: {
+      kind: "openai-compatible",
+      baseUrl: "http://localhost:8080/v1",
+      model: "my-model",
+      contextWindow: 8192,
+    },
+  }),
+};
+```
