@@ -555,43 +555,60 @@ export const transitionRunningWorkers = async (
             cwd: wt.path,
           });
           if (validation.status === "failed") {
-            // Persist escalation for the failed scenario so it survives
-            // a mid-re-run exit (the user may Ctrl-C during the fix
-            // iteration below). Without this write the escalation is lost
-            // on resume — the orchestrator would see an empty state file.
-            const updatedEscalation = scenario !== undefined
-              ? { ...escalation, [scenario]: 1 as EscalationLevel }
-              : escalation;
-            await ctx.deps.writeEscalationState(updatedEscalation, wLog);
-            const escalatedLevel = computeEffectiveLevel(
-              scenario,
-              updatedEscalation,
-              ctx.level,
-            );
-
-            wLog({
-              tags: ["info", "orchestrator"],
-              message: yellow(
-                `Worker ${i} validation failed, re-running iteration to fix`,
-              ),
-            });
-            // Re-run iteration with the validation failure so the agent can fix
-            await ctx.deps.runIteration({
-              iterationNum: iterationsUsed,
-              ladder: ctx.ladder,
-              signal: ctx.signal,
+            // Only re-run if the worker actually committed something.
+            // If the agent produced zero commits (e.g. model crashed or
+            // exited instantly) retrying with a validation log is futile
+            // and causes a rapid spin loop.
+            const workerCommitted = await ctx.deps.hasNewCommits({
+              worktree: wt,
               log: wLog,
-              validationFailurePath: validation.outputPath,
-              plugin: ctx.plugin,
-              level: escalatedLevel,
-              cwd: wt.path,
-              specFile: ctx.specFile,
-              progressFile: ctx.progressFile,
-              workerIndex: i,
-              ...(scenario !== undefined
-                ? { targetScenarioOverride: scenario }
-                : {}),
             });
+            if (!workerCommitted) {
+              wLog({
+                tags: ["info", "orchestrator"],
+                message: yellow(
+                  `Worker ${i} validation failed but produced no commits — skipping re-run`,
+                ),
+              });
+            } else {
+              // Persist escalation for the failed scenario so it survives
+              // a mid-re-run exit (the user may Ctrl-C during the fix
+              // iteration below). Without this write the escalation is lost
+              // on resume — the orchestrator would see an empty state file.
+              const updatedEscalation = scenario !== undefined
+                ? { ...escalation, [scenario]: 1 as EscalationLevel }
+                : escalation;
+              await ctx.deps.writeEscalationState(updatedEscalation, wLog);
+              const escalatedLevel = computeEffectiveLevel(
+                scenario,
+                updatedEscalation,
+                ctx.level,
+              );
+
+              wLog({
+                tags: ["info", "orchestrator"],
+                message: yellow(
+                  `Worker ${i} validation failed, re-running iteration to fix`,
+                ),
+              });
+              // Re-run iteration with the validation failure so the agent can fix
+              await ctx.deps.runIteration({
+                iterationNum: iterationsUsed,
+                ladder: ctx.ladder,
+                signal: ctx.signal,
+                log: wLog,
+                validationFailurePath: validation.outputPath,
+                plugin: ctx.plugin,
+                level: escalatedLevel,
+                cwd: wt.path,
+                specFile: ctx.specFile,
+                progressFile: ctx.progressFile,
+                workerIndex: i,
+                ...(scenario !== undefined
+                  ? { targetScenarioOverride: scenario }
+                  : {}),
+              });
+            }
           }
           return {
             workerIndex: i,

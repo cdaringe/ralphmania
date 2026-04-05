@@ -27,6 +27,9 @@ const tagColor: Record<string, (s: string) => string> = {
 
 const colorizeTag = (tag: string): string => (tagColor[tag] ?? dim)(tag);
 
+const fmtTime = (ts: number): string =>
+  new Date(ts).toLocaleTimeString(undefined, { hour12: false });
+
 export const createLogger = (
   output: LoggerOutput = defaultLoggerOutput,
 ): Logger => {
@@ -35,8 +38,9 @@ export const createLogger = (
     const level = tags[0];
     const coloredTags = tags.map(colorizeTag).join(dim(":"));
     const coloredMessage = level === "error" ? bold(red(message)) : message;
+    const ts = dim(fmtTime(Date.now()));
     const encoded = encoder.encode(
-      `${dim("[")}${magenta("ralph")}${dim(":")}${coloredTags}${
+      `${ts} ${dim("[")}${magenta("ralph")}${dim(":")}${coloredTags}${
         dim("]")
       } ${coloredMessage}\n`,
     );

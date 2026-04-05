@@ -692,6 +692,7 @@ Deno.test("transitionRunningWorkers: per-worker validation failure triggers re-r
           })
           : Promise.resolve({ status: "passed" as const }),
       readProgress: () => Promise.resolve(wipProgress),
+      hasNewCommits: () => Promise.resolve(true),
     }),
     expectedScenarioIds: ["ARCH.1", "ARCH.2"],
   });
@@ -707,6 +708,38 @@ Deno.test("transitionRunningWorkers: per-worker validation failure triggers re-r
   );
   // Worker ran once; validation failed; iteration re-ran with failure path = 2 total
   assertEquals(rerunCount, 2);
+});
+
+Deno.test("transitionRunningWorkers: skips re-run when worker produced no commits", async () => {
+  let rerunCount = 0;
+  const ctx = makeCtx({
+    deps: makeDeps({
+      runIteration: () => {
+        rerunCount++;
+        return Promise.resolve({ status: "continue" as const });
+      },
+      runValidation: () =>
+        Promise.resolve({
+          status: "failed" as const,
+          outputPath: ".ralph/validation/iteration-0.log",
+        }),
+      readProgress: () => Promise.resolve(wipProgress),
+      hasNewCommits: () => Promise.resolve(false),
+    }),
+    expectedScenarioIds: ["ARCH.1", "ARCH.2"],
+  });
+  await transitionRunningWorkers(
+    {
+      tag: "running_workers",
+      iterationsUsed: 0,
+      validationFailurePath: undefined,
+      uniqueActionable: ["ARCH.2"],
+      escalation: {},
+    },
+    ctx,
+  );
+  // Worker ran once; validation failed but no commits — re-run skipped
+  assertEquals(rerunCount, 1);
 });
 
 Deno.test("full orchestrator loop terminates on abort signal", async () => {
