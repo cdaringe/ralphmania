@@ -1,5 +1,9 @@
 import type { Plugin } from "./src/plugin.ts";
-import type { KnownProvider } from "./src/types.ts";
+import type {
+  KnownProvider,
+  ModelSelection,
+  RectifyAction,
+} from "./src/types.ts";
 
 /** Agent model specs — adjust per-role as needed. */
 const agents = {
@@ -22,7 +26,11 @@ const parseSpec = (spec: string) => {
 let rectifying = false;
 
 export const plugin: Plugin = {
-  onConfigResolved() {
+  onConfigResolved(): {
+    coder: string;
+    escalated: string;
+    verifier: string;
+  } {
     return {
       coder: agents.coder,
       escalated: agents.escalated,
@@ -30,12 +38,12 @@ export const plugin: Plugin = {
     };
   },
 
-  onRectify() {
+  onRectify(): RectifyAction {
     rectifying = true;
     return { action: "agent" };
   },
 
-  onModelSelected({ selection }) {
+  onModelSelected({ selection }): ModelSelection {
     if (rectifying && selection.mode === "escalated") {
       const { provider, model } = parseSpec(agents.rectifier);
       return { ...selection, provider, model };
@@ -43,7 +51,7 @@ export const plugin: Plugin = {
     return selection;
   },
 
-  onIterationEnd() {
+  onIterationEnd(): void {
     rectifying = false;
   },
 
