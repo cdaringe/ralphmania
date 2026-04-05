@@ -143,7 +143,7 @@ const ROW = {
   // as WORKERS_START + workerCount + offset
 } as const;
 
-const CELL = { w: 210, h: 80 };
+const CELL = { w: 165, h: 80 };
 
 const gridPos = (col: number, row: number) => ({
   x: col * CELL.w,
@@ -474,6 +474,18 @@ export default function WorkflowGraph(): preact.JSX.Element {
       // deno-lint-ignore no-non-null-assertion
       reactRoot = ReactDOMClient.createRoot(containerRef.current!);
 
+      // Re-fit viewport whenever the node count changes (e.g. workers appear).
+      // Must be a child of <ReactFlow> so useReactFlow() has context.
+      // deno-lint-ignore no-explicit-any
+      const FitViewOnChange = (props: any): null => {
+        const { fitView } = rf.useReactFlow();
+        React.useEffect(() => {
+          const id = setTimeout(() => fitView({ padding: 0.2 }), 50);
+          return () => clearTimeout(id);
+        }, [props.nodeCount, fitView]);
+        return null;
+      };
+
       const render = (): void => {
         if (!getHydrated()) {
           reactRoot.render(
@@ -539,6 +551,9 @@ export default function WorkflowGraph(): preact.JSX.Element {
               proOptions: { hideAttribution: true },
               style: { background: BG },
             },
+            React.createElement(FitViewOnChange, {
+              nodeCount: nodes.length,
+            }),
             React.createElement(rf.Background, {
               color: "#e4e4e7",
               gap: 20,
