@@ -329,13 +329,22 @@ Deno.test({
       );
       assert(workerNode !== null, "Worker node not found");
       await workerNode.click();
-      await new Promise<void>((r) => setTimeout(r, 500));
 
-      const modalVisible = await ctx.page.evaluate(() => {
-        const modal = document.getElementById("worker-modal");
-        return modal && modal.style.display !== "none" &&
-          modal.innerHTML.length > 0;
-      });
+      let tries = 3;
+      let modalVisible: boolean = false;
+      while (tries) {
+        --tries;
+        await new Promise<void>((r) => setTimeout(r, 500));
+        modalVisible = await ctx.page.evaluate(() => {
+          const modal = document.getElementById("worker-modal");
+          return Boolean(
+            modal && modal.style.display !== "none" &&
+              modal.innerHTML.length > 0,
+          );
+        });
+        if (modalVisible) break;
+      }
+
       assert(modalVisible, "Expected worker modal to be visible after click");
 
       const modalContent = await ctx.page.evaluate(() => {

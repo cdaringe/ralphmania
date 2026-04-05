@@ -9,8 +9,9 @@
  */
 
 import { z } from "zod";
-import type { Api, Model } from "@mariozechner/pi-ai";
+import type { Api, Model, OpenAICompletionsCompat } from "@mariozechner/pi-ai";
 import type { CustomModelConfig } from "./types.ts";
+import { LOCAL_MODEL_COMPAT_DEFAULTS } from "./types.ts";
 
 export const OLLAMA_DEFAULT_BASE = "http://localhost:11434";
 
@@ -155,6 +156,7 @@ const buildModel = (
     baseUrl: string;
     contextWindow: number;
     supportsImages: boolean;
+    compat: OpenAICompletionsCompat;
   },
 ): Model<Api> => ({
   id: opts.id,
@@ -169,6 +171,7 @@ const buildModel = (
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: opts.contextWindow,
   maxTokens: opts.contextWindow,
+  compat: opts.compat,
 });
 
 /**
@@ -177,6 +180,11 @@ const buildModel = (
 export const resolveCustomModel = async (
   config: CustomModelConfig,
 ): Promise<Model<Api>> => {
+  const compat: OpenAICompletionsCompat = {
+    ...LOCAL_MODEL_COMPAT_DEFAULTS,
+    ...config.compat,
+  };
+
   if (config.kind === "ollama") {
     const base = config.baseUrl ?? OLLAMA_DEFAULT_BASE;
     const show = await queryOllamaShow(base, config.model);
@@ -186,6 +194,7 @@ export const resolveCustomModel = async (
       baseUrl: `${base.replace(/\/+$/, "")}/v1`,
       contextWindow: extractContextWindow(info),
       supportsImages: hasVisionCapability(info),
+      compat,
     });
   }
 
@@ -194,5 +203,6 @@ export const resolveCustomModel = async (
     baseUrl: config.baseUrl.replace(/\/+$/, ""),
     contextWindow: config.contextWindow,
     supportsImages: false,
+    compat,
   });
 };

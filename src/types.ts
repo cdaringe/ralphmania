@@ -72,6 +72,38 @@ export type IterationResult =
   | { status: "timeout" };
 
 /**
+ * Compatibility overrides for OpenAI-compatible endpoints that don't
+ * fully implement the OpenAI API.
+ *
+ * Most local servers (ollama, llama.cpp, vLLM) need at minimum
+ * `supportsDeveloperRole: false` because they don't recognize the
+ * `developer` message role that pi-coding-agent sends by default.
+ * Without this, the server may reject the request or silently drop
+ * system instructions.
+ *
+ * See {@link https://platform.openai.com/docs/guides/text?api-mode=chat#developer-messages | OpenAI developer messages}
+ * for the upstream spec, and {@link https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/models.md | pi-mono models.md}
+ * for the full compat reference.
+ *
+ * Re-exported from `@mariozechner/pi-ai` — see `OpenAICompletionsCompat`.
+ */
+export type { OpenAICompletionsCompat } from "@mariozechner/pi-ai";
+
+/**
+ * Sensible compat defaults for local/self-hosted models.
+ * Most don't support developer role, store, reasoning effort, or
+ * streaming usage.
+ */
+export const LOCAL_MODEL_COMPAT_DEFAULTS:
+  import("@mariozechner/pi-ai").OpenAICompletionsCompat = {
+    supportsDeveloperRole: false,
+    supportsStore: false,
+    supportsReasoningEffort: false,
+    supportsUsageInStreaming: false,
+    maxTokensField: "max_tokens",
+  };
+
+/**
  * Descriptor for a model hosted outside the pi-ai registry.
  *
  * - `"ollama"`: queries the ollama `/api/show` endpoint to discover
@@ -79,6 +111,10 @@ export type IterationResult =
  *   OpenAI-compatible `/v1` endpoint for inference.
  * - `"openai-compatible"`: generic OpenAI-completions endpoint (e.g.
  *   llama.cpp, vLLM, LM Studio). You must provide `contextWindow`.
+ *
+ * Both kinds default to `LOCAL_MODEL_COMPAT_DEFAULTS` (which disables
+ * `developer` role, `store`, `reasoning_effort`, etc.). Override via
+ * `compat` if your server supports more.
  */
 export type CustomModelConfig =
   | {
@@ -87,6 +123,8 @@ export type CustomModelConfig =
     readonly baseUrl?: string;
     /** Model name as known to ollama, e.g. `"gemma4:e2b"`. */
     readonly model: string;
+    /** Override OpenAI compatibility flags. Defaults to {@link LOCAL_MODEL_COMPAT_DEFAULTS}. */
+    readonly compat?: import("@mariozechner/pi-ai").OpenAICompletionsCompat;
   }
   | {
     readonly kind: "openai-compatible";
@@ -96,6 +134,8 @@ export type CustomModelConfig =
     readonly model: string;
     /** Context window size in tokens (required — no discovery API). */
     readonly contextWindow: number;
+    /** Override OpenAI compatibility flags. Defaults to {@link LOCAL_MODEL_COMPAT_DEFAULTS}. */
+    readonly compat?: import("@mariozechner/pi-ai").OpenAICompletionsCompat;
   };
 
 /**

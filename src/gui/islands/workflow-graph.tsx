@@ -116,6 +116,40 @@ const edgeStyle = (
 // deno-lint-ignore no-explicit-any
 type RF = Record<string, any>;
 
+/**
+ * Grid-based layout encoding.
+ *
+ * The graph flows in an L-shape:
+ *   - Horizontal pipeline (row 0): init → read → find → dispatch
+ *   - Workers fan out vertically in WORKER_COL, stacked by row
+ *   - Merge + validate + done drop down in DISPATCH_COL, below the workers
+ *
+ * COL/ROW indices map to pixel positions via CELL dimensions.
+ */
+const COL = {
+  INIT: 0,
+  READ_PROGRESS: 1,
+  FIND_ACTIONABLE: 2,
+  DISPATCH: 3, // running_workers, merge, validating, checking_doneness, done
+  WORKERS: 4, // worker nodes (stacked vertically)
+  ABORT: 1, // aborted sits above reading_progress
+} as const;
+
+const ROW = {
+  PIPELINE: 0, // horizontal pipeline
+  ABORT: -1, // aborted above pipeline
+  WORKERS_START: 1, // first worker row
+  // merge, validate, checking_doneness, done are computed dynamically
+  // as WORKERS_START + workerCount + offset
+} as const;
+
+const CELL = { w: 210, h: 80 };
+
+const gridPos = (col: number, row: number) => ({
+  x: col * CELL.w,
+  y: row * CELL.h,
+});
+
 const buildGraph = (
   as: string,
   workersMap: ReadonlyMap<number, WorkerInfo>,
@@ -123,42 +157,54 @@ const buildGraph = (
 ): { nodes: Record<string, unknown>[]; edges: Record<string, unknown>[] } => {
   const { MarkerType: MT, Position: P } = rf;
 
+  // How many worker rows do we need? At least 1 for the merge row offset.
+  const workerCount = Math.max(workersMap.size, 1);
+
+  // Vertical section starts after all worker rows
+  const mergeRow = ROW.WORKERS_START + workerCount;
+  const validateRow = mergeRow + 1;
+  const donenessRow = validateRow + 1;
+  const doneRow = donenessRow + 1;
+
   const nodes: Record<string, unknown>[] = [
+    // ── Horizontal pipeline (row 0) ──
     {
       id: "init",
-      position: { x: 250, y: 0 },
+      position: gridPos(COL.INIT, ROW.PIPELINE),
       data: { label: "init" },
       style: { ...baseNodeStyle, ...stateNodeStyle("init", as) },
-      sourcePosition: P.Bottom,
-      targetPosition: P.Top,
+      sourcePosition: P.Right,
+      targetPosition: P.Left,
     },
     {
       id: "reading_progress",
-      position: { x: 250, y: 90 },
+      position: gridPos(COL.READ_PROGRESS, ROW.PIPELINE),
       data: { label: "reading_progress" },
       style: { ...baseNodeStyle, ...stateNodeStyle("reading_progress", as) },
-      sourcePosition: P.Bottom,
-      targetPosition: P.Top,
+      sourcePosition: P.Right,
+      targetPosition: P.Left,
     },
     {
       id: "finding_actionable",
-      position: { x: 250, y: 180 },
+      position: gridPos(COL.FIND_ACTIONABLE, ROW.PIPELINE),
       data: { label: "finding_actionable" },
       style: { ...baseNodeStyle, ...stateNodeStyle("finding_actionable", as) },
-      sourcePosition: P.Bottom,
-      targetPosition: P.Top,
+      sourcePosition: P.Right,
+      targetPosition: P.Left,
     },
     {
       id: "running_workers",
-      position: { x: 250, y: 270 },
+      position: gridPos(COL.DISPATCH, ROW.PIPELINE),
       data: { label: "running_workers" },
       style: { ...baseNodeStyle, ...stateNodeStyle("running_workers", as) },
       sourcePosition: P.Bottom,
-      targetPosition: P.Top,
+      targetPosition: P.Left,
     },
+
+    // ── Vertical tail (dispatch column, below workers) ──
     {
       id: "validating",
-      position: { x: 250, y: 540 },
+      position: gridPos(COL.DISPATCH, validateRow),
       data: { label: "validating", phase: "validate" },
       style: {
         ...baseNodeStyle,
@@ -170,7 +216,7 @@ const buildGraph = (
     },
     {
       id: "checking_doneness",
-      position: { x: 250, y: 630 },
+      position: gridPos(COL.DISPATCH, donenessRow),
       data: { label: "checking_doneness" },
       style: { ...baseNodeStyle, ...stateNodeStyle("checking_doneness", as) },
       sourcePosition: P.Bottom,
@@ -178,7 +224,7 @@ const buildGraph = (
     },
     {
       id: "done",
-      position: { x: 250, y: 720 },
+      position: gridPos(COL.DISPATCH, doneRow),
       data: { label: "done" },
       style: {
         ...baseNodeStyle,
@@ -189,7 +235,7 @@ const buildGraph = (
     },
     {
       id: "aborted",
-      position: { x: 500, y: 90 },
+      position: gridPos(COL.ABORT, ROW.ABORT),
       data: { label: "aborted" },
       style: {
         ...baseNodeStyle,
@@ -197,11 +243,12 @@ const buildGraph = (
         minWidth: 100,
         ...terminalNodeStyle("aborted", as),
       },
-      targetPosition: P.Left,
+      targetPosition: P.Bottom,
     },
   ];
 
   const edges: Record<string, unknown>[] = [
+    // ── Horizontal pipeline edges ──
     {
       id: "e-init-rp",
       source: "init",
@@ -223,6 +270,8 @@ const buildGraph = (
       style: edgeStyle("finding_actionable", "running_workers", as),
       markerEnd: { type: MT.ArrowClosed },
     },
+
+    // ── Default: running_workers → validating (removed when workers exist) ──
     {
       id: "e-rw-val",
       source: "running_workers",
@@ -230,6 +279,8 @@ const buildGraph = (
       style: edgeStyle("running_workers", "validating", as),
       markerEnd: { type: MT.ArrowClosed },
     },
+
+    // ── Vertical tail edges ──
     {
       id: "e-val-cd",
       source: "validating",
@@ -244,6 +295,8 @@ const buildGraph = (
       style: edgeStyle("checking_doneness", "done", as),
       markerEnd: { type: MT.ArrowClosed },
     },
+
+    // ── Loop: checking_doneness → reading_progress ──
     {
       id: "e-loop",
       source: "checking_doneness",
@@ -251,28 +304,26 @@ const buildGraph = (
       type: "smoothstep",
       style: { stroke: PURPLE, strokeWidth: 1.5, strokeDasharray: "6,3" },
       markerEnd: { type: MT.ArrowClosed, color: PURPLE },
-      sourcePosition: P.Right,
-      targetPosition: P.Right,
-      pathOptions: { offset: 50 },
+      sourcePosition: P.Left,
+      targetPosition: P.Bottom,
     },
+
+    // ── Abort edge ──
     {
       id: "e-rp-abort",
       source: "reading_progress",
       target: "aborted",
       style: { stroke: INACTIVE, strokeWidth: 1, opacity: 0.4 },
       markerEnd: { type: MT.ArrowClosed },
-      sourcePosition: P.Right,
+      sourcePosition: P.Top,
     },
   ];
 
-  // Dynamic worker nodes
+  // ── Dynamic worker nodes (stacked vertically in WORKER_COL) ──
   if (workersMap.size > 0) {
     const entries = [...workersMap.entries()];
-    const startX = 50;
-    const spacing = Math.min(200, 600 / entries.length);
 
     entries.forEach(([wi, info], idx) => {
-      const cx = startX + spacing * idx;
       const isDone = info.status === "done" || info.status === "merged";
       const isMerging = info.status === "merging";
       const nodeStyle = isDone
@@ -308,15 +359,15 @@ const buildGraph = (
 
       nodes.push({
         id: `worker-${wi}`,
-        position: { x: cx, y: 370 },
+        position: gridPos(COL.WORKERS, ROW.WORKERS_START + idx),
         data: {
           label: `W${wi} ${info.scenario}`,
           workerIndex: wi,
           scenario: info.scenario,
         },
         style: nodeStyle,
-        sourcePosition: P.Bottom,
-        targetPosition: P.Top,
+        sourcePosition: P.Left,
+        targetPosition: P.Left,
       });
       edges.push(
         {
@@ -328,6 +379,7 @@ const buildGraph = (
             strokeWidth: isDone ? 1.5 : 2,
           },
           markerEnd: { type: MT.ArrowClosed },
+          sourcePosition: P.Right,
         },
         {
           id: `e-w${wi}-merge`,
@@ -338,17 +390,19 @@ const buildGraph = (
             strokeWidth: isDone ? 1.5 : 2,
           },
           markerEnd: { type: MT.ArrowClosed },
+          targetPosition: P.Right,
         },
       );
     });
 
+    // ── Merge node: dispatch column, below all workers ──
     const mergeActive = entries.some(([, i]) => i.status === "merging");
     const allDone = entries.every(([, i]) =>
       i.status === "done" || i.status === "merged"
     );
     nodes.push({
       id: "merge",
-      position: { x: 250, y: 460 },
+      position: gridPos(COL.DISPATCH, mergeRow),
       data: { label: "merge", phase: "merge" },
       style: {
         ...baseNodeStyle,

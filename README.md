@@ -169,3 +169,22 @@ export const plugin: Plugin = {
   }),
 };
 ```
+
+Both `ollama` and `openai-compatible` default to safe compatibility settings
+(`LOCAL_MODEL_COMPAT_DEFAULTS`) — most importantly
+`supportsDeveloperRole: false`, because local servers don't understand OpenAI's
+[`developer` message role](https://platform.openai.com/docs/guides/text?api-mode=chat#developer-messages)
+and will reject or silently drop system instructions sent with it. Override via
+`compat` if your server supports more:
+
+```typescript
+customModel: {
+  kind: "ollama",
+  model: "gemma4:e2b",
+  compat: { supportsDeveloperRole: true },
+}
+```
+
+See
+[pi-mono models.md](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/models.md)
+for the full compat reference.

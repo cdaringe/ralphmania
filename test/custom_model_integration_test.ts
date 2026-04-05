@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@^1.0.11";
+import { LOCAL_MODEL_COMPAT_DEFAULTS } from "../src/types.ts";
 import {
   extractContextWindow,
   isOllamaReachable,
@@ -109,6 +110,8 @@ Deno.test({
       cacheRead: 0,
       cacheWrite: 0,
     });
+    // Compat defaults — developer role disabled for local ollama
+    assertEquals(model.compat, LOCAL_MODEL_COMPAT_DEFAULTS);
   },
 });
 

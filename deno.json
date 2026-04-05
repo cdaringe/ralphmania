@@ -42,22 +42,6 @@
       ]
     }
   },
-  "tasks": {
-    "site:build": "deno run -A site/build.ts",
-    "test": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net",
-    "test:unit": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --ignore=test/*_integration_test.ts src/ test/",
-    "test:integration": "deno test --allow-read --allow-write --allow-run --allow-env --allow-net test/*_integration_test.ts",
-    "test:coverage": "deno task test --clean --coverage=coverage/ && deno coverage coverage/",
-    "test:coverage:html": "deno task test --clean --coverage=coverage/ && deno coverage --html coverage/",
-    "test:coverage:enforce": "deno task test --clean --coverage=coverage/ && bash -c 'deno coverage coverage/ 2>&1 | deno run --allow-read scripts/check-coverage.ts'",
-    "fmt": "deno fmt",
-    "check": "deno check mod.ts",
-    "gen-gui-manifest": "deno run --allow-read --allow-write scripts/gen-gui-manifest.ts",
-    "ralph": "deno run -A mod.ts --iterations 30 --plugin plugin.ralph.ts",
-    "ralph:debug": "deno run --inspect-brk -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
-    "yeet:bump": "deno eval \"const f='deno.json';const j=JSON.parse(Deno.readTextFileSync(f));const[a,b,c]=j.version.split('.').map(Number);j.version=[a,b+1,0].join('.');Deno.writeTextFileSync(f,JSON.stringify(j,null,2)+'\\n');console.log('Bumped to',j.version)\"",
-    "yeet": "deno task yeet:bump && deno task gen-gui-manifest && deno fmt || true && deno task test:coverage && git add . || true && git commit -m 'chore: bump version' || true && gph || true && deno publish"
-  },
   "imports": {
     "@mariozechner/pi-coding-agent": "npm:@mariozechner/pi-coding-agent@0.65.0",
     "@mariozechner/pi-ai": "npm:@mariozechner/pi-ai@0.65.0",
