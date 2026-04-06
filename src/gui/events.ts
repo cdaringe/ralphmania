@@ -63,6 +63,21 @@ export type GuiValidateDoneEvent = {
   readonly ts: number;
 };
 
+/** Simulation config broadcast — emitted when sim controller state changes. */
+export type GuiSimStateEvent = {
+  readonly type: "sim_state";
+  readonly config: {
+    readonly profile: string;
+    readonly autoAdvance: boolean;
+    readonly validationFailureRate: number;
+    readonly mergeConflictRate: number;
+    readonly workerFailureRate: number;
+    readonly scenarioCount: number;
+    readonly scenarioOutcomes: Record<string, string>;
+  };
+  readonly ts: number;
+};
+
 export type GuiEvent =
   | GuiLogEvent
   | GuiStateEvent
@@ -71,7 +86,8 @@ export type GuiEvent =
   | GuiMergeStartEvent
   | GuiMergeDoneEvent
   | GuiValidateStartEvent
-  | GuiValidateDoneEvent;
+  | GuiValidateDoneEvent
+  | GuiSimStateEvent;
 
 /** Unsubscribe function returned by {@link GuiEventBus.subscribe}. */
 export type Unsubscribe = () => void;

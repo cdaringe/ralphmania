@@ -76,6 +76,9 @@ import { createAgentInputBus } from "./src/gui/input-bus.ts";
 import { createTui } from "./src/tui/mod.ts";
 import type { TuiController } from "./src/tui/mod.ts";
 import { defaultLoggerOutput } from "./src/ports/impl.ts";
+import { createSimController } from "./src/sim/controller.ts";
+import { createSimDeps } from "./src/sim/deps.ts";
+import { generateSimScenarioIds } from "./src/sim/fixtures.ts";
 
 const printBanner = (
   { ladder, iterations, level, parallel }: {
@@ -115,6 +118,117 @@ const printBanner = (
   });
 
   w(`${line}\n\n`);
+};
+
+/**
+ * Run the GUI in simulation mode. No real agents, git, or filesystem —
+ * the orchestrator state machine drives through with fake I/O backed by
+ * the SimController. A dev panel in the GUI controls the simulation.
+ */
+const runSimMode = async (opts: {
+  ladder: ModelLadder;
+  iterations: number;
+  level: EscalationLevel | undefined;
+  parallel: number;
+  guiPort: number;
+  simScenarios: number;
+  simProfile: "instant" | "fast" | "realistic";
+  plugin: import("./src/plugin.ts").Plugin;
+  log: import("./src/types.ts").Logger;
+  mutableOutput: import("./src/ports/types.ts").LoggerOutput;
+}): Promise<number> => {
+  let { log } = opts;
+  const simController = createSimController({
+    scenarioCount: opts.simScenarios,
+    profile: opts.simProfile,
+    autoAdvance: true,
+  });
+
+  const bus = createEventBus();
+  const guiController = new AbortController();
+
+  await initLogDir();
+  bus.subscribe((event) => {
+    writeOrchestratorEvent(event);
+  });
+
+  // Bridge sim controller changes → SSE via event bus.
+  simController.subscribe(() => {
+    bus.emit({
+      type: "sim_state",
+      config: simController.snapshot(),
+      ts: Date.now(),
+    });
+  });
+
+  log = createGuiLogger(log, bus);
+
+  log({
+    tags: ["info"],
+    message:
+      `Simulation mode: ${opts.simScenarios} scenarios, profile=${opts.simProfile}`,
+  });
+
+  const simDeps = createSimDeps(simController);
+  const expectedScenarioIds = generateSimScenarioIds(
+    simController.scenarioCount,
+  );
+
+  const guiFinished = startGuiServer({
+    port: opts.guiPort,
+    log,
+    signal: guiController.signal,
+    simController,
+  }).then((h) => h.finished);
+
+  const runLoop = async (): Promise<void> => {
+    while (!simController.abortController.signal.aborted) {
+      await runParallelLoop({
+        ladder: opts.ladder,
+        iterations: opts.iterations,
+        parallelism: opts.parallel,
+        expectedScenarioIds,
+        signal: simController.abortController.signal,
+        log,
+        plugin: opts.plugin,
+        level: opts.level,
+        deps: simDeps,
+      });
+
+      // If the loop finishes (all verified), wait for reset.
+      log({
+        tags: ["info"],
+        message: "Simulation complete. Use Reset to restart.",
+      });
+      await new Promise<void>((resolve) => {
+        const unsub = simController.subscribe(() => {
+          // The reset() call creates a new AbortController, so we detect it.
+          unsub();
+          resolve();
+        });
+      });
+    }
+  };
+
+  const shutdownController = new AbortController();
+  const onSigint = (): void => {
+    log({ tags: ["error"], message: "Interrupted" });
+    guiController.abort();
+    simController.abortController.abort();
+    shutdownController.abort();
+    Deno.removeSignalListener("SIGINT", onSigint);
+    Deno.addSignalListener("SIGINT", () => Deno.exit(130));
+  };
+  Deno.addSignalListener("SIGINT", onSigint);
+
+  try {
+    await runLoop();
+  } finally {
+    guiController.abort();
+    await guiFinished?.catch(() => {});
+  }
+
+  return 0;
 };
 
 const main = async (): Promise<number> => {
@@ -212,6 +326,23 @@ const main = async (): Promise<number> => {
   const guiPort = configHookResult?.guiPort ?? parsed.value.guiPort;
   const resetWorktrees = configHookResult?.resetWorktrees ??
     parsed.value.resetWorktrees;
+  const sim = parsed.value.sim;
+
+  // ── Simulation mode ──────────────────────────────────────────────────
+  if (sim) {
+    return runSimMode({
+      ladder,
+      iterations,
+      level,
+      parallel,
+      guiPort,
+      simScenarios: parsed.value.simScenarios,
+      simProfile: parsed.value.simProfile,
+      plugin,
+      log,
+      mutableOutput,
+    });
+  }
 
   if (resetWorktrees) {
     const resetResult = await resetAllWorktrees({ log });

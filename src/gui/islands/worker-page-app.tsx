@@ -26,11 +26,13 @@ export default function WorkerPageApp(): preact.JSX.Element {
   const workerIndex = parseInt(parts[parts.length - 1], 10);
   const params = new URLSearchParams(globalThis.location?.search ?? "");
   const workerId = params.get("scenario") ?? "\u2014";
-  const phase = params.get("phase") as "merge" | "validate" | null;
+  const phase = params.get("phase") as "merge" | "validate" | "rectify" | null;
   const phaseLabel = phase === "merge"
     ? "Merge"
     : phase === "validate"
     ? "Validation"
+    : phase === "rectify"
+    ? "Rectification"
     : undefined;
 
   const [events, setEvents] = useState<LogEvent[]>([]);

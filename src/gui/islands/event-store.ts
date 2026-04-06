@@ -39,8 +39,8 @@ export type StatusDiff = {
 export type SelectedWorker = {
   readonly workerIndex: number;
   readonly scenario: string;
-  /** When set, this selection points to a phase stream (merge/validate) rather than a worker. */
-  readonly phase?: "merge" | "validate";
+  /** When set, this selection points to a phase stream (merge/validate/rectify) rather than a worker. */
+  readonly phase?: "merge" | "validate" | "rectify";
 } | null;
 
 // deno-lint-ignore no-explicit-any
@@ -296,6 +296,10 @@ export const dispatch = (ev: GuiEvent): void => {
   } else if (ev.type === "validate_done") {
     validateActive = false;
     notify("graph");
+    return;
+  } else if (ev.type === "sim_state") {
+    // Sim state events are consumed by the dev panel directly via its
+    // own EventSource — nothing to store here, just ignore gracefully.
     return;
   }
 };

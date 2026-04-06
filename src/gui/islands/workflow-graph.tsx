@@ -33,6 +33,7 @@ const STATE_ORDER = [
   "running_workers",
   "validating",
   "checking_doneness",
+  "rectifying",
 ];
 
 const baseNodeStyle = {
@@ -50,7 +51,8 @@ const stateNodeStyle = (
 ): Record<string, unknown> => {
   const activeIdx = STATE_ORDER.indexOf(activeState);
   const thisIdx = STATE_ORDER.indexOf(state);
-  return state === activeState
+  const isActive = state === activeState;
+  return isActive
     ? {
       background: "#f0fdf4",
       border: `2px solid ${ACCENT}`,
@@ -131,6 +133,7 @@ const COL = {
   READ_PROGRESS: 1,
   FIND_ACTIONABLE: 2,
   DISPATCH: 3, // running_workers, merge, validating, checking_doneness, done
+  RECTIFY: 2, // rectifying (left of validating, same column as find_actionable)
   WORKERS: 4, // worker nodes (stacked vertically)
   ABORT: 1, // aborted sits above reading_progress
 } as const;
@@ -164,6 +167,7 @@ const buildGraph = (
   const mergeRow = ROW.WORKERS_START + workerCount;
   const validateRow = mergeRow + 1;
   const donenessRow = validateRow + 1;
+  const rectifyRow = validateRow + 1; // below validating, in RECTIFY col
   const doneRow = donenessRow + 1;
 
   const nodes: Record<string, unknown>[] = [
@@ -220,6 +224,18 @@ const buildGraph = (
       data: { label: "checking_doneness" },
       style: { ...baseNodeStyle, ...stateNodeStyle("checking_doneness", as) },
       sourcePosition: P.Bottom,
+      targetPosition: P.Top,
+    },
+    {
+      id: "rectifying",
+      position: gridPos(COL.RECTIFY, rectifyRow),
+      data: { label: "rectifying", phase: "rectify" },
+      style: {
+        ...baseNodeStyle,
+        cursor: "pointer",
+        ...stateNodeStyle("rectifying", as),
+      },
+      sourcePosition: P.Right,
       targetPosition: P.Top,
     },
     {
@@ -294,6 +310,28 @@ const buildGraph = (
       target: "done",
       style: edgeStyle("checking_doneness", "done", as),
       markerEnd: { type: MT.ArrowClosed },
+    },
+
+    // ── Rectification loop: validating → rectifying → validating ──
+    {
+      id: "e-val-rect",
+      source: "validating",
+      target: "rectifying",
+      type: "smoothstep",
+      style: edgeStyle("validating", "rectifying", as),
+      markerEnd: { type: MT.ArrowClosed },
+      sourcePosition: P.Left,
+      targetPosition: P.Top,
+    },
+    {
+      id: "e-rect-val",
+      source: "rectifying",
+      target: "validating",
+      type: "smoothstep",
+      style: { stroke: PURPLE, strokeWidth: 1.5, strokeDasharray: "6,3" },
+      markerEnd: { type: MT.ArrowClosed, color: PURPLE },
+      sourcePosition: P.Right,
+      targetPosition: P.Left,
     },
 
     // ── Loop: checking_doneness → reading_progress ──
@@ -528,6 +566,12 @@ export default function WorkflowGraph(): preact.JSX.Element {
               workerIndex: -2,
               scenario: "__validate__",
               phase: "validate",
+            });
+          } else if (node.data?.phase === "rectify") {
+            setSelectedWorker({
+              workerIndex: -3,
+              scenario: "__rectify__",
+              phase: "rectify",
             });
           }
         };

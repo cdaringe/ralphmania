@@ -9,6 +9,7 @@ deno run -A jsr:@cdaringe/ralphmania -i 10
 deno run -A jsr:@cdaringe/ralphmania -i 10 [-a claude|codex]
 deno run -A jsr:@cdaringe/ralphmania -i 10 --plugin ./my-plugin.ts
 deno run -A jsr:@cdaringe/ralphmania -i 10 --gui
+deno run -A jsr:@cdaringe/ralphmania -i 10 --sim
 deno run -A jsr:@cdaringe/ralphmania serve receipts [--open] [--port 8421]
 ```
 
@@ -49,7 +50,46 @@ deno run -A jsr:@cdaringe/ralphmania -i 10 --gui
 ![ralphmania GUI](./site/src/assets/gui-screenshot.png)
 
 The GUI shows an interactive workflow graph, per-worker log streaming, scenario
-status editing, and agent input — all updated in real-time via SSE.
+status editing, and agent input -- all updated in real-time via SSE.
+
+## Simulation Mode
+
+Pass `--sim` to run the GUI with simulated agent backends -- no real agents, git
+operations, or filesystem side effects:
+
+```bash
+deno run -A jsr:@cdaringe/ralphmania -i 10 --sim
+deno run -A jsr:@cdaringe/ralphmania -i 10 --sim --sim-scenarios 8 --sim-profile realistic
+```
+
+| Flag              | Default | Description                                       |
+| ----------------- | ------- | ------------------------------------------------- |
+| `--sim`           | `false` | Enable simulation mode (implies `--gui`)          |
+| `--sim-scenarios` | `4`     | Number of simulated scenarios                     |
+| `--sim-profile`   | `fast`  | Timing profile: `instant`, `fast`, or `realistic` |
+
+A **dev panel** appears in the bottom-right corner of the GUI with controls for:
+
+- **Timing profile** -- how fast simulated operations complete
+- **Auto-advance** -- toggle automatic progression; when off, step through
+  transitions manually
+- **Validation failure rate** -- probability of validation failing after merge
+- **Merge conflict rate** -- probability of a simulated merge conflict
+- **Worker failure rate** -- probability of a worker timing out
+- **Per-scenario outcomes** -- set each scenario to complete, needs_rework, or
+  timeout
+
+The real orchestrator state machine runs unmodified -- only the `MachineDeps`
+adapter is swapped for an in-memory simulation. The GUI receives the exact same
+event stream as in production, making this ideal for developing and testing the
+UI.
+
+For programmatic use in browser tests, create a `SimController` directly:
+
+```typescript
+import { createSimController } from "jsr:@cdaringe/ralphmania/sim/controller";
+import { createSimDeps } from "jsr:@cdaringe/ralphmania/sim/deps";
+```
 
 ## How it works
 

@@ -32,7 +32,11 @@ import { parseScenarioIds } from "../progress.ts";
 import { dim, green, yellow } from "../colors.ts";
 import { difference, xor } from "../set-fns.ts";
 import { formatDuration, Status } from "../constants.ts";
-import { MERGE_LOG_ID, resetWorkerLog } from "../gui/log-dir.ts";
+import {
+  MERGE_LOG_ID,
+  RECTIFY_LOG_ID,
+  resetWorkerLog,
+} from "../gui/log-dir.ts";
 
 const buildRectifyPrompt = (validationFailurePath: string): string =>
   `You are the escalated rectification agent operating on the merged main branch.
@@ -220,12 +224,6 @@ export type RectifyingState = Readonly<{
   validationFailurePath: string;
 }>;
 
-export type ReValidatingState = Readonly<{
-  tag: "re_validating";
-  iterationsUsed: number;
-  validationFailurePath: string;
-}>;
-
 export type DoneState = Readonly<{ tag: "done"; iterationsUsed: number }>;
 
 export type AbortedState = Readonly<{ tag: "aborted" }>;
@@ -238,7 +236,6 @@ export type OrchestratorState =
   | ValidatingState
   | CheckingDonenessState
   | RectifyingState
-  | ReValidatingState
   | DoneState
   | AbortedState;
 
@@ -803,15 +800,17 @@ export const transitionCheckingDoneness = async (
 export const transitionRectifying = async (
   state: RectifyingState,
   ctx: MachineContext,
-): Promise<ReValidatingState | ReadingProgressState | DoneState> => {
+): Promise<ValidatingState | ReadingProgressState | DoneState> => {
   await ctx.deps.writeCheckpoint({
     iterationsUsed: state.iterationsUsed,
     step: "rectify",
     validationFailurePath: state.validationFailurePath,
   });
 
+  await resetWorkerLog(RECTIFY_LOG_ID).catch(() => {});
+
   ctx.log({
-    tags: ["info", "orchestrator"],
+    tags: ["info", "orchestrator", "rectify"],
     message: yellow(
       `Rectifying validation failures (iteration ${state.iterationsUsed})...`,
     ),
@@ -852,6 +851,8 @@ export const transitionRectifying = async (
   }
 
   // Run the rectification agent on main (no worktree isolation).
+  // Use RECTIFY_LOG_ID as targetScenarioOverride so the runner streams
+  // agent output to the dedicated rectify log file for GUI streaming.
   await ctx.deps.runIteration({
     iterationNum: state.iterationsUsed,
     ladder: ctx.ladder,
@@ -864,71 +865,14 @@ export const transitionRectifying = async (
       buildRectifyPrompt(state.validationFailurePath),
     specFile: ctx.specFile,
     progressFile: ctx.progressFile,
+    targetScenarioOverride: RECTIFY_LOG_ID,
   });
 
   return {
-    tag: "re_validating",
+    tag: "validating",
     iterationsUsed: state.iterationsUsed,
     validationFailurePath: state.validationFailurePath,
   };
-};
-
-export const transitionReValidating = async (
-  state: ReValidatingState,
-  ctx: MachineContext,
-): Promise<CheckingDonenessState | ReadingProgressState> => {
-  await ctx.deps.writeCheckpoint({
-    iterationsUsed: state.iterationsUsed,
-    step: "validate",
-    validationFailurePath: state.validationFailurePath,
-  });
-
-  ctx.log({
-    tags: ["info", "orchestrator"],
-    message: dim("Re-validating after rectification..."),
-  });
-
-  const rawValidation = await ctx.deps.runValidation({
-    iterationNum: state.iterationsUsed,
-    log: ctx.log,
-  });
-  const validation = ctx.plugin.onValidationComplete
-    ? await ctx.plugin.onValidationComplete({
-      result: rawValidation,
-      ctx: {
-        ladder: ctx.ladder,
-        log: ctx.log,
-        iterationNum: state.iterationsUsed,
-      },
-    })
-    : rawValidation;
-
-  const validationFailurePath = validation.status === "failed"
-    ? validation.outputPath
-    : undefined;
-
-  const iterationsUsed = state.iterationsUsed + 1;
-
-  await ctx.deps.writeCheckpoint({
-    iterationsUsed,
-    step: "done",
-    validationFailurePath,
-  });
-
-  if (validationFailurePath) {
-    ctx.log({
-      tags: ["info", "orchestrator"],
-      message:
-        "Rectification validation still failing; resuming normal iteration flow",
-    });
-    return {
-      tag: "reading_progress",
-      iterationsUsed,
-      validationFailurePath,
-    };
-  }
-
-  return { tag: "checking_doneness", iterationsUsed, validationFailurePath };
 };
 
 // ---------------------------------------------------------------------------
@@ -963,9 +907,6 @@ export const transition = async (
       break;
     case "rectifying":
       next = await transitionRectifying(state, ctx);
-      break;
-    case "re_validating":
-      next = await transitionReValidating(state, ctx);
       break;
     case "done":
     case "aborted":

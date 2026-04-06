@@ -40,6 +40,9 @@ const ralph = shellTask(
 const ralphDebug = shellTask(
   "deno run --inspect-brk -A mod.ts --iterations 30 --agent claude --plugin plugin.ralph.ts",
 );
+const simulate = shellTask(
+  "deno run -A mod.ts --iterations 10 --sim --sim-scenarios 20 --parallel 4",
+);
 const yeetBump = shellTask(
   "deno eval \"const f='deno.json';const j=JSON.parse(Deno.readTextFileSync(f));const[a,b,c]=j.version.split('.').map(Number);j.version=[a,b+1,0].join('.');Deno.writeTextFileSync(f,JSON.stringify(j,null,2)+'\\n');console.log('Bumped to',j.version)\"",
 );
@@ -69,6 +72,9 @@ export const tasks: Tasks = {
   "gen-gui-manifest": genGuiManifest,
   ralph,
   "ralph:debug": ralphDebug,
+  simulate,
+  sim: simulate,
+  s: simulate,
   "yeet:bump": yeetBump,
   yeet,
 };

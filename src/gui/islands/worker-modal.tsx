@@ -144,6 +144,8 @@ export default function WorkerModal(): preact.JSX.Element | null {
     ? "Merge"
     : selected.phase === "validate"
     ? "Validation"
+    : selected.phase === "rectify"
+    ? "Rectification"
     : undefined;
 
   const close = (): void => setSelectedWorker(null);

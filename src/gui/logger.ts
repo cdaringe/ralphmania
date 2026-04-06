@@ -7,7 +7,7 @@
 import type { Logger } from "../types.ts";
 import type { GuiEventBus } from "./events.ts";
 import { writeWorkerLine } from "./log-dir.ts";
-import { MERGE_LOG_ID, VALIDATE_LOG_ID } from "./log-dir.ts";
+import { MERGE_LOG_ID, RECTIFY_LOG_ID, VALIDATE_LOG_ID } from "./log-dir.ts";
 
 /** Pattern matching the orchestrator's state-transition log message: "from → to". */
 const TRANSITION_RE = /^(\w+) \u2192 (\w+)$/;
@@ -46,6 +46,12 @@ const MERGE_TAGS = new Set(["worktree", "reconcile"]);
 
 /** Tags that indicate validation-phase log output. */
 const VALIDATE_TAGS = new Set(["validate"]);
+
+/** Matches "Rectifying validation failures (iteration N)..." */
+const RECTIFY_START_RE = /^Rectifying validation failures/;
+
+/** Tags that indicate rectification-phase log output. */
+const RECTIFY_TAGS = new Set(["rectify"]);
 
 export type GuiLoggerOptions = {
   /** When true (default), mirror merge/validation log messages to dedicated log files. */
@@ -175,6 +181,20 @@ export const createGuiLogger =
           message: opts.message,
           ts,
           workerId: VALIDATE_LOG_ID,
+        });
+      }
+      // Mirror rectification-phase log lines to the dedicated rectify log stream.
+      if (
+        (opts.tags as string[]).some((t) => RECTIFY_TAGS.has(t)) ||
+        RECTIFY_START_RE.test(opts.message)
+      ) {
+        writeWorkerLine(RECTIFY_LOG_ID, {
+          type: "log",
+          level: opts.tags[0],
+          tags: opts.tags,
+          message: opts.message,
+          ts,
+          workerId: RECTIFY_LOG_ID,
         });
       }
     }

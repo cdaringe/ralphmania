@@ -187,6 +187,32 @@ graph TD
     end
 ```
 
+## Simulation Mode
+
+Simulation mode (`--sim`) swaps the `MachineDeps` adapter for an in-memory
+implementation. The orchestrator state machine runs unmodified — only I/O is
+faked.
+
+```mermaid
+graph TD
+    SM[Orchestrator State Machine] -->|ctx.deps| Port{MachineDeps Port}
+    Port -->|production| Real[Real Deps<br/>git, agents, filesystem]
+    Port -->|--sim| Sim[SimMachineDeps<br/>in-memory, controllable]
+    Sim --> SC[SimController]
+    SC <-->|HTTP /api/sim/*| DP[Dev Panel<br/>GUI island]
+    SC -->|sim_state events| Bus[GuiEventBus]
+    Bus --> SSE[SSE /events]
+```
+
+Key modules:
+
+- `src/sim/controller.ts` — reactive config: timing profile, scenario outcomes,
+  failure rates, auto-advance
+- `src/sim/deps.ts` — `MachineDeps` adapter backed by `SimController`
+- `src/sim/fixtures.ts` — synthetic spec/progress generators
+- `src/sim/routes.ts` — HTTP control endpoints
+- `src/gui/islands/dev-panel.tsx` — interactive control panel
+
 ## Key Data Flow
 
 ```

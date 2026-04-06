@@ -16,6 +16,7 @@ const POLL_INTERVAL_MS = 200;
 /** Well-known log IDs for merge and validation phase streams. */
 export const MERGE_LOG_ID = "__merge__";
 export const VALIDATE_LOG_ID = "__validate__";
+export const RECTIFY_LOG_ID = "__rectify__";
 
 /** Path to a worker's log file. */
 const workerLogPath = (workerId: string): string =>

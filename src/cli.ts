@@ -19,6 +19,9 @@ export type CliConfig = {
   gui: boolean;
   guiPort: number;
   resetWorktrees: boolean;
+  sim: boolean;
+  simScenarios: number;
+  simProfile: "instant" | "fast" | "realistic";
 };
 
 const validateLevel = (v: number): number => {
@@ -65,6 +68,21 @@ const withRunOptions = <T extends Command<any>>(cmd: T): T =>
       "--reset-worktrees",
       "Clear all existing ralph worker worktrees and state on boot.",
       { default: false },
+    )
+    .option(
+      "--sim",
+      "Run in simulation mode with fake agent backends (implies --gui).",
+      { default: false },
+    )
+    .option(
+      "--sim-scenarios <count:integer>",
+      "Number of simulated scenarios.",
+      { default: 4 },
+    )
+    .option(
+      "--sim-profile <profile:string>",
+      "Simulation timing profile: instant, fast, or realistic.",
+      { default: "fast" },
     ) as T;
 
 export type CliActions = {
@@ -162,15 +180,25 @@ const toCliConfig = (options: ParsedOptions): Result<CliConfig, string> => {
   const ladderResult = resolveLadder(options);
   if (ladderResult.isErr()) return err(ladderResult.error);
 
+  const sim = (options.sim as boolean | undefined) ?? false;
+  const simProfile = (options.simProfile as string | undefined) ?? "fast";
+  const validProfiles = ["instant", "fast", "realistic"] as const;
+  if (!validProfiles.includes(simProfile as typeof validProfiles[number])) {
+    return err(`--sim-profile must be one of: ${validProfiles.join(", ")}`);
+  }
+
   return ok({
     ladder: ladderResult.value,
     iterations,
     pluginPath: options.plugin as string | undefined,
     level: options.level as EscalationLevel | undefined,
     parallel: (options.parallel as number | undefined) ?? 2,
-    gui: (options.gui as boolean | undefined) ?? false,
+    gui: sim || ((options.gui as boolean | undefined) ?? false),
     guiPort: (options.guiPort as number | undefined) ?? 8420,
     resetWorktrees: (options.resetWorktrees as boolean | undefined) ?? false,
+    sim,
+    simScenarios: (options.simScenarios as number | undefined) ?? 4,
+    simProfile: simProfile as "instant" | "fast" | "realistic",
   });
 };
 
@@ -234,10 +262,19 @@ export const parseCliArgsInteractive = async (
       });
     }
 
-    const gui = (options.gui as boolean | undefined) ?? false;
+    const sim = (options.sim as boolean | undefined) ?? false;
+    const gui = sim || ((options.gui as boolean | undefined) ?? false);
     const guiPort = (options.guiPort as number | undefined) ?? 8420;
     const resetWorktrees = (options.resetWorktrees as boolean | undefined) ??
       false;
+    const simProfile = (options.simProfile as string | undefined) ?? "fast";
+    const validProfiles = ["instant", "fast", "realistic"] as const;
+    if (
+      sim &&
+      !validProfiles.includes(simProfile as typeof validProfiles[number])
+    ) {
+      return err(`--sim-profile must be one of: ${validProfiles.join(", ")}`);
+    }
     return ok({
       ladder,
       iterations,
@@ -247,6 +284,9 @@ export const parseCliArgsInteractive = async (
       gui,
       guiPort,
       resetWorktrees,
+      sim,
+      simScenarios: (options.simScenarios as number | undefined) ?? 4,
+      simProfile: simProfile as "instant" | "fast" | "realistic",
     });
   } catch {
     return err("parse error");

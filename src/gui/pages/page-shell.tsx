@@ -21,6 +21,8 @@ type PageShellProps = {
   readonly v?: string;
   /** Optional loading text shown before island hydration. */
   readonly placeholder?: string;
+  /** When true, also loads the dev-panel island for sim controls. */
+  readonly simMode?: boolean;
 };
 
 export const PageShell = ({
@@ -31,6 +33,7 @@ export const PageShell = ({
   boot,
   v,
   placeholder,
+  simMode,
 }: PageShellProps): preact.VNode => {
   const q = v ? `?v=${v}` : "";
   const imports = extraImports
@@ -58,6 +61,9 @@ export const PageShell = ({
       <body>
         <div id="app-root">{placeholder}</div>
         <script type="module" src={`/islands/${boot}${q}`} />
+        {simMode && (
+          <script type="module" src={`/islands/dev-panel-boot.js${q}`} />
+        )}
       </body>
     </html>
   );

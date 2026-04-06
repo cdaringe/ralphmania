@@ -10,7 +10,6 @@ import {
   transitionInit,
   transitionReadingProgress,
   transitionRectifying,
-  transitionReValidating,
   transitionRunningWorkers,
   transitionValidating,
 } from "./state-machine.ts";
@@ -922,7 +921,7 @@ Deno.test("transitionInit: checkpoint at rectify without failure path → readin
 // transitionRectifying
 // ---------------------------------------------------------------------------
 
-Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goes to re_validating", async () => {
+Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goes to validating", async () => {
   let iterationOpts:
     | { level: number | undefined; promptOverride: string | undefined }
     | undefined;
@@ -945,7 +944,7 @@ Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goe
     },
     ctx,
   );
-  assertEquals(next.tag, "re_validating");
+  assertEquals(next.tag, "validating");
   assertEquals(iterationOpts?.level, 1);
   assertEquals(
     iterationOpts?.promptOverride?.includes(
@@ -953,7 +952,7 @@ Deno.test("transitionRectifying: default (no plugin hook) → runs agent and goe
     ),
     true,
   );
-  if (next.tag === "re_validating") {
+  if (next.tag === "validating") {
     assertEquals(next.iterationsUsed, 1);
   }
 });
@@ -1044,126 +1043,13 @@ Deno.test("transitionRectifying: writes checkpoint at rectify step", async () =>
 });
 
 // ---------------------------------------------------------------------------
-// transitionReValidating
-// ---------------------------------------------------------------------------
-
-Deno.test("transitionReValidating: validation passes → checking_doneness without failure", async () => {
-  const ctx = makeCtx({
-    deps: makeDeps({
-      runValidation: () => Promise.resolve({ status: "passed" as const }),
-    }),
-  });
-  const next = await transitionReValidating(
-    {
-      tag: "re_validating",
-      iterationsUsed: 1,
-      validationFailurePath: ".ralph/validation/iteration-0.log",
-    },
-    ctx,
-  );
-  assertEquals(next.tag, "checking_doneness");
-  if (next.tag === "checking_doneness") {
-    assertEquals(next.validationFailurePath, undefined);
-    assertEquals(next.iterationsUsed, 2);
-  }
-});
-
-Deno.test("transitionReValidating: validation fails → reading_progress with failure", async () => {
-  const ctx = makeCtx({
-    deps: makeDeps({
-      runValidation: () =>
-        Promise.resolve({
-          status: "failed" as const,
-          outputPath: ".ralph/validation/iteration-1.log",
-        }),
-    }),
-  });
-  const next = await transitionReValidating(
-    {
-      tag: "re_validating",
-      iterationsUsed: 1,
-      validationFailurePath: ".ralph/validation/iteration-0.log",
-    },
-    ctx,
-  );
-  assertEquals(next.tag, "reading_progress");
-  if (next.tag === "reading_progress") {
-    assertEquals(
-      next.validationFailurePath,
-      ".ralph/validation/iteration-1.log",
-    );
-    assertEquals(next.iterationsUsed, 2);
-  }
-});
-
-Deno.test("transitionReValidating: writes checkpoint before and after validation", async () => {
-  const checkpoints: { step: string; iterationsUsed: number }[] = [];
-  const ctx = makeCtx({
-    deps: makeDeps({
-      writeCheckpoint: (cp) => {
-        checkpoints.push(cp);
-        return Promise.resolve();
-      },
-      runValidation: () => Promise.resolve({ status: "passed" as const }),
-    }),
-  });
-  await transitionReValidating(
-    {
-      tag: "re_validating",
-      iterationsUsed: 2,
-      validationFailurePath: ".ralph/validation/iteration-1.log",
-    },
-    ctx,
-  );
-  assertEquals(checkpoints.length, 2);
-  assertEquals(checkpoints[0]?.step, "validate");
-  assertEquals(checkpoints[0]?.iterationsUsed, 2);
-  assertEquals(checkpoints[1]?.step, "done");
-  assertEquals(checkpoints[1]?.iterationsUsed, 3);
-});
-
-Deno.test("transitionReValidating: plugin.onValidationComplete can override result", async () => {
-  const ctx = makeCtx({
-    deps: makeDeps({
-      runValidation: () =>
-        Promise.resolve({ status: "failed" as const, outputPath: "x.log" }),
-    }),
-    plugin: {
-      onValidationComplete: () => ({ status: "passed" as const }),
-    },
-  });
-  const next = await transitionReValidating(
-    {
-      tag: "re_validating",
-      iterationsUsed: 0,
-      validationFailurePath: ".ralph/validation/iteration-0.log",
-    },
-    ctx,
-  );
-  if (next.tag === "checking_doneness") {
-    assertEquals(next.validationFailurePath, undefined);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// isTerminal: new states are not terminal
+// isTerminal: rectifying is not terminal
 // ---------------------------------------------------------------------------
 
 Deno.test("isTerminal: rectifying is not terminal", () => {
   assertEquals(
     isTerminal({
       tag: "rectifying",
-      iterationsUsed: 0,
-      validationFailurePath: "x.log",
-    }),
-    false,
-  );
-});
-
-Deno.test("isTerminal: re_validating is not terminal", () => {
-  assertEquals(
-    isTerminal({
-      tag: "re_validating",
       iterationsUsed: 0,
       validationFailurePath: "x.log",
     }),
@@ -1209,5 +1095,4 @@ Deno.test("full loop: validation failure triggers rectification cycle", async ()
   }
   assertEquals(state.tag, "done");
   assertEquals(visited.includes("rectifying"), true);
-  assertEquals(visited.includes("re_validating"), true);
 });

@@ -27,6 +27,8 @@ import { WorkerPage } from "./pages/worker-page.tsx";
 import type { GuiEvent } from "./events.ts";
 import { type CompiledIslands, compileIslands } from "./dev.ts";
 import { loadCssFiles } from "./css.ts";
+import type { SimController } from "../sim/controller.ts";
+import { createSimRoutes, matchSimRoute } from "../sim/routes.ts";
 
 /** Returns the current spec-vs-progress status diff. */
 export type StatusProvider = () => Promise<StatusDiff>;
@@ -53,6 +55,8 @@ export type GuiServerOptions = {
   readonly progressRowUpdater?: ProgressRowUpdater;
   /** Skip island compilation (for unit tests that don't need client JS). */
   readonly skipBuild?: boolean;
+  /** When set, enables sim control routes and dev panel in the GUI. */
+  readonly simController?: SimController;
 };
 
 const htmlResponse = (jsx: preact.VNode): Response =>
@@ -99,8 +103,10 @@ export const startGuiServer = async (
     statusProvider,
     scenarioDetailProvider,
     progressRowUpdater,
+    simController,
   } = opts;
   const log = opts.log ?? createLogger();
+  const simRoutes = simController ? createSimRoutes(simController) : undefined;
 
   // Compile island TypeScript to browser JS (unless skipped for unit tests).
   const islands: CompiledIslands = opts.skipBuild
@@ -425,8 +431,36 @@ export const startGuiServer = async (
     }
   });
 
+  // Sim control routes — only mounted when --sim is active.
+  if (simRoutes) {
+    app.get("/api/sim/config", (ctx) => {
+      const resp = matchSimRoute(simRoutes, ctx.req);
+      return resp ?? new Response("not found", { status: 404 });
+    });
+    app.post("/api/sim/config", (ctx) => {
+      const resp = matchSimRoute(simRoutes, ctx.req);
+      return resp ?? new Response("not found", { status: 404 });
+    });
+    app.post("/api/sim/advance", (ctx) => {
+      const resp = matchSimRoute(simRoutes, ctx.req);
+      return resp ?? new Response("not found", { status: 404 });
+    });
+    app.post("/api/sim/reset", (ctx) => {
+      const resp = matchSimRoute(simRoutes, ctx.req);
+      return resp ?? new Response("not found", { status: 404 });
+    });
+    app.post("/api/sim/reset-config", (ctx) => {
+      const resp = matchSimRoute(simRoutes, ctx.req);
+      return resp ?? new Response("not found", { status: 404 });
+    });
+  }
+
   // GET / — main GUI page
-  app.get("/", (_ctx) => htmlResponse(<MainPage v={buildHash} />));
+  app.get(
+    "/",
+    (_ctx) =>
+      htmlResponse(<MainPage v={buildHash} simMode={!!simController} />),
+  );
 
   const handler = await app.handler();
   let attemptPort = port;
