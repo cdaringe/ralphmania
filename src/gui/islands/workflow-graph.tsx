@@ -146,7 +146,7 @@ const ROW = {
   // as WORKERS_START + workerCount + offset
 } as const;
 
-const CELL = { w: 165, h: 80 };
+const CELL = { w: 200, h: 100 };
 
 const gridPos = (col: number, row: number) => ({
   x: col * CELL.w,
@@ -167,7 +167,7 @@ const buildGraph = (
   const mergeRow = ROW.WORKERS_START + workerCount;
   const validateRow = mergeRow + 1;
   const donenessRow = validateRow + 1;
-  const rectifyRow = validateRow + 1; // below validating, in RECTIFY col
+  const rectifyRow = validateRow; // same row as validating, in RECTIFY col
   const doneRow = donenessRow + 1;
 
   const nodes: Record<string, unknown>[] = [
